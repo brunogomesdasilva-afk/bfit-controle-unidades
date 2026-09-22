@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Identidade visual provisória (herdada do sistema de financiamento): ajuste às cores da BFIT */
+@theme {
+  --color-marca: #006830;
+  --color-marca-escuro: #00522a;
+  --color-marca-claro: #3fbf7a;
+  --color-grafite: #32363a;
+  --color-grafite-escuro: #272a2d;
+}
+
+/* Tamanho-base do sistema (o padrão do navegador é 16px). Textos e espaçamentos acompanham. */
+html {
+  font-size: 14.5px;
+}
+
+body {
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-marca);
+  outline-offset: 2px;
+}

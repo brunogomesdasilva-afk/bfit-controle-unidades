@@ -1,0 +1,306 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import { exigirAdmin } from "@/lib/auth";
+import type { Profile } from "@/lib/database.types";
+import {
+  alterarEmailUsuario,
+  alterarNomeUsuario,
+  alterarPerfilUsuario,
+  alterarStatusUsuario,
+  criarUsuario,
+  redefinirSenhaUsuario,
+} from "./actions";
+import { MenuAcoesUsuario } from "./MenuAcoesUsuario";
+
+const CAMPO = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm";
+const ROTULO_PERFIL = { admin: "Administrador", usuario: "Usuário" } as const;
+
+export default async function UsuariosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    erro?: string;
+    ok?: string;
+    inativar?: string;
+    editarEmail?: string;
+    redefinirSenha?: string;
+  }>;
+}) {
+  const atual = await exigirAdmin();
+  const { erro, ok, inativar, editarEmail, redefinirSenha } = await searchParams;
+
+  const supabase = await createClient();
+  const { data } = await supabase.from("profiles").select("*").order("nome");
+  const usuarios = (data ?? []) as Profile[];
+  const chaveConfigurada = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const nomePorId = new Map(usuarios.map((u) => [u.id, u.nome]));
+
+  const alvoInativar = inativar && inativar !== atual.id ? usuarios.find((u) => u.id === inativar && u.ativo !== false) : undefined;
+  const alvoEmail = editarEmail ? usuarios.find((u) => u.id === editarEmail) : undefined;
+  const alvoSenha = redefinirSenha ? usuarios.find((u) => u.id === redefinirSenha) : undefined;
+
+  return (
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="lg:col-span-2">
+        <h1 className="text-lg font-semibold text-slate-900">Usuários</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Administradores gerenciam o sistema e os usuários. O nome é o que aparece no sistema no lugar do
+          e-mail.
+        </p>
+
+        {erro && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+        {ok && <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{ok}</p>}
+
+        {alvoEmail && (
+          <form
+            action={alterarEmailUsuario.bind(null, alvoEmail.id)}
+            className="mt-4 rounded-xl border border-slate-300 bg-white p-5"
+          >
+            <h2 className="text-sm font-semibold text-slate-900">Alterar e-mail de {alvoEmail.nome}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              O e-mail é o login do usuário. Depois da troca ele entra com o novo e-mail e a mesma senha.
+            </p>
+            <label className="mt-3 block text-sm font-medium text-slate-700">Novo e-mail</label>
+            <input
+              name="email"
+              type="email"
+              required
+              defaultValue={alvoEmail.email}
+              autoComplete="off"
+              className={CAMPO}
+            />
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="submit"
+                className="rounded-md bg-marca px-3 py-2 text-sm font-medium text-white hover:bg-marca-escuro"
+              >
+                Salvar e-mail
+              </button>
+              <Link href="/usuarios" className="text-sm text-slate-600 underline hover:text-slate-900">
+                Cancelar
+              </Link>
+            </div>
+          </form>
+        )}
+
+        {alvoSenha && (
+          <form
+            action={redefinirSenhaUsuario.bind(null, alvoSenha.id)}
+            className="mt-4 rounded-xl border border-slate-300 bg-white p-5"
+          >
+            <h2 className="text-sm font-semibold text-slate-900">Redefinir senha de {alvoSenha.nome}</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Ele passa a entrar com essa senha. Avise-o pessoalmente (telefone, presencialmente etc.) —
+              a senha não fica registrada em nenhum lugar do sistema.
+            </p>
+            <label className="mt-3 block text-sm font-medium text-slate-700">Senha nova</label>
+            <input name="senha" type="password" required minLength={6} autoComplete="new-password" className={CAMPO} />
+            <label className="mt-3 block text-sm font-medium text-slate-700">Confirme a senha nova</label>
+            <input
+              name="confirmacao"
+              type="password"
+              required
+              minLength={6}
+              autoComplete="new-password"
+              className={CAMPO}
+            />
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="submit"
+                className="rounded-md bg-marca px-3 py-2 text-sm font-medium text-white hover:bg-marca-escuro"
+              >
+                Salvar senha nova
+              </button>
+              <Link href="/usuarios" className="text-sm text-slate-600 underline hover:text-slate-900">
+                Cancelar
+              </Link>
+            </div>
+          </form>
+        )}
+
+        {alvoInativar && (
+          <form
+            action={alterarStatusUsuario.bind(null, alvoInativar.id)}
+            className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-5"
+          >
+            <input type="hidden" name="ativo" value="false" />
+            <h2 className="text-sm font-semibold text-amber-900">Inativar {alvoInativar.nome}</h2>
+            <p className="mt-1 text-sm text-amber-900">
+              O usuário deixa de ter acesso ao sistema, mas continua no histórico. Você pode reativá-lo depois.
+            </p>
+
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="submit"
+                className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700"
+              >
+                Inativar usuário
+              </button>
+              <Link href="/usuarios" className="text-sm text-slate-600 underline hover:text-slate-900">
+                Cancelar
+              </Link>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
+              <tr>
+                <th className="px-4 py-2 font-medium">Nome</th>
+                <th className="px-4 py-2 font-medium">E-mail</th>
+                <th className="px-4 py-2 font-medium">Perfil</th>
+                <th className="px-4 py-2 font-medium">Status</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {usuarios.map((u) => (
+                <tr key={u.id} className={u.ativo === false ? "bg-slate-50 text-slate-400" : undefined}>
+                  <td className="px-4 py-2">
+                    <form action={alterarNomeUsuario.bind(null, u.id)} className="flex items-center gap-2">
+                      <input
+                        name="nome"
+                        defaultValue={u.nome}
+                        required
+                        maxLength={80}
+                        className="w-full min-w-40 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                      />
+                      <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
+                        salvar
+                      </button>
+                    </form>
+                  </td>
+                  <td className="px-4 py-2 text-slate-600">{u.email}</td>
+                  <td className="px-4 py-2">
+                    {u.id === atual.id ? (
+                      <span className="text-slate-600">{ROTULO_PERFIL[u.perfil]} (você)</span>
+                    ) : (
+                      <form action={alterarPerfilUsuario.bind(null, u.id)} className="flex items-center gap-2">
+                        <select
+                          name="perfil"
+                          defaultValue={u.perfil}
+                          className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                        >
+                          <option value="usuario">Usuário</option>
+                          <option value="admin">Administrador</option>
+                        </select>
+                        <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
+                          salvar
+                        </button>
+                      </form>
+                    )}
+                  </td>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        {u.ativo === false ? (
+                          <>
+                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
+                              Inativo
+                            </span>
+                            {u.ativo_alterado_em && (
+                              <p className="mt-1 text-xs text-slate-500">
+                                desde {new Date(u.ativo_alterado_em).toLocaleDateString("pt-BR")}
+                                {u.ativo_alterado_por && nomePorId.get(u.ativo_alterado_por)
+                                  ? ` por ${nomePorId.get(u.ativo_alterado_por)}`
+                                  : ""}
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                            Ativo
+                          </span>
+                        )}
+                      </div>
+                      <MenuAcoesUsuario>
+                        <Link
+                          href={`/usuarios?editarEmail=${u.id}`}
+                          role="menuitem"
+                          className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Alterar e-mail
+                        </Link>
+                        <Link
+                          href={`/usuarios?redefinirSenha=${u.id}`}
+                          role="menuitem"
+                          className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                        >
+                          Redefinir senha
+                        </Link>
+                        {u.ativo === false ? (
+                          <form action={alterarStatusUsuario.bind(null, u.id)}>
+                            <input type="hidden" name="ativo" value="true" />
+                            <button
+                              type="submit"
+                              role="menuitem"
+                              className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                            >
+                              Reativar usuário
+                            </button>
+                          </form>
+                        ) : u.id === atual.id ? (
+                          <span className="block px-4 py-2 text-sm text-slate-400">
+                            Você não pode inativar a si mesmo
+                          </span>
+                        ) : (
+                          <Link
+                            href={`/usuarios?inativar=${u.id}`}
+                            role="menuitem"
+                            className="block px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                          >
+                            Inativar usuário
+                          </Link>
+                        )}
+                      </MenuAcoesUsuario>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white p-6">
+        <h2 className="text-sm font-semibold text-slate-900">Novo usuário</h2>
+
+        {!chaveConfigurada && (
+          <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Para criar usuários por aqui, adicione a chave <code>SUPABASE_SERVICE_ROLE_KEY</code> ao arquivo{" "}
+            <code>.env.local</code> (Supabase → Project Settings → API → service_role) e reinicie o
+            servidor. Essa chave é secreta: nunca a compartilhe nem a envie ao navegador.
+          </p>
+        )}
+
+        <form action={criarUsuario} className="mt-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Nome</label>
+            <input name="nome" required className={CAMPO} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">E-mail</label>
+            <input name="email" type="email" required className={CAMPO} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Senha inicial</label>
+            <input name="senha" type="password" required minLength={6} autoComplete="new-password" className={CAMPO} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Perfil</label>
+            <select name="perfil" defaultValue="usuario" className={CAMPO}>
+              <option value="usuario">Usuário</option>
+              <option value="admin">Administrador</option>
+            </select>
+          </div>
+          <button
+            type="submit"
+            className="w-full rounded-md bg-marca px-3 py-2 text-sm font-medium text-white hover:bg-marca-escuro"
+          >
+            Criar usuário
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
