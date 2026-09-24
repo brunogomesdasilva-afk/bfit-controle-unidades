@@ -1,12 +1,17 @@
-import { notFound } from "next/navigation";
-import { exigirAdmin } from "@/lib/auth";
+import { notFound, redirect } from "next/navigation";
+import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { AbasDaAcademia } from "./AbasDaAcademia";
 
 // Área de uma academia dentro do "Cadastro de academias": nome no topo e os cadastros dela em abas.
+// O administrador abre qualquer academia; o usuário de uma academia, só a dele.
 export default async function AcademiaLayout({ children, params }: LayoutProps<"/academias/[id]">) {
-  await exigirAdmin();
+  const atual = await getPerfilAtual();
+  if (!atual) redirect("/login");
   const { id } = await params;
+  if (atual.perfil !== "admin" && atual.academiaId !== id) {
+    redirect(atual.academiaId ? `/academias/${atual.academiaId}` : "/");
+  }
   const supabase = await createClient();
   const { data: academia } = await supabase.from("academias").select("id, nome").eq("id", id).maybeSingle();
   if (!academia) notFound();

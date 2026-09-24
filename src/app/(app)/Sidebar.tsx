@@ -51,7 +51,6 @@ const ITENS: ItemMenu[] = [
   {
     href: "/academias",
     rotulo: "Cadastro de academias",
-    somenteAdmin: true,
     ativo: (p: string) => p === "/academias",
     icone: (
       <Icone>

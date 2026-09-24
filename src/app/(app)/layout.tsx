@@ -11,9 +11,10 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     .split(",")
     .filter(Boolean);
 
-  // Cada academia vira um submenu de "Cadastro de academias" (só o administrador vê esse menu).
+  // Cada academia vira um submenu de "Cadastro de academias": o administrador vê todas; o usuário de
+  // uma academia, só a dele (a regra de acesso do banco já filtra).
   let academias: { id: string; nome: string }[] = [];
-  if (atual?.perfil === "admin") {
+  if (atual) {
     const supabase = await createClient();
     const { data } = await supabase.from("academias").select("id, nome").order("nome");
     academias = data ?? [];

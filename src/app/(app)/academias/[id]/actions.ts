@@ -1,20 +1,30 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
+import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { DEPARTAMENTOS, GENEROS } from "@/lib/database.types";
 import { mensagemErro, validar, verificarAcesso } from "@/lib/planilha";
 import type { Resultado } from "../../Planilha";
 
-// Cadastros de cada academia: só o administrador inclui, altera e exclui.
+// Cadastros de cada academia (funcionários e modalidades): o administrador cuida de todas; o usuário de
+// uma academia cuida só da dele (a mesma regra também está no banco).
 // A academia vem do submenu aberto (presa ao botão da planilha).
+
+async function semAcessoAAcademia(academiaId: string) {
+  const semAcesso = await verificarAcesso();
+  if (semAcesso) return semAcesso;
+  const atual = await getPerfilAtual();
+  if (atual?.perfil !== "admin" && atual?.academiaId !== academiaId) return "Você só pode alterar o cadastro da sua academia.";
+  return null;
+}
 
 export async function salvarFuncionario(
   academiaId: string,
   id: string | null,
   dados: Record<string, string>
 ): Promise<Resultado> {
-  const semAcesso = await verificarAcesso(true);
+  const semAcesso = await semAcessoAAcademia(academiaId);
   if (semAcesso) return { erro: semAcesso };
 
   const { registro, erro } = validar(
@@ -43,7 +53,7 @@ export async function salvarModalidade(
   id: string | null,
   dados: Record<string, string>
 ): Promise<Resultado> {
-  const semAcesso = await verificarAcesso(true);
+  const semAcesso = await semAcessoAAcademia(academiaId);
   if (semAcesso) return { erro: semAcesso };
 
   const { registro, erro } = validar([{ campo: "nome", rotulo: "Modalidade", tipo: "texto", obrigatorio: true }], dados);
@@ -77,8 +87,9 @@ async function gravar(
   return {};
 }
 
+// A regra do banco garante que o usuário de uma academia só exclui o que é dela.
 async function apagar(tabela: "funcionarios" | "modalidades", id: string): Promise<Resultado> {
-  const semAcesso = await verificarAcesso(true);
+  const semAcesso = await verificarAcesso();
   if (semAcesso) return { erro: semAcesso };
 
   const supabase = await createClient();

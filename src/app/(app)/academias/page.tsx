@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { exigirAdmin } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { getPerfilAtual } from "@/lib/auth";
 import type { Academia } from "@/lib/database.types";
 import { Planilha, type Coluna, type Linha } from "../Planilha";
 import { excluirAcademia, salvarAcademia } from "./actions";
@@ -20,7 +21,11 @@ const COLUNAS: Coluna[] = [
 const texto = (n: number | null | undefined) => (n === null || n === undefined ? null : String(n));
 
 export default async function AcademiasPage() {
-  await exigirAdmin();
+  // O administrador cadastra e altera as academias; o usuário de uma academia só consulta a dele
+  // (os funcionários e modalidades ele cuida no submenu da academia).
+  const atual = await getPerfilAtual();
+  if (!atual) redirect("/login");
+  const admin = atual.perfil === "admin";
   const supabase = await createClient();
   const { data } = await supabase.from("academias").select("*").order("nome");
   const linhas: Linha[] = ((data ?? []) as Academia[]).map((a) => {
@@ -53,10 +58,15 @@ export default async function AcademiasPage() {
       <Planilha
         colunas={COLUNAS}
         linhas={linhas}
-        salvar={salvarAcademia}
-        excluir={excluirAcademia}
+        salvar={admin ? salvarAcademia : undefined}
+        excluir={admin ? excluirAcademia : undefined}
         padroesNovo={{ maquinas_peitoral: "0", maquinas_costas: "0", maquinas_pernas: "0", maquinas_bracos: "0" }}
         rotuloNovo="+ Nova academia"
+        somenteLeitura={
+          admin
+            ? undefined
+            : "Os dados da academia são alterados pelo administrador. Funcionários e modalidades: abra a academia no menu ao lado."
+        }
         vazio="Nenhuma academia cadastrada. Clique em “+ Nova academia”."
       />
     </div>
