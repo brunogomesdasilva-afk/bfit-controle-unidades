@@ -9,7 +9,8 @@ const MAQUINAS = [
   ["maquinas_peitoral", "Peitoral"],
   ["maquinas_costas", "Costas"],
   ["maquinas_pernas", "Pernas"],
-  ["maquinas_bracos", "Braços"],
+  ["maquinas_cardio", "Cardio"],
+  ["maquinas_bancos_abdomen", "Bancos e Abdômen"],
 ] as const;
 
 export async function salvarAcademia(id: string | null, dados: Record<string, string>): Promise<Resultado> {

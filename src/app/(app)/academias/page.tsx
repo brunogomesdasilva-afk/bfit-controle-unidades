@@ -14,7 +14,8 @@ const COLUNAS: Coluna[] = [
   { campo: "maquinas_peitoral", rotulo: "Peitoral", tipo: "inteiro", grupo: INVENTARIO, largura: "w-24" },
   { campo: "maquinas_costas", rotulo: "Costas", tipo: "inteiro", grupo: INVENTARIO, largura: "w-24" },
   { campo: "maquinas_pernas", rotulo: "Pernas", tipo: "inteiro", grupo: INVENTARIO, largura: "w-24" },
-  { campo: "maquinas_bracos", rotulo: "Braços", tipo: "inteiro", grupo: INVENTARIO, largura: "w-24" },
+  { campo: "maquinas_cardio", rotulo: "Cardio", tipo: "inteiro", grupo: INVENTARIO, largura: "w-24" },
+  { campo: "maquinas_bancos_abdomen", rotulo: "Bancos e Abdômen", tipo: "inteiro", grupo: INVENTARIO, largura: "w-28" },
   { campo: "maquinas_total", rotulo: "Total", tipo: "calculado", grupo: INVENTARIO, largura: "w-24" },
 ];
 
@@ -29,11 +30,12 @@ export default async function AcademiasPage() {
   const supabase = await createClient();
   const { data } = await supabase.from("academias").select("*").order("nome");
   const linhas: Linha[] = ((data ?? []) as Academia[]).map((a) => {
-    const [peitoral, costas, pernas, bracos] = [
+    const [peitoral, costas, pernas, cardio, bancos] = [
       a.maquinas_peitoral,
       a.maquinas_costas,
       a.maquinas_pernas,
-      a.maquinas_bracos,
+      a.maquinas_cardio,
+      a.maquinas_bancos_abdomen,
     ].map((n) => n ?? 0);
     return {
       id: a.id,
@@ -43,8 +45,9 @@ export default async function AcademiasPage() {
       maquinas_peitoral: texto(peitoral),
       maquinas_costas: texto(costas),
       maquinas_pernas: texto(pernas),
-      maquinas_bracos: texto(bracos),
-      maquinas_total: texto(peitoral + costas + pernas + bracos),
+      maquinas_cardio: texto(cardio),
+      maquinas_bancos_abdomen: texto(bancos),
+      maquinas_total: texto(peitoral + costas + pernas + cardio + bancos),
     };
   });
 
@@ -60,7 +63,7 @@ export default async function AcademiasPage() {
         linhas={linhas}
         salvar={admin ? salvarAcademia : undefined}
         excluir={admin ? excluirAcademia : undefined}
-        padroesNovo={{ maquinas_peitoral: "0", maquinas_costas: "0", maquinas_pernas: "0", maquinas_bracos: "0" }}
+        padroesNovo={{ maquinas_peitoral: "0", maquinas_costas: "0", maquinas_pernas: "0", maquinas_cardio: "0", maquinas_bancos_abdomen: "0" }}
         rotuloNovo="+ Nova academia"
         somenteLeitura={
           admin

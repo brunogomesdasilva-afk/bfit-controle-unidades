@@ -18,7 +18,8 @@ export type Academia = {
   maquinas_peitoral: number;
   maquinas_costas: number;
   maquinas_pernas: number;
-  maquinas_bracos: number;
+  maquinas_cardio: number;
+  maquinas_bancos_abdomen: number;
   created_at: string;
 };
 
