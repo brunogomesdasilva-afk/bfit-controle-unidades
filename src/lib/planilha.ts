@@ -5,6 +5,12 @@ export function hoje() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 }
 
+// Dia anterior a hoje (fuso de Brasília), no formato aaaa-mm-dd.
+export function ontem() {
+  const [a, m, d] = hoje().split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d - 1)).toISOString().slice(0, 10);
+}
+
 // Converte o que veio da planilha: texto aparado (vazio vira null) e datas no formato aaaa-mm-dd.
 export function texto(valor: string | undefined, limite = 500) {
   const v = (valor ?? "").trim().slice(0, limite);

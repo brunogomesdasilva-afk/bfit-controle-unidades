@@ -50,7 +50,7 @@ const ITENS: ItemMenu[] = [
   },
   {
     href: "/academias",
-    rotulo: "Cadastro de academias",
+    rotulo: "Academias",
     ativo: (p: string) => p === "/academias",
     icone: (
       <Icone>
@@ -61,7 +61,7 @@ const ITENS: ItemMenu[] = [
   },
   {
     href: "/compras",
-    rotulo: "Controle de compras",
+    rotulo: "Compras",
     ativo: (p: string) => p === "/compras",
     icone: (
       <Icone>
@@ -73,7 +73,7 @@ const ITENS: ItemMenu[] = [
   },
   {
     href: "/manutencao",
-    rotulo: "Controle de manutenção",
+    rotulo: "Manutenção",
     ativo: (p: string) => p === "/manutencao",
     icone: (
       <Icone>
@@ -83,7 +83,7 @@ const ITENS: ItemMenu[] = [
   },
   {
     href: "/vendas",
-    rotulo: "Controle de vendas",
+    rotulo: "Vendas",
     ativo: (p: string) => p === "/vendas",
     icone: (
       <Icone>
@@ -94,7 +94,7 @@ const ITENS: ItemMenu[] = [
     filhos: [
       {
         href: "/vendas/diario",
-        rotulo: "Controle diário",
+        rotulo: "Diário",
         ativo: (p: string) => p === "/vendas/diario",
         icone: (
           <Icone>
@@ -107,7 +107,7 @@ const ITENS: ItemMenu[] = [
       },
       {
         href: "/vendas/conversao",
-        rotulo: "Controle de conversão",
+        rotulo: "Conversão",
         ativo: (p: string) => p === "/vendas/conversao",
         icone: (
           <Icone>
@@ -122,7 +122,7 @@ const ITENS: ItemMenu[] = [
   },
   {
     href: "/frequencia",
-    rotulo: "Controle de frequência",
+    rotulo: "Frequência",
     ativo: (p: string) => p === "/frequencia",
     icone: (
       <Icone>
@@ -193,23 +193,59 @@ const ITENS: ItemMenu[] = [
     ],
   },
   {
-    href: "/avaliacao",
-    rotulo: "Avaliação de desempenho",
-    ativo: (p: string) => p === "/avaliacao",
+    href: "/avaliacao/adb",
+    rotulo: "A.D.B",
+    ativo: (p: string) => p.startsWith("/avaliacao"),
     icone: (
       <Icone>
         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
       </Icone>
     ),
+  },
+  {
+    href: "/relatorios",
+    rotulo: "Relatórios",
+    ativo: (p: string) => p === "/relatorios",
+    icone: (
+      <Icone>
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <line x1="8" y1="13" x2="16" y2="13" />
+        <line x1="8" y1="17" x2="16" y2="17" />
+      </Icone>
+    ),
     filhos: [
       {
-        href: "/avaliacao/adb",
-        rotulo: "A.D.B",
-        ativo: (p: string) => p === "/avaliacao/adb",
+        href: "/relatorios/diario",
+        rotulo: "Resumo do dia",
+        ativo: (p: string) => p === "/relatorios/diario",
+        icone: (
+          <Icone>
+            <circle cx="12" cy="12" r="10" />
+            <polyline points="12 6 12 12 16 14" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/relatorios/pendencias",
+        rotulo: "Compras e manutenção",
+        ativo: (p: string) => p === "/relatorios/pendencias",
         icone: (
           <Icone>
             <path d="M9 11l3 3L22 4" />
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/relatorios/mensal",
+        rotulo: "Fechamento do mês",
+        ativo: (p: string) => p === "/relatorios/mensal",
+        icone: (
+          <Icone>
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
           </Icone>
         ),
       },
@@ -317,8 +353,8 @@ export function Sidebar({
 
   return (
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col border-r border-grafite-escuro bg-grafite transition-[width] duration-200 ${
-        recolhido ? "w-16" : "w-72"
+      className={`sticky top-0 flex h-screen shrink-0 flex-col print:hidden border-r border-grafite-escuro bg-grafite transition-[width] duration-200 ${
+        recolhido ? "w-16" : "w-56"
       }`}
     >
       <div

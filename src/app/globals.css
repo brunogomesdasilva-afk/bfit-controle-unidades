@@ -25,3 +25,14 @@ body {
   outline: 2px solid var(--color-marca);
   outline-offset: 2px;
 }
+
+/* Impressão / "Salvar como PDF" dos relatórios: folha A4 deitada, fundo branco. */
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  body {
+    background: #fff;
+  }
+}

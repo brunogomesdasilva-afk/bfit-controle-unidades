@@ -61,7 +61,7 @@ export async function TelaMensal({
   const { data } = await consulta;
   const registros = (data ?? []) as Registro[];
 
-  // Listas vindas dos cadastros da academia ("Cadastro de academias" → academia).
+  // Listas vindas dos cadastros da academia ("Academias" → academia).
   let modalidades: string[] = [];
   if (usaModalidades && selecionada) {
     const { data: lista } = await supabase.from("modalidades").select("nome").eq("academia_id", selecionada).order("nome");
@@ -105,7 +105,7 @@ export async function TelaMensal({
 
   const avisoCadastro = (falta: string) => (
     <p className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-      {falta} para {nomeSelecionada}. Cadastre em Cadastro de academias → {nomeSelecionada} para
+      {falta} para {nomeSelecionada}. Cadastre em Academias → {nomeSelecionada} para
       escolher na lista.
     </p>
   );

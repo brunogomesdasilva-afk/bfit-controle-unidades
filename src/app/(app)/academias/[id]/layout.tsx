@@ -3,7 +3,7 @@ import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { AbasDaAcademia } from "./AbasDaAcademia";
 
-// Área de uma academia dentro do "Cadastro de academias": nome no topo e os cadastros dela em abas.
+// Área de uma academia dentro do "Academias": nome no topo e os cadastros dela em abas.
 // O administrador abre qualquer academia; o usuário de uma academia, só a dele.
 export default async function AcademiaLayout({ children, params }: LayoutProps<"/academias/[id]">) {
   const atual = await getPerfilAtual();
@@ -18,7 +18,7 @@ export default async function AcademiaLayout({ children, params }: LayoutProps<"
 
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-slate-500">Cadastro de academias</p>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Academias</p>
       <h1 className="text-lg font-semibold text-slate-900">{academia.nome}</h1>
       <AbasDaAcademia id={academia.id} />
       {children}

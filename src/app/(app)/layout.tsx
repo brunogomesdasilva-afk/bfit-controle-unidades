@@ -11,7 +11,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     .split(",")
     .filter(Boolean);
 
-  // Cada academia vira um submenu de "Cadastro de academias": o administrador vê todas; o usuário de
+  // Cada academia vira um submenu de "Academias": o administrador vê todas; o usuário de
   // uma academia, só a dele (a regra de acesso do banco já filtra).
   let academias: { id: string; nome: string }[] = [];
   if (atual) {
@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         recolhidoInicial={recolhido}
         submenusIniciais={submenusAbertos}
       />
-      <main className="min-w-0 flex-1 px-6 py-6">
+      <main className="min-w-0 flex-1 px-6 py-6 print:p-0">
         {children}
       </main>
     </div>
