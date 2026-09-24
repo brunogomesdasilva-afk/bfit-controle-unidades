@@ -6,10 +6,21 @@ import { exigirAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-const PERFIS = ["admin", "usuario"];
-
 function voltar(params: Record<string, string>): never {
   redirect(`/usuarios?${new URLSearchParams(params).toString()}`);
+}
+
+// O campo "acesso" da tela vale "admin" (todas as academias) ou o id de uma academia.
+async function lerAcesso(formData: FormData) {
+  const acesso = String(formData.get("acesso") ?? "");
+  if (acesso === "admin") return { perfil: "admin", academia_id: null };
+
+  const supabase = await createClient();
+  const { data: academia } = acesso
+    ? await supabase.from("academias").select("id").eq("id", acesso).maybeSingle()
+    : { data: null };
+  if (!academia) voltar({ erro: "Escolha o acesso do usuário: administrador ou uma academia." });
+  return { perfil: "usuario", academia_id: academia.id as string };
 }
 
 export async function criarUsuario(formData: FormData) {
@@ -18,11 +29,10 @@ export async function criarUsuario(formData: FormData) {
   const nome = String(formData.get("nome") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const senha = String(formData.get("senha") ?? "");
-  const perfil = String(formData.get("perfil") ?? "usuario");
 
   if (!nome || !email) voltar({ erro: "Informe o nome e o e-mail." });
   if (senha.length < 6) voltar({ erro: "A senha precisa ter pelo menos 6 caracteres." });
-  if (!PERFIS.includes(perfil)) voltar({ erro: "Perfil inválido." });
+  const acesso = await lerAcesso(formData);
 
   const admin = createAdminClient();
   if (!admin) {
@@ -40,8 +50,8 @@ export async function criarUsuario(formData: FormData) {
     voltar({ erro: jaExiste ? "Já existe um usuário com esse e-mail." : (error?.message ?? "Erro ao criar o usuário.") });
   }
 
-  // O perfil (linha em profiles) é criado por um gatilho do banco com o perfil padrão "usuario".
-  const { error: erroPerfil } = await admin.from("profiles").update({ perfil }).eq("id", data.user.id);
+  // O perfil (linha em profiles) é criado por um gatilho do banco, ainda sem acesso; aqui ele recebe o acesso.
+  const { error: erroPerfil } = await admin.from("profiles").update(acesso).eq("id", data.user.id);
   if (erroPerfil) voltar({ erro: erroPerfil.message });
 
   revalidatePath("/usuarios");
@@ -62,19 +72,17 @@ export async function alterarNomeUsuario(usuarioId: string, formData: FormData) 
   voltar({ ok: "Nome atualizado." });
 }
 
-export async function alterarPerfilUsuario(usuarioId: string, formData: FormData) {
+export async function alterarAcessoUsuario(usuarioId: string, formData: FormData) {
   const atual = await exigirAdmin();
-  const perfil = String(formData.get("perfil") ?? "");
-
-  if (usuarioId === atual.id) voltar({ erro: "Você não pode alterar o seu próprio perfil." });
-  if (!PERFIS.includes(perfil)) voltar({ erro: "Perfil inválido." });
+  if (usuarioId === atual.id) voltar({ erro: "Você não pode alterar o seu próprio acesso." });
+  const acesso = await lerAcesso(formData);
 
   const supabase = await createClient();
-  const { error } = await supabase.from("profiles").update({ perfil }).eq("id", usuarioId);
+  const { error } = await supabase.from("profiles").update(acesso).eq("id", usuarioId);
   if (error) voltar({ erro: error.message });
 
   revalidatePath("/usuarios");
-  voltar({ ok: "Perfil atualizado." });
+  voltar({ ok: "Acesso atualizado." });
 }
 
 // O e-mail é o login do usuário: troca no Supabase Auth (precisa da chave de serviço) e no perfil.

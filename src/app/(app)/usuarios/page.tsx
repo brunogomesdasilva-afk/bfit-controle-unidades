@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { exigirAdmin } from "@/lib/auth";
-import type { Profile } from "@/lib/database.types";
+import type { Academia, Profile } from "@/lib/database.types";
 import {
+  alterarAcessoUsuario,
   alterarEmailUsuario,
   alterarNomeUsuario,
-  alterarPerfilUsuario,
   alterarStatusUsuario,
   criarUsuario,
   redefinirSenhaUsuario,
@@ -13,7 +13,27 @@ import {
 import { MenuAcoesUsuario } from "./MenuAcoesUsuario";
 
 const CAMPO = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm";
-const ROTULO_PERFIL = { admin: "Administrador", usuario: "Usuário" } as const;
+
+// Acesso do usuário: "admin" (todas as academias) ou o id da academia que ele pode ver.
+function valorAcesso(u: Profile) {
+  return u.perfil === "admin" ? "admin" : (u.academia_id ?? "");
+}
+
+function OpcoesAcesso({ academias }: { academias: Academia[] }) {
+  return (
+    <>
+      <option value="" disabled>
+        Selecione o acesso
+      </option>
+      <option value="admin">Administrador (todas as academias)</option>
+      {academias.map((a) => (
+        <option key={a.id} value={a.id}>
+          {a.nome}
+        </option>
+      ))}
+    </>
+  );
+}
 
 export default async function UsuariosPage({
   searchParams,
@@ -30,8 +50,13 @@ export default async function UsuariosPage({
   const { erro, ok, inativar, editarEmail, redefinirSenha } = await searchParams;
 
   const supabase = await createClient();
-  const { data } = await supabase.from("profiles").select("*").order("nome");
+  const [{ data }, { data: listaAcademias }] = await Promise.all([
+    supabase.from("profiles").select("*").order("nome"),
+    supabase.from("academias").select("*").order("nome"),
+  ]);
   const usuarios = (data ?? []) as Profile[];
+  const academias = (listaAcademias ?? []) as Academia[];
+  const nomeAcademia = new Map(academias.map((a) => [a.id, a.nome]));
   const chaveConfigurada = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   const nomePorId = new Map(usuarios.map((u) => [u.id, u.nome]));
 
@@ -44,8 +69,8 @@ export default async function UsuariosPage({
       <div className="lg:col-span-2">
         <h1 className="text-lg font-semibold text-slate-900">Usuários</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Administradores gerenciam o sistema e os usuários. O nome é o que aparece no sistema no lugar do
-          e-mail.
+          O administrador vê todas as academias e gerencia o sistema. Os demais usuários só veem e lançam
+          compras e manutenções da academia do seu acesso.
         </p>
 
         {erro && <p className="mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
@@ -149,7 +174,7 @@ export default async function UsuariosPage({
               <tr>
                 <th className="px-4 py-2 font-medium">Nome</th>
                 <th className="px-4 py-2 font-medium">E-mail</th>
-                <th className="px-4 py-2 font-medium">Perfil</th>
+                <th className="px-4 py-2 font-medium">Acesso</th>
                 <th className="px-4 py-2 font-medium">Status</th>
               </tr>
             </thead>
@@ -173,16 +198,19 @@ export default async function UsuariosPage({
                   <td className="px-4 py-2 text-slate-600">{u.email}</td>
                   <td className="px-4 py-2">
                     {u.id === atual.id ? (
-                      <span className="text-slate-600">{ROTULO_PERFIL[u.perfil]} (você)</span>
+                      <span className="text-slate-600">
+                        {u.perfil === "admin" ? "Administrador" : (nomeAcademia.get(u.academia_id ?? "") ?? "Sem acesso")}{" "}
+                        (você)
+                      </span>
                     ) : (
-                      <form action={alterarPerfilUsuario.bind(null, u.id)} className="flex items-center gap-2">
+                      <form action={alterarAcessoUsuario.bind(null, u.id)} className="flex items-center gap-2">
                         <select
-                          name="perfil"
-                          defaultValue={u.perfil}
-                          className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          name="acesso"
+                          defaultValue={valorAcesso(u)}
+                          required
+                          className="max-w-56 rounded-md border border-slate-300 px-2 py-1 text-sm"
                         >
-                          <option value="usuario">Usuário</option>
-                          <option value="admin">Administrador</option>
+                          <OpcoesAcesso academias={academias} />
                         </select>
                         <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
                           salvar
@@ -287,11 +315,13 @@ export default async function UsuariosPage({
             <input name="senha" type="password" required minLength={6} autoComplete="new-password" className={CAMPO} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700">Perfil</label>
-            <select name="perfil" defaultValue="usuario" className={CAMPO}>
-              <option value="usuario">Usuário</option>
-              <option value="admin">Administrador</option>
+            <label className="block text-sm font-medium text-slate-700">Acesso</label>
+            <select name="acesso" defaultValue="" required className={CAMPO}>
+              <OpcoesAcesso academias={academias} />
             </select>
+            <p className="mt-1 text-xs text-slate-500">
+              Escolhendo uma academia, o usuário só vê as compras e manutenções dela.
+            </p>
           </div>
           <button
             type="submit"

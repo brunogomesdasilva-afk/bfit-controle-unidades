@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
-/* Identidade visual provisória (herdada do sistema de financiamento): ajuste às cores da BFIT */
+/* Identidade visual Bluefit: branco, cinza e azul.
+   "marca" = azul (botões, destaques, links); "grafite" = cinza (menu lateral e tela de login). */
 @theme {
-  --color-marca: #006830;
-  --color-marca-escuro: #00522a;
-  --color-marca-claro: #3fbf7a;
-  --color-grafite: #32363a;
-  --color-grafite-escuro: #272a2d;
+  --color-marca: #0b4ea2;
+  --color-marca-escuro: #083b7a;
+  --color-marca-claro: #4a9bff;
+  --color-grafite: #3b4047;
+  --color-grafite-escuro: #2c3036;
 }
 
 /* Tamanho-base do sistema (o padrão do navegador é 16px). Textos e espaçamentos acompanham. */

@@ -3,10 +3,83 @@ export type Profile = {
   nome: string;
   email: string;
   perfil: "admin" | "usuario";
+  academia_id: string | null;
   ativo: boolean;
   ativo_alterado_em: string | null;
   ativo_alterado_por: string | null;
   created_at: string;
+};
+
+export type Academia = {
+  id: string;
+  nome: string;
+  area_m2: number | null;
+  custo_financeiro: number | null;
+  maquinas_peitoral: number;
+  maquinas_costas: number;
+  maquinas_pernas: number;
+  maquinas_bracos: number;
+  created_at: string;
+};
+
+export type Compra = {
+  id: string;
+  academia_id: string;
+  data_solicitacao: string;
+  descricao: string;
+  necessario_ate: string | null;
+  data_efetivacao: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const TIPOS_MANUTENCAO = {
+  predial: "Predial",
+  preventiva: "Preventiva",
+  corretiva: "Corretiva",
+} as const;
+export type TipoManutencao = keyof typeof TIPOS_MANUTENCAO;
+
+export type Manutencao = {
+  id: string;
+  academia_id: string;
+  tipo: TipoManutencao;
+  data_inclusao: string;
+  descricao: string;
+  data_finalizacao: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export const DEPARTAMENTOS = {
+  gerente: "Gerente",
+  recepcao: "Recepção",
+  professores: "Professores",
+  professor_coletivas: "Professor de coletivas",
+  professor_lutas: "Professor de lutas",
+  estagiario: "Estagiário",
+  limpeza: "Limpeza",
+} as const;
+
+export const GENEROS = {
+  masculino: "Masculino",
+  feminino: "Feminino",
+} as const;
+
+export type Funcionario = {
+  id: string;
+  academia_id: string;
+  nome: string;
+  departamento: keyof typeof DEPARTAMENTOS;
+  horario_entrada: string | null;
+  horario_saida: string | null;
+  genero: keyof typeof GENEROS | null;
+};
+
+export type Modalidade = {
+  id: string;
+  academia_id: string;
+  nome: string;
 };
 
 // Placeholder mínimo para satisfazer o generic do supabase-js.

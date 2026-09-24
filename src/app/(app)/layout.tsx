@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { getPerfilAtual } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { Sidebar } from "./Sidebar";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
@@ -10,11 +11,21 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     .split(",")
     .filter(Boolean);
 
+  // Cada academia vira um submenu de "Cadastro de academias" (só o administrador vê esse menu).
+  let academias: { id: string; nome: string }[] = [];
+  if (atual?.perfil === "admin") {
+    const supabase = await createClient();
+    const { data } = await supabase.from("academias").select("id, nome").order("nome");
+    academias = data ?? [];
+  }
+
   return (
     <div className="flex min-h-screen">
       <Sidebar
         nome={atual?.nome ?? ""}
         perfil={atual?.perfil ?? "usuario"}
+        academiaNome={atual?.academiaNome ?? null}
+        academias={academias}
         recolhidoInicial={recolhido}
         submenusIniciais={submenusAbertos}
       />
