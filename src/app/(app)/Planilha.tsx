@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type KeyboardEvent } from "react";
+import { useState, useTransition, type KeyboardEvent, type ReactNode } from "react";
 
 // Tabela no estilo de planilha: cabeçalho fixo, linhas numeradas e edição direto na linha.
 // "+ Nova linha" abre uma linha em branco no topo; "Alterar" (ou duplo clique) edita a linha.
@@ -111,6 +111,7 @@ export function Planilha({
   vazio = "Nenhum registro ainda. Clique em “+ Nova linha” para incluir.",
   somenteLeitura,
   numeroInicial = 1,
+  barra,
 }: {
   colunas: Coluna[];
   linhas: Linha[];
@@ -124,6 +125,8 @@ export function Planilha({
   somenteLeitura?: string;
   // Número da primeira linha (em telas com paginação, continua a contagem da página anterior).
   numeroInicial?: number;
+  // Controles mostrados na mesma linha do botão de incluir (ex.: o seletor de mês).
+  barra?: ReactNode;
 }) {
   const editaveis = colunas.filter((c) => !SO_EXIBICAO.has(c.tipo));
   const temGrupos = colunas.some((c) => c.grupo);
@@ -268,9 +271,13 @@ export function Planilha({
   return (
     <div>
       {somenteLeitura ? (
-        <p className="mb-3 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">{somenteLeitura}</p>
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {barra}
+          <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">{somenteLeitura}</p>
+        </div>
       ) : (
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex flex-wrap items-center gap-3">
+          {barra}
           <button
             type="button"
             onClick={abrirNovo}
@@ -279,7 +286,7 @@ export function Planilha({
           >
             {rotuloNovo}
           </button>
-          <p className="text-xs text-slate-500">Duplo clique na linha para alterar · Enter salva · Esc cancela</p>
+          <p className="ml-auto text-xs text-slate-500">Duplo clique na linha para alterar · Enter salva · Esc cancela</p>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { AVISO_TODAS, contextoAcademias } from "@/lib/contexto";
 import { hoje, intervaloDoMes, lerMes } from "@/lib/planilha";
-import { AbasAcademias } from "./AbasAcademias";
+import { AbasAcademias, SeletorMes } from "./AbasAcademias";
 import { SemAcademias } from "./SemAcademias";
 import { Planilha, type Coluna, type Linha, type Resultado } from "./Planilha";
 
@@ -119,7 +119,7 @@ export async function TelaMensal({
         <SemAcademias admin={admin} />
       ) : (
         <>
-          <AbasAcademias academias={academias} selecionada={selecionada} mes={mes} caminho={caminho} />
+          <AbasAcademias academias={academias} selecionada={selecionada} caminho={caminho} />
           {usaModalidades && selecionada && modalidades.length === 0 && avisoCadastro("Nenhuma modalidade cadastrada")}
           {professores &&
             selecionada &&
@@ -136,6 +136,7 @@ export async function TelaMensal({
             rotuloNovo={rotuloNovo}
             vazio={selecionada ? `Nenhum lançamento neste mês. Clique em “${rotuloNovo}” para incluir.` : "Nenhum lançamento neste mês."}
             somenteLeitura={selecionada ? undefined : AVISO_TODAS}
+            barra={<SeletorMes caminho={caminho} academia={selecionada} mes={mes} />}
           />
         </>
       )}

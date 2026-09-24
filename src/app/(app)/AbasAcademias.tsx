@@ -93,30 +93,46 @@ export function AbasAcademias({
         </div>
       )}
 
-      {mes && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-slate-500">Mês:</span>
-          <div className="inline-flex items-center overflow-hidden rounded-md border border-slate-300 bg-white">
-            <Link
-              href={link(caminho, { ...atuais, mes: somarMes(mes, -1) })}
-              aria-label="Mês anterior"
-              className="px-2.5 py-1 text-slate-600 hover:bg-slate-50"
-            >
-              ‹
-            </Link>
-            <span className="min-w-36 border-x border-slate-300 px-3 py-1 text-center font-medium capitalize text-slate-900">
-              {MESES[Number(mes.slice(5, 7)) - 1]}/{mes.slice(0, 4)}
-            </span>
-            <Link
-              href={link(caminho, { ...atuais, mes: somarMes(mes, 1) })}
-              aria-label="Próximo mês"
-              className="px-2.5 py-1 text-slate-600 hover:bg-slate-50"
-            >
-              ›
-            </Link>
-          </div>
-        </div>
-      )}
+      {mes && <SeletorMes caminho={caminho} academia={selecionada} situacao={situacao} mes={mes} />}
+    </div>
+  );
+}
+
+// Seletor de mês (‹ setembro/2026 ›). Também usado na barra da planilha, ao lado do botão de incluir.
+export function SeletorMes({
+  caminho,
+  academia,
+  situacao,
+  mes,
+}: {
+  caminho: string;
+  academia: string | null;
+  situacao?: FiltroSituacao;
+  mes: string;
+}) {
+  const atuais: Filtros = { academia, situacao, mes };
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <span className="text-slate-500">Mês:</span>
+      <div className="inline-flex items-center overflow-hidden rounded-md border border-slate-300 bg-white">
+        <Link
+          href={link(caminho, { ...atuais, mes: somarMes(mes, -1) })}
+          aria-label="Mês anterior"
+          className="px-2.5 py-1 text-slate-600 hover:bg-slate-50"
+        >
+          ‹
+        </Link>
+        <span className="min-w-36 border-x border-slate-300 px-3 py-1 text-center font-medium capitalize text-slate-900">
+          {MESES[Number(mes.slice(5, 7)) - 1]}/{mes.slice(0, 4)}
+        </span>
+        <Link
+          href={link(caminho, { ...atuais, mes: somarMes(mes, 1) })}
+          aria-label="Próximo mês"
+          className="px-2.5 py-1 text-slate-600 hover:bg-slate-50"
+        >
+          ›
+        </Link>
+      </div>
     </div>
   );
 }
