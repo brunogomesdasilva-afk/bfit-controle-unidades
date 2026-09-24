@@ -49,39 +49,6 @@ const ITENS: ItemMenu[] = [
     ),
   },
   {
-    href: "/academias",
-    rotulo: "Academias",
-    ativo: (p: string) => p === "/academias",
-    icone: (
-      <Icone>
-        <path d="M6.5 6.5h11M6.5 17.5h11" />
-        <path d="M3 9v6M21 9v6M6.5 5v14M17.5 5v14" />
-      </Icone>
-    ),
-  },
-  {
-    href: "/compras",
-    rotulo: "Compras",
-    ativo: (p: string) => p === "/compras",
-    icone: (
-      <Icone>
-        <circle cx="9" cy="21" r="1" />
-        <circle cx="20" cy="21" r="1" />
-        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
-      </Icone>
-    ),
-  },
-  {
-    href: "/manutencao",
-    rotulo: "Manutenção",
-    ativo: (p: string) => p === "/manutencao",
-    icone: (
-      <Icone>
-        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-      </Icone>
-    ),
-  },
-  {
     href: "/vendas",
     rotulo: "Vendas",
     ativo: (p: string) => p === "/vendas",
@@ -193,6 +160,28 @@ const ITENS: ItemMenu[] = [
     ],
   },
   {
+    href: "/compras",
+    rotulo: "Compras",
+    ativo: (p: string) => p === "/compras",
+    icone: (
+      <Icone>
+        <circle cx="9" cy="21" r="1" />
+        <circle cx="20" cy="21" r="1" />
+        <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6" />
+      </Icone>
+    ),
+  },
+  {
+    href: "/manutencao",
+    rotulo: "Manutenção",
+    ativo: (p: string) => p === "/manutencao",
+    icone: (
+      <Icone>
+        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+      </Icone>
+    ),
+  },
+  {
     href: "/avaliacao/adb",
     rotulo: "A.D.B",
     ativo: (p: string) => p.startsWith("/avaliacao"),
@@ -216,17 +205,6 @@ const ITENS: ItemMenu[] = [
     ),
     filhos: [
       {
-        href: "/relatorios/diario",
-        rotulo: "Resumo do dia",
-        ativo: (p: string) => p === "/relatorios/diario",
-        icone: (
-          <Icone>
-            <circle cx="12" cy="12" r="10" />
-            <polyline points="12 6 12 12 16 14" />
-          </Icone>
-        ),
-      },
-      {
         href: "/relatorios/pendencias",
         rotulo: "Compras e manutenção",
         ativo: (p: string) => p === "/relatorios/pendencias",
@@ -237,19 +215,18 @@ const ITENS: ItemMenu[] = [
           </Icone>
         ),
       },
-      {
-        href: "/relatorios/mensal",
-        rotulo: "Fechamento do mês",
-        ativo: (p: string) => p === "/relatorios/mensal",
-        icone: (
-          <Icone>
-            <line x1="18" y1="20" x2="18" y2="10" />
-            <line x1="12" y1="20" x2="12" y2="4" />
-            <line x1="6" y1="20" x2="6" y2="14" />
-          </Icone>
-        ),
-      },
     ],
+  },
+  {
+    href: "/academias",
+    rotulo: "Academias",
+    ativo: (p: string) => p === "/academias",
+    icone: (
+      <Icone>
+        <path d="M6.5 6.5h11M6.5 17.5h11" />
+        <path d="M3 9v6M21 9v6M6.5 5v14M17.5 5v14" />
+      </Icone>
+    ),
   },
   {
     href: "/usuarios",
