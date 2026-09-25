@@ -34,6 +34,7 @@ export async function salvarFuncionario(
       { campo: "horario_entrada", rotulo: "Horário de entrada", tipo: "hora" },
       { campo: "horario_saida", rotulo: "Horário de saída", tipo: "hora" },
       { campo: "genero", rotulo: "Gênero", tipo: "texto" },
+      { campo: "data_nascimento", rotulo: "Data de nascimento", tipo: "data" },
     ],
     dados
   );

@@ -75,6 +75,7 @@ export type Funcionario = {
   horario_entrada: string | null;
   horario_saida: string | null;
   genero: keyof typeof GENEROS | null;
+  data_nascimento: string | null;
 };
 
 export type Modalidade = {

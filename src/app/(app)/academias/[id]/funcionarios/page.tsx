@@ -11,6 +11,7 @@ const COLUNAS: Coluna[] = [
   { campo: "horario_entrada", rotulo: "Horário de entrada", tipo: "hora", largura: "w-36" },
   { campo: "horario_saida", rotulo: "Horário de saída", tipo: "hora", largura: "w-36" },
   { campo: "genero", rotulo: "Gênero", tipo: "opcoes", largura: "w-36", opcoes: lista(GENEROS) },
+  { campo: "data_nascimento", rotulo: "Data de nascimento", tipo: "data", largura: "w-40" },
 ];
 
 export default async function FuncionariosPage({ params }: PageProps<"/academias/[id]/funcionarios">) {
@@ -24,10 +25,11 @@ export default async function FuncionariosPage({ params }: PageProps<"/academias
     horario_entrada: f.horario_entrada,
     horario_saida: f.horario_saida,
     genero: f.genero,
+    data_nascimento: f.data_nascimento,
   }));
 
   return (
-    <div className="max-w-5xl">
+    <div className="max-w-6xl">
       <Planilha
         colunas={COLUNAS}
         linhas={linhas}
