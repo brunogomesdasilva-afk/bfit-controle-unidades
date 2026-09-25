@@ -36,3 +36,12 @@ body {
     background: #fff;
   }
 }
+
+/* Celular: campos com 16px para o iPhone não dar zoom sozinho ao tocar num campo. */
+@media (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

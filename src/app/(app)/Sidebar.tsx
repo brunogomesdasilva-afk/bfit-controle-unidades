@@ -3,7 +3,7 @@
 import { Logo } from "@/app/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { logout } from "@/app/login/actions";
 
 function Icone({ children }: { children: ReactNode }) {
@@ -297,6 +297,19 @@ function LinkMenu({
   );
 }
 
+// Tela de computador (md ou maior). No servidor considera computador; no celular o menu vira uma gaveta.
+function useTelaGrande() {
+  return useSyncExternalStore(
+    (avisar) => {
+      const consulta = window.matchMedia("(min-width: 768px)");
+      consulta.addEventListener("change", avisar);
+      return () => consulta.removeEventListener("change", avisar);
+    },
+    () => window.matchMedia("(min-width: 768px)").matches,
+    () => true
+  );
+}
+
 export function Sidebar({
   nome,
   perfil,
@@ -313,7 +326,11 @@ export function Sidebar({
   submenusIniciais: string[];
 }) {
   const pathname = usePathname();
-  const [recolhido, setRecolhido] = useState(recolhidoInicial);
+  const [recolhidoNoComputador, setRecolhido] = useState(recolhidoInicial);
+  const telaGrande = useTelaGrande();
+  // No celular o menu nunca fica recolhido (ele abre como gaveta, com os nomes).
+  const recolhido = recolhidoNoComputador && telaGrande;
+  const [aberto, setAberto] = useState(false);
   const [abertos, setAbertos] = useState<string[]>(submenusIniciais);
 
   function alternarSubmenu(href: string) {
@@ -323,16 +340,41 @@ export function Sidebar({
   }
 
   function alternar() {
-    const proximo = !recolhido;
+    const proximo = !recolhidoNoComputador;
     setRecolhido(proximo);
     document.cookie = `sidebar_recolhido=${proximo ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
   }
 
   return (
+    <>
+      {/* Celular: barra no topo com o botão que abre o menu. */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-grafite-escuro bg-grafite px-4 py-3 md:hidden print:hidden">
+        <Logo />
+        <button
+          type="button"
+          onClick={() => setAberto(true)}
+          aria-label="Abrir menu"
+          aria-expanded={aberto}
+          className="rounded-md p-2 text-slate-200 hover:bg-white/10"
+        >
+          <Icone>
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </Icone>
+        </button>
+      </header>
+      {aberto && (
+        <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setAberto(false)} aria-hidden="true" />
+      )}
     <aside
-      className={`sticky top-0 flex h-screen shrink-0 flex-col print:hidden border-r border-grafite-escuro bg-grafite transition-[width] duration-200 ${
-        recolhido ? "w-16" : "w-56"
-      }`}
+      // Fecha a gaveta do celular ao escolher uma tela.
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest("a")) setAberto(false);
+      }}
+      className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col border-r border-grafite-escuro bg-grafite transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] print:hidden ${
+        aberto ? "translate-x-0" : "-translate-x-full"
+      } ${recolhido ? "md:w-16" : "md:w-56"}`}
     >
       <div
         className={`flex items-center border-b border-white/10 ${
@@ -346,11 +388,22 @@ export function Sidebar({
         )}
         <button
           type="button"
+          onClick={() => setAberto(false)}
+          aria-label="Fechar menu"
+          className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white md:hidden"
+        >
+          <Icone>
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </Icone>
+        </button>
+        <button
+          type="button"
           onClick={alternar}
           aria-expanded={!recolhido}
           aria-label={recolhido ? "Expandir menu" : "Recolher menu"}
           title={recolhido ? "Expandir menu" : "Recolher menu"}
-          className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+          className="hidden shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white md:inline-flex"
         >
           <Icone>
             {recolhido ? <polyline points="9 18 15 12 9 6" /> : <polyline points="15 18 9 12 15 6" />}
@@ -459,5 +512,6 @@ export function Sidebar({
         </form>
       </div>
     </aside>
+    </>
   );
 }

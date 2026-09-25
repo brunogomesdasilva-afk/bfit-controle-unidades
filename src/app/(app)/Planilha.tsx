@@ -286,7 +286,7 @@ export function Planilha({
           >
             {rotuloNovo}
           </button>
-          <p className="ml-auto text-xs text-slate-500">Duplo clique na linha para alterar · Enter salva · Esc cancela</p>
+          <p className="ml-auto hidden text-xs text-slate-500 md:block">Duplo clique na linha para alterar · Enter salva · Esc cancela</p>
         </div>
       )}
 

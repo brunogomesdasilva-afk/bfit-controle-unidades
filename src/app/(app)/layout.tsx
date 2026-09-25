@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen flex-col md:flex-row">
       <Sidebar
         nome={atual?.nome ?? ""}
         perfil={atual?.perfil ?? "usuario"}
@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         recolhidoInicial={recolhido}
         submenusIniciais={submenusAbertos}
       />
-      <main className="min-w-0 flex-1 px-6 py-6 print:p-0">
+      <main className="min-w-0 flex-1 px-3 py-4 md:px-6 md:py-6 print:p-0">
         {children}
       </main>
     </div>
