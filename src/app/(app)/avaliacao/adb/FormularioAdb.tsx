@@ -89,7 +89,8 @@ export function FormularioAdb({
 
       {funcionarios.length === 0 && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Nenhum funcionário de Professores ou Recepção cadastrado nesta academia. Cadastre em Academias →
+          Nenhum funcionário que entra na A.D.B (professores de sala, professores de lutas, estagiários ou recepção)
+          cadastrado nesta academia. Cadastre em Academias →
           academia → Funcionários.
         </p>
       )}

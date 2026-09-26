@@ -92,10 +92,11 @@ export const PERGUNTAS_ABERTAS = [
 
 export const CONCEITOS: Record<number, string> = { 5: "Excelente", 4: "Bom", 3: "Regular", 2: "Ruim", 1: "Péssimo" };
 
-// Questionário de cada departamento. Gerente e Limpeza não têm questionário na planilha.
+// Questionário de cada departamento. Gerente e Limpeza não têm questionário na planilha, e professores de
+// coletivas não entram na A.D.B (regra do Bruno).
 export function questionarioDoDepartamento(departamento: string): Questionario | null {
   if (departamento === "recepcao") return "recepcao";
-  if (["professores", "professor_coletivas", "professor_lutas", "estagiario"].includes(departamento)) return "professores";
+  if (["professores", "professor_lutas", "estagiario"].includes(departamento)) return "professores";
   return null;
 }
 
