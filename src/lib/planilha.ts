@@ -36,11 +36,12 @@ export function numero(valor: string | undefined, { inteiro = false } = {}) {
   return n;
 }
 
-// Horário no formato hh:mm, sempre de 30 em 30 minutos (08:00, 08:30...).
+// Horário no formato hh:mm. As telas oferecem de 30 em 30 minutos; aulas coletivas importadas podem ter
+// quartos de hora (18:45), e o banco confere a regra de cada tabela.
 export function hora(valor: string | undefined) {
   const v = (valor ?? "").trim();
   if (!v) return null;
-  return /^([01]\d|2[0-3]):(00|30)(:00)?$/.test(v) ? v.slice(0, 5) : undefined;
+  return /^([01]\d|2[0-3]):(00|15|30|45)(:00)?$/.test(v) ? v.slice(0, 5) : undefined;
 }
 
 // Validação dos campos que chegam da planilha, conforme o tipo de cada um.

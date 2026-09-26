@@ -35,6 +35,12 @@ const HORARIOS = Array.from({ length: 48 }, (_, i) => {
   return { valor: h, rotulo: h };
 });
 
+// Lista de horários incluindo o já gravado, se ele estiver fora da grade (ex.: 18:45 do histórico importado).
+function horariosCom(atual: string | undefined) {
+  if (!atual || HORARIOS.some((h) => h.valor === atual)) return HORARIOS;
+  return [...HORARIOS, { valor: atual, rotulo: atual }].sort((a, b) => a.valor.localeCompare(b.valor));
+}
+
 export type Linha = { id: string } & Record<string, string | null>;
 
 export type Resultado = { erro?: string };
@@ -227,7 +233,7 @@ export function Planilha({
                       ? `Escolha antes: ${colunas.find((d) => d.campo === c.dependeDe)?.rotulo ?? ""}`
                       : "Selecione…"}
                 </option>
-                {(c.tipo === "hora" ? HORARIOS : opcoesVisiveis(c)).map((o) => (
+                {(c.tipo === "hora" ? horariosCom(rascunho[c.campo]) : opcoesVisiveis(c)).map((o) => (
                   <option key={o.valor} value={o.valor}>
                     {o.rotulo}
                   </option>
