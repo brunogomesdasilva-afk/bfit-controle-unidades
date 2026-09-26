@@ -1,5 +1,5 @@
 // Importa a aba de dados do "Gerencial <Academia>.xlsx" para o Controle diário (tabela controle_diario).
-// Uso (na pasta do projeto): node scripts/importar-gerencial.mjs "<arquivo.xlsx>" "<nome da academia no sistema>" [--gravar]
+// Uso (na pasta do projeto): node scripts/importar-gerencial.mjs "<arquivo.xlsx>" "<nome da academia no sistema>" [--gravar] [--desde aaaa-mm-dd]
 // Sem --gravar só confere (simulação). Com --gravar, grava; dias que já existem no sistema são atualizados.
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -9,8 +9,10 @@ const require = createRequire(raiz + "/package.json");
 const ExcelJS = require("exceljs");
 const { createClient } = require("@supabase/supabase-js");
 
-const [arquivo, nomeAcademia, modo] = process.argv.slice(2);
-const gravar = modo === "--gravar";
+const [arquivo, nomeAcademia, ...opcoes] = process.argv.slice(2);
+const gravar = opcoes.includes("--gravar");
+// --desde: ignora datas anteriores (ex.: linha que sobrou do modelo de outra academia).
+const desde = opcoes.includes("--desde") ? opcoes[opcoes.indexOf("--desde") + 1] : null;
 
 const env = Object.fromEntries(
   fs.readFileSync(raiz + "/.env.local", "utf8").split(/\r?\n/).filter((l) => l.includes("=") && !l.startsWith("#"))
@@ -38,7 +40,7 @@ const CAMPOS = {
   cancelamentos_efetivados: { cab: ["can. efet.", "canc. efet.", "canc. efet"], inteiro: true },
   nps: { cab: ["nps"], inteiro: false },
   neoassist: { cab: ["neoassist", "neo assist"], inteiro: true },
-  vendas_site: { cab: ["vendas site"], inteiro: true },
+  vendas_site: { cab: ["vendas site", "vendas sites"], inteiro: true },
 };
 
 const problemas = [];
@@ -46,8 +48,10 @@ function numero(bruto, campo, linha, inteiro) {
   let v = valor(bruto);
   if (v === null || v === undefined || v === "") return null;
   if (typeof v === "string") {
-    const s = v.trim().replace(/^R\$\s*/, "");
+    let s = v.trim().replace(/^R\$\s*/, "");
     if (s === "" || s === "-") return null;
+    // Digitado com vírgula no lugar do ponto de milhar (ex.: "14,023,00" = 14.023,00): a última vírgula é a decimal.
+    if (/^\d{1,3}(,\d{3})+,\d{2}$/.test(s)) s = s.replace(/,(?=\d{3},)/g, ".");
     const n = Number(s.includes(",") ? s.replace(/\./g, "").replace(",", ".") : s);
     if (!Number.isFinite(n)) {
       problemas.push(`linha ${linha}: ${campo} = "${v}" não é número (ficou vazio)`);
@@ -85,6 +89,10 @@ aba.eachRow((row, r) => {
   const bruto = valor(row.getCell(colData).value);
   if (!(bruto instanceof Date)) return;
   const data = bruto.toISOString().slice(0, 10);
+  if (desde && data < desde) {
+    problemas.push(`linha ${r}: data ${data} anterior a ${desde} (ignorada)`);
+    return;
+  }
   const registro = { data };
   for (const [campo, col] of Object.entries(colunas)) {
     if (!col) continue;
