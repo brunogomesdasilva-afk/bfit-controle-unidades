@@ -37,6 +37,7 @@ const INDICADORES: Indicador[] = [
   { rotulo: "Churn", formato: "percentual", valor: (t) => div(t.cancelamentos_efetivados, t.ativos_pagantes), sobeEBom: false },
   { rotulo: "Previsão de churn", formato: "percentual", valor: (t) => div(t.cancelamentos_solicitados, t.ativos_pagantes), sobeEBom: false },
   { rotulo: "NPS (média)", formato: "decimal", valor: (t) => t.nps, sobeEBom: true },
+  { rotulo: "Neoassist", formato: "numero", valor: (t) => t.neoassist, sobeEBom: false },
   { rotulo: "Passagens na catraca", formato: "numero", valor: (t) => t.passagens, sobeEBom: true },
   { rotulo: "Check-ins Gympass", formato: "numero", valor: (t) => t.gympass, sobeEBom: true },
   { rotulo: "Gympass (R$)", formato: "moeda", valor: (t) => t.gympass_valor, sobeEBom: true },
@@ -142,7 +143,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
     motivosDeNaoConversao(supabase, p.mes, unidade),
     motivosDeNaoConversao(supabase, p.ano, unidade),
   ]);
-  const erro = dia.erro ?? mes.erro;
+  const erro = dia.erro ?? mes.erro ?? mesAnterior.erro ?? ano.erro ?? anoAnterior.erro;
 
   // Estrutura das unidades escolhidas (cadastro de academias).
   const escolhidas = unidade ? academias.filter((a) => a.id === unidade) : academias;

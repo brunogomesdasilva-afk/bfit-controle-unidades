@@ -49,7 +49,31 @@ const PROFESSORES = {
   renan: "Renan",
   ryan: "Ryan",
   will: "Will", wil: "Will",
+  // Novo Osasco
+  lidi: "Lidiane", lidiane: "Lidiane",
+  max: "Maxwell", maxwell: "Maxwell",
+  regina: "Regyna", regyna: "Regyna",
+  tiagot: "Tiago Terra", tiagoterra: "Tiago Terra",
+  thiagoc: "Thiago C.",
+  // Km18
+  day: "Dayane",
+  adrjano: "Adriano",
+  thiagoterra: "Tiago Terra",
+  karol: "Carol",
 };
+// Regras de cada unidade (confirmadas com o Bruno): nomes que são professores já cadastrados na unidade e
+// pessoas que só davam aula como substitutas (a aula vai para "professor substituto" e ninguém é cadastrado).
+const POR_UNIDADE = {
+  novoosasco: { substitutos: ["daniela", "adriano", "adrjano"] },
+  rochdale: {
+    professores: { luiz: "luís", felipe: "Filipi", caio: "caio cessar augusto" },
+    substitutos: ["daniel"],
+  },
+};
+const unidade = POR_UNIDADE[chave(nomeAcademia)] ?? {};
+const nomeDoProfessor = (p) => unidade.professores?.[chave(p)] ?? PROFESSORES[chave(p)] ?? titulo(p);
+// Texto de substituição no lugar do professor (a aula vai para "professor substituto", sem professor).
+const SUBSTITUICAO = /^(sub|subistuicao|substituicao|substituto|ferias\w*)$/;
 const MODALIDADES = {
   bodypump: "BODY PUMP", bodycombat: "BODY COMBAT", bodybalance: "BODY BALANCE", balance: "BODY BALANCE", bodylance: "BODY BALANCE",
   bodyattack: "BODY ATTACK", bodystep: "BODY STEP", bodyjam: "BODY JAM", bodyjump: "BODY JUMP",
@@ -57,41 +81,75 @@ const MODALIDADES = {
   fitdance: "FIT DANCE", alongamento: "ALONGAMENTO", alongamemto: "ALONGAMENTO",
   hiit: "HIIT", hit: "HIIT", hitt: "HIIT",
   jiujitsu: "JIU JITSU", muaythai: "MUAY THAI",
+  // Erros de digitação e variações das outras unidades (confirmado com o Bruno)
+  alogamento: "ALONGAMENTO", alonamento: "ALONGAMENTO", alongamen: "ALONGAMENTO",
+  bodupump: "BODY PUMP", bodypump45: "BODY PUMP", powerjump45: "POWER JUMP",
+  circuto: "CIRCUITO", mobiidade: "MOBILIDADE", firdance: "FIT DANCE", plates: "PILATES",
+  muaythay: "MUAY THAI", muaythau: "MUAY THAI", jiu: "JIU JITSU",
+  shbam: "SH'BAM",
+  bodyvombat: "BODY COMBAT", set: "STEP", setp: "STEP", stepclass: "STEP",
+  alongmob: "ALONGAMENTO / MOBILIDADE",
+  bcross: "B-CROSS", cross: "B-CROSS", crosfit: "B-CROSS", crossfit: "B-CROSS",
 };
 const SEM_MODALIDADE = new Set(["", "xxx"]);
 const titulo = (s) => s.toLowerCase().replace(/(^|\s)\S/g, (l) => l.toUpperCase());
 
 // Nome do professor da planilha → partes já com o nome do sistema. Dupla ("A/B") ou "Daniel ( marina)" vem com
 // mais de uma parte; a aula fica com o professor que costuma dar aquele horário (regra do Bruno).
+// "Elias/sub" fica com o Elias (a marca de substituição some); "Férias Terra" ou "subistuição" sozinhos viram
+// substituição (professor em branco, texto no substituto).
 function partesDoProfessor(bruto) {
   const texto = String(bruto ?? "").trim();
-  if (!texto) return [];
-  return texto
+  if (!texto) return { partes: [], substituicao: null };
+  const primeira = chave(texto.split(/\s/)[0]);
+  if (SUBSTITUICAO.test(chave(texto)) || SUBSTITUICAO.test(primeira))
+    return { partes: [], substituicao: chave(texto).startsWith("sub") ? "Substituição" : titulo(texto) };
+  // Quem só dava aula como substituto nesta unidade (ex.: Daniela na Novo Osasco).
+  if (unidade.substitutos?.includes(chave(texto))) return { partes: [], substituicao: titulo(texto) };
+  const partes = texto
     .split(/[/()]/)
     .map((p) => p.trim())
-    .filter(Boolean)
-    .map((p) => PROFESSORES[chave(p)] ?? titulo(p));
+    .filter((p) => p && !SUBSTITUICAO.test(chave(p)))
+    .map(nomeDoProfessor);
+  return { partes, substituicao: null };
 }
 // Modalidade: null = sem modalidade (a aula não entra, regra do Bruno).
 function modalidade(bruto) {
   const texto = String(bruto ?? "").trim();
   if (SEM_MODALIDADE.has(chave(texto))) return { nome: null, unica: false };
   if (texto.includes("/")) return { nome: texto.split("/").map((p) => MODALIDADES[chave(p)] ?? p.trim().toUpperCase()).join(" / "), unica: false };
-  return { nome: MODALIDADES[chave(texto)] ?? texto.replace(/s+/g, " ").toUpperCase(), unica: true };
+  const nome = MODALIDADES[chave(texto)] ?? texto.replace(/\s+/g, " ").toUpperCase();
+  // Combinação (ex.: ALONG MOB = ALONGAMENTO / MOBILIDADE) não vira modalidade própria no cadastro.
+  return { nome, unica: !nome.includes(" / ") };
 }
 
 // ---------- Leitura das células ----------
 const v = (x) => (x && typeof x === "object" && !(x instanceof Date) ? ("result" in x ? x.result : x.richText ? x.richText.map((t) => t.text).join("") : x) : x);
+// Coluna "Prof" da contagem de sala: número de professores; na Rochdale vem o nome do professor do horário
+// (conta 1). Na Continental, a partir de 03/02/2026 a coluna foi preenchida com uma sequência (3, 4, 5… 21)
+// que não é a quantidade de professores: fica em branco.
+function quantosProfessores(x, d) {
+  if (chave(nomeAcademia) === "continental" && d && d >= "2026-02-03") return null;
+  const y = v(x);
+  if (typeof y === "string" && /[a-z]/i.test(y)) return /^nao/.test(chave(y)) ? null : 1;
+  return inteiro(x);
+}
 function inteiro(x) {
   const y = v(x);
   if (typeof y === "number") return y >= 0 ? Math.round(y) : null;
   if (typeof y === "string" && y.trim() !== "" && !isNaN(Number(y.trim()))) return Math.max(0, Math.round(Number(y.trim())));
   return null;
 }
-function data(x) {
+// Data da coluna A; se estiver vazia ou digitada errada, monta pelas colunas Dia, Mês e Ano (G, H, I).
+function data(x, row) {
   const d = v(x);
-  if (!(d instanceof Date)) return null;
-  let s = d.toISOString().slice(0, 10);
+  let s;
+  if (d instanceof Date) s = d.toISOString().slice(0, 10);
+  else if (row) {
+    const [dia, mes, ano] = [7, 8, 9].map((c) => Number(v(row.getCell(c).value)));
+    if (!(dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12 && ano >= 2020 && ano <= 2100)) return null;
+    s = `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  } else return null;
   if (s.startsWith("2006-")) s = "2026" + s.slice(4); // digitado 2006 no lugar de 2026
   return s;
 }
@@ -110,15 +168,19 @@ function hora(x, passo = 30) {
 
 const wb = new ExcelJS.Workbook();
 await wb.xlsx.readFile(arquivo);
-const [abaSala, abaColetivas, abaLutas] = wb.worksheets;
+// Abas pelo nome (a ordem muda de uma planilha para outra).
+const aba = (re) => wb.worksheets.find((w) => re.test(w.name.trim()));
+const [abaSala, abaColetivas, abaLutas] = [aba(/^contagem$/i), aba(/^ginastica$/i), aba(/^lutas/i)];
+if (!abaSala || !abaColetivas || !abaLutas) throw new Error("Não achei as abas CONTAGEM, GINASTICA e LUTAS");
 const avisos = [];
 const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
 const sala = [];
 abaSala.eachRow((row, r) => {
   if (r === 1) return;
-  const d = data(row.getCell(1).value), h = hora(row.getCell(2).value);
-  const musc = inteiro(row.getCell(3).value), cardio = inteiro(row.getCell(4).value), prof = inteiro(row.getCell(5).value);
+  const d = data(row.getCell(1).value, row), h = hora(row.getCell(2).value);
+  const musc = inteiro(row.getCell(3).value), cardio = inteiro(row.getCell(4).value);
+  const prof = quantosProfessores(row.getCell(5).value, d);
   if (musc === null && cardio === null) return; // sem contagem (inclui dias futuros)
   if (!d || !h) { avisos.push(`${abaSala.name} linha ${r}: sem data/horário válido (ignorada)`); return; }
   if (d > hoje) return;
@@ -132,15 +194,17 @@ for (const [aba, origem] of [[abaColetivas, "coletivas"], [abaLutas, "lutas"]]) 
     if (r === 1) return;
     const qtd = inteiro(row.getCell(5).value);
     if (qtd === null) return; // sem quantidade (inclui aulas futuras)
-    if ([row.getCell(3).value, row.getCell(4).value].some((c) => chave(v(c)) === "horavaga")) return;
+    // Hora vaga e feriado não são aulas.
+    if ([row.getCell(3).value, row.getCell(4).value].some((c) => ["horavaga", "feriado"].includes(chave(v(c))))) return;
     const m = modalidade(v(row.getCell(4).value));
     if (!m.nome) { avisos.push(`${aba.name} linha ${r}: sem modalidade (não entra)`); return; }
     // Pilates dado na sala de lutas conta como coletiva (regra do Bruno).
     const tipo = origem === "lutas" && chave(m.nome) === "pilates" ? "coletivas" : origem;
-    const d = data(row.getCell(1).value), h = hora(row.getCell(2).value, tipo === "coletivas" ? 15 : 30);
+    const d = data(row.getCell(1).value, row), h = hora(row.getCell(2).value, tipo === "coletivas" ? 15 : 30);
     if (!d || !h) { avisos.push(`${aba.name} linha ${r}: sem data/horário válido (ignorada)`); return; }
     if (d > hoje) return;
-    brutas.push({ tipo, data: d, horario: h, partes: partesDoProfessor(v(row.getCell(3).value)), modalidade: m, quantidade: qtd });
+    const { partes, substituicao } = partesDoProfessor(v(row.getCell(3).value));
+    brutas.push({ tipo, data: d, horario: h, partes, substituicao, modalidade: m, quantidade: qtd });
   });
 }
 // Quem dá cada horário (tipo + dia da semana + horário), contando só as aulas com um professor.
@@ -153,9 +217,10 @@ for (const a of brutas) {
   doHorario.set(k, m);
 }
 const duplasResolvidas = new Map();
-// Dupla: fica com quem dá aquele horário. Em coletivas, se nenhum da dupla dá o horário, a aula vai
-// para "professor substituto" (com o professor em branco), regra do Bruno.
+// Dupla: fica com quem dá aquele horário. Se nenhum da dupla dá o horário, a aula vai para "professor
+// substituto" (com o professor em branco), em coletivas e em lutas (regra do Bruno).
 function professorDaAula(a) {
+  if (a.substituicao) return { professor: null, substituto: a.substituicao };
   if (a.partes.length <= 1) return { professor: a.partes[0] ?? null, substituto: null };
   const frequencia = doHorario.get(`${a.tipo}|${diaDaSemana(a.data)}|${a.horario}`) ?? new Map();
   const ordenados = [...frequencia.entries()].sort((x, y) => y[1] - x[1]);
@@ -163,9 +228,7 @@ function professorDaAula(a) {
   const resultado =
     daDupla
       ? { professor: daDupla[0], substituto: null }
-      : a.tipo === "coletivas"
-        ? { professor: null, substituto: a.partes.join(" / ") }
-        : { professor: (ordenados[0] ?? [a.partes[0]])[0], substituto: null };
+      : { professor: null, substituto: a.partes.join(" / ") };
   const rotulo = `${a.partes.join(" / ")} → ${resultado.professor ?? "substituto"}`;
   duplasResolvidas.set(rotulo, (duplasResolvidas.get(rotulo) ?? 0) + 1);
   return resultado;
@@ -182,8 +245,7 @@ for (const a of brutas) {
   }
   if (a.modalidade.unica) modalidadesNovas.add(a.modalidade.nome);
   const base = { data: a.data, horario: a.horario, professor: prof, modalidade: a.modalidade.nome, quantidade: a.quantidade };
-  if (a.tipo === "coletivas") coletivas.push({ ...base, professor_substituto: substituto });
-  else lutas.push(base);
+  (a.tipo === "coletivas" ? coletivas : lutas).push({ ...base, professor_substituto: substituto });
 }
 
 const { data: academia } = await admin.from("academias").select("id, nome").ilike("nome", nomeAcademia).single();
@@ -193,6 +255,14 @@ const { data: modalidadesAtuais } = await admin.from("modalidades").select("nome
 // Com --refazer, o que existe hoje será apagado: tudo é cadastrado de novo.
 const jaTem = new Set(refazer ? [] : (funcionariosAtuais ?? []).map((f) => chave(f.nome)));
 const jaTemMod = new Set(refazer ? [] : (modalidadesAtuais ?? []).map((m) => chave(m.nome)));
+
+// Nomes já cadastrados na unidade: as aulas usam a mesma grafia do cadastro (ex.: "bodycombat" na Rochdale).
+const grafiaProf = new Map(refazer ? [] : (funcionariosAtuais ?? []).map((f) => [chave(f.nome), f.nome]));
+const grafiaMod = new Map(refazer ? [] : (modalidadesAtuais ?? []).map((m) => [chave(m.nome), m.nome]));
+for (const l of [...coletivas, ...lutas]) {
+  if (l.professor && grafiaProf.has(chave(l.professor))) l.professor = grafiaProf.get(chave(l.professor));
+  if (l.modalidade && grafiaMod.has(chave(l.modalidade))) l.modalidade = grafiaMod.get(chave(l.modalidade));
+}
 
 const novosProfessores = [...contagem.entries()]
   .filter(([nome]) => !jaTem.has(chave(nome)))
@@ -207,8 +277,12 @@ console.log(`Professores a cadastrar (${novosProfessores.length}): ${novosProfes
 console.log(`Modalidades a cadastrar (${novasModalidades.length}): ${novasModalidades.join(", ")}`);
 console.log(`Aulas com dois professores (ficaram com quem dá o horário): ${[...duplasResolvidas.entries()].map(([k, n]) => `${k} (${n})`).join(" · ")}`);
 console.log(`Aulas em horários de 15 minutos: ${coletivas.filter((a) => /:(15|45)$/.test(a.horario)).length}`);
+const porTipo = new Map();
+for (const a of avisos) { const k = a.replace(/linha d+/, "linha N"); porTipo.set(k, (porTipo.get(k) ?? 0) + 1); }
 console.log(`Avisos: ${avisos.length}`);
-for (const a of avisos.slice(0, 20)) console.log("  - " + a);
+for (const [k, n] of porTipo) console.log(`  - ${n}× ${k}`);
+const porAno = (l) => Object.entries(l.reduce((t, a) => ((t[a.data.slice(0, 4)] = (t[a.data.slice(0, 4)] ?? 0) + 1), t), {})).map(([a, n]) => a + ":" + n).join(" ");
+console.log(`Por ano · sala ${porAno(sala)} · coletivas ${porAno(coletivas)} · lutas ${porAno(lutas)}`);
 
 if (!gravar) {
   console.log("(simulação: nada foi gravado)");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { ResultadoImportacao } from "./importar";
 
@@ -12,9 +12,12 @@ const LIMITE_MB = 50;
 export function ImportarExcel({
   importar,
   rotulo,
+  info,
 }: {
   importar: (arquivo: { caminho: string; nome: string }) => Promise<ResultadoImportacao>;
   rotulo: string;
+  // Informação mostrada ao lado dos botões (ex.: última data já importada).
+  info?: ReactNode;
 }) {
   const campo = useRef<HTMLInputElement>(null);
   const [arquivo, setArquivo] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export function ImportarExcel({
         >
           {enviando ? "Importando…" : rotulo}
         </button>
+        {info && <span className="text-sm text-slate-600 sm:ml-auto">{info}</span>}
       </div>
       {resultado?.erro && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{resultado.erro}</p>}
       {resultado?.ok && <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{resultado.ok}</p>}

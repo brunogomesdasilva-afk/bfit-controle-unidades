@@ -111,7 +111,15 @@ const OBRIGATORIAS: Record<TipoRelatorio, string[]> = {
 
 export type LinhaImportada = Record<string, string | number | null> & { data: string; hora: string };
 
+// Lê a primeira aba que tem o relatório (importação pela tela, uma academia por arquivo).
 export async function lerRelatorio(tipo: TipoRelatorio, arquivo: Buffer) {
+  const abas = await lerAbas(tipo, arquivo, true);
+  return abas[0] ?? { aba: "", linhas: [], ignoradas: 0 };
+}
+
+// Lê todas as abas com o relatório (ex.: arquivo com uma aba por unidade). Abas sem o cabeçalho esperado
+// são puladas; se nenhuma tiver, avisa que a planilha não é o relatório.
+export async function lerAbas(tipo: TipoRelatorio, arquivo: Buffer, soAPrimeira = false) {
   const leitor = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from(arquivo), {
     sharedStrings: "cache",
     styles: "ignore",
@@ -119,11 +127,14 @@ export async function lerRelatorio(tipo: TipoRelatorio, arquivo: Buffer) {
     worksheets: "emit",
   });
 
-  const linhas: LinhaImportada[] = [];
-  let ignoradas = 0;
+  const abas: { aba: string; linhas: LinhaImportada[]; ignoradas: number }[] = [];
+  let erroCabecalho: string | null = null;
 
   for await (const aba of leitor) {
+    const linhas: LinhaImportada[] = [];
+    let ignoradas = 0;
     let indice: Map<string, number> | null = null;
+    let valida = true;
     let vaziasSeguidas = 0;
     for await (const row of aba) {
       const valores = (row.values as unknown[]).slice(1);
@@ -134,7 +145,9 @@ export async function lerRelatorio(tipo: TipoRelatorio, arquivo: Buffer) {
         const faltando = OBRIGATORIAS[tipo].filter((c) => !indice!.has(c));
         if (faltando.length) {
           const nome = tipo === "passagens" ? "relatório de passagens" : "relatório do Gympass";
-          throw new Error(`Esta planilha não parece ser o ${nome}: faltam as colunas ${faltando.join(", ")}.`);
+          erroCabecalho = `Esta planilha não parece ser o ${nome}: faltam as colunas ${faltando.join(", ")}.`;
+          valida = false;
+          break;
         }
         continue;
       }
@@ -194,9 +207,12 @@ export async function lerRelatorio(tipo: TipoRelatorio, arquivo: Buffer) {
         });
       }
     }
-    // Só a primeira aba com o relatório é importada.
-    if (indice) break;
+    if (!valida || !indice) continue;
+    // O leitor em fluxo só informa o nome da aba pela propriedade interna "name".
+    abas.push({ aba: String((aba as unknown as { name?: string }).name ?? ""), linhas, ignoradas });
+    if (soAPrimeira) break;
   }
+  if (abas.length === 0 && erroCabecalho) throw new Error(erroCabecalho);
 
-  return { linhas, ignoradas };
+  return abas;
 }

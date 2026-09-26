@@ -71,9 +71,22 @@ export async function TelaRelatorio({
   const pagina = Math.max(1, Number(f.pagina) || 1);
   const inicioPagina = (pagina - 1) * POR_PAGINA;
 
+  // Total de linhas do período: vem dos resumos por dia (mantidos pelo banco), sem contar as linhas brutas.
+  // Se os resumos ainda não existirem no banco, conta direto na tabela.
+  let resumo = supabase
+    .from(tipo === "passagens" ? "resumo_passagens_dia" : "resumo_gympass_dia")
+    .select(tipo === "passagens" ? "entradas" : "checkins")
+    .gte("data", periodo.inicio)
+    .lte("data", periodo.fim);
+  if (selecionada) resumo = resumo.eq("academia_id", selecionada);
+  const { data: diasResumo, error: semResumo } = await resumo;
+  const totalResumo = semResumo
+    ? null
+    : ((diasResumo ?? []) as Record<string, number>[]).reduce((t, d) => t + Number(d.entradas ?? d.checkins ?? 0), 0);
+
   let consulta = supabase
     .from(tipo)
-    .select("*", { count: "exact" })
+    .select("*", totalResumo === null ? { count: "exact" } : {})
     .gte("data", periodo.inicio)
     .lte("data", periodo.fim)
     .order("data", { ascending: true })
@@ -82,7 +95,7 @@ export async function TelaRelatorio({
     .range(inicioPagina, inicioPagina + POR_PAGINA - 1);
   if (selecionada) consulta = consulta.eq("academia_id", selecionada);
   const { data, count } = await consulta;
-  const total = count ?? 0;
+  const total = totalResumo ?? count ?? 0;
   const paginas = Math.max(1, Math.ceil(total / POR_PAGINA));
 
   const linhas: Linha[] = (data ?? []).map((r: Record<string, unknown>) => {
@@ -116,6 +129,26 @@ export async function TelaRelatorio({
     : { data: [] };
   const quinzeMinutos = limiteParaDesfazer();
 
+  // Última data já importada de cada academia (mostrada ao lado do botão de importar).
+  const ultimas = new Map(
+    await Promise.all(
+      (selecionada ? academias.filter((a) => a.id === selecionada) : academias).map(async (a) => {
+        const { data: ultima } = await supabase
+          .from(tipo)
+          .select("data")
+          .eq("academia_id", a.id)
+          .order("data", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        return [a.id, (ultima?.data as string | undefined) ?? null] as const;
+      })
+    )
+  );
+  const ultimaTexto = (id: string) => {
+    const d = ultimas.get(id);
+    return d ? d.split("-").reverse().join("/") : "nenhuma";
+  };
+
   const manter = { academia: selecionada ?? undefined };
   const filtroAtual = { ...manter, dia: f.dia, mes: f.mes, ano: f.ano };
   const anoAtual = Number(hoje().slice(0, 4));
@@ -135,10 +168,21 @@ export async function TelaRelatorio({
             <ImportarExcel
               importar={importarRelatorio.bind(null, tipo, selecionada)}
               rotulo={`Importar para ${academias.find((a) => a.id === selecionada)?.nome}`}
+              info={
+                <>
+                  Última data no sistema: <strong className="text-slate-900">{ultimaTexto(selecionada)}</strong>
+                </>
+              }
             />
           ) : (
             <p className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
-              Para importar uma planilha, abra a aba da academia.
+              Para importar uma planilha, abra a aba da academia. Última data no sistema:{" "}
+              {academias.map((a, i) => (
+                <span key={a.id}>
+                  {i > 0 && " · "}
+                  {a.nome} <strong className="text-slate-900">{ultimaTexto(a.id)}</strong>
+                </span>
+              ))}
             </p>
           )}
 

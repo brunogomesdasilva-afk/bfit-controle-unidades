@@ -46,6 +46,7 @@ const CAMPOS: Record<Tabela, CampoValidado[]> = {
     { campo: "data", rotulo: "Data", tipo: "data", obrigatorio: true },
     { campo: "horario", rotulo: "Horário", tipo: "hora", obrigatorio: true },
     { campo: "professor", rotulo: "Professor", tipo: "texto" },
+    { campo: "professor_substituto", rotulo: "Professor substituto", tipo: "texto" },
     { campo: "modalidade", rotulo: "Modalidade", tipo: "texto" },
     { campo: "quantidade", rotulo: "Quantidade", tipo: "inteiro", obrigatorio: true },
   ],
@@ -57,6 +58,47 @@ type Tabela =
   | "contagem_sala"
   | "contagem_coletivas"
   | "contagem_lutas";
+
+// Tabelas em que todo dia deve ter lançamento (inclusive fim de semana). Coletivas e lutas não entram:
+// nem todo dia tem aula.
+const TODO_DIA: Tabela[] = ["controle_diario", "contagem_sala"];
+
+const DIAS_DA_SEMANA = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"];
+const diaMes = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const somarDia = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+// Lembrete ao incluir: dias entre o último lançamento anterior e a data incluída que ficaram sem
+// lançamento (feriados com a academia fechada não contam).
+async function diasFaltando(supabase: Awaited<ReturnType<typeof createClient>>, tabela: Tabela, academiaId: string, data: string) {
+  const { data: anterior } = await supabase
+    .from(tabela)
+    .select("data")
+    .eq("academia_id", academiaId)
+    .lt("data", data)
+    .order("data", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!anterior) return null;
+  const inicio = somarDia(anterior.data as string, 1);
+  if (inicio >= data) return null;
+  const { data: fechados } = await supabase
+    .from("feriados")
+    .select("data, academia_id")
+    .eq("fechada", true)
+    .gte("data", inicio)
+    .lt("data", data);
+  const fechado = new Set(
+    (fechados ?? []).filter((f) => f.academia_id === null || f.academia_id === academiaId).map((f) => f.data as string)
+  );
+  const faltam: string[] = [];
+  for (let d = inicio; d < data; d = somarDia(d, 1)) if (!fechado.has(d)) faltam.push(d);
+  if (faltam.length === 0) return null;
+  const semana = (d: string) => DIAS_DA_SEMANA[new Date(`${d}T12:00:00Z`).getUTCDay()];
+  if (faltam.length === 1) return `Lembrete: o dia ${diaMes(faltam[0])} (${semana(faltam[0])}) está faltando.`;
+  if (faltam.length <= 7)
+    return `Lembrete: os dias ${faltam.slice(0, -1).map(diaMes).join(", ")} e ${diaMes(faltam.at(-1)!)} estão faltando.`;
+  return `Lembrete: faltam ${faltam.length} dias, de ${diaMes(faltam[0])} a ${diaMes(faltam.at(-1)!)}.`;
+}
 
 // Telas atualizadas depois de cada gravação.
 const PAGINAS = ["/vendas", "/frequencia"];
@@ -73,11 +115,35 @@ async function gravar(
 
   const { registro, erro } = validar(CAMPOS[tabela], dados);
   if (erro || !registro) return { erro };
-  // Coletivas: o professor pode ficar em branco só quando há professor substituto.
-  if (tabela === "contagem_coletivas" && !registro.professor && !registro.professor_substituto)
+  // Coletivas e lutas: o professor pode ficar em branco só quando há professor substituto.
+  if ((tabela === "contagem_coletivas" || tabela === "contagem_lutas") && !registro.professor && !registro.professor_substituto)
     return { erro: "Preencha o professor ou o professor substituto." };
 
   const supabase = await createClient();
+
+  // Contagem repetida: o mesmo horário (e, em coletivas e lutas, a mesma modalidade) no mesmo dia.
+  if (tabela === "contagem_sala" || tabela === "contagem_coletivas" || tabela === "contagem_lutas") {
+    let repetida = supabase
+      .from(tabela)
+      .select("id")
+      .eq("academia_id", academiaId)
+      .eq("data", String(registro.data))
+      .eq("horario", String(registro.horario))
+      .limit(1);
+    if (tabela !== "contagem_sala")
+      repetida = registro.modalidade ? repetida.eq("modalidade", String(registro.modalidade)) : repetida.is("modalidade", null);
+    if (id) repetida = repetida.neq("id", id);
+    const { data: existente } = await repetida;
+    if (existente?.length)
+      return {
+        erro:
+          tabela === "contagem_sala"
+            ? "Já existe contagem neste dia e horário. Altere a linha que já está lançada."
+            : "Já existe esta aula (mesmo dia, horário e modalidade). Altere a linha que já está lançada.",
+      };
+  }
+
+  let aviso: string | null = null;
   if (id) {
     const { error } = await supabase.from(tabela).update(registro).eq("id", id);
     if (error) return { erro: mensagemErro(error) };
@@ -89,12 +155,13 @@ async function gravar(
       .from(tabela)
       .insert({ ...registro, academia_id: academiaId, criado_por: user?.id });
     if (error) return { erro: mensagemErro(error) };
+    if (TODO_DIA.includes(tabela)) aviso = await diasFaltando(supabase, tabela, academiaId, String(registro.data));
   }
 
   for (const p of PAGINAS) revalidatePath(p, "layout");
   // Atualiza a tela aberta na hora (sem isso a planilha só mostrava a mudança ao recarregar).
   refresh();
-  return {};
+  return aviso ? { aviso } : {};
 }
 
 async function apagar(tabela: Tabela, id: string): Promise<Resultado> {

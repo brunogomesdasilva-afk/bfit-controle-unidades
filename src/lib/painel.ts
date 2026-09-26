@@ -44,6 +44,7 @@ export type Totais = {
   alunos_coletivas: number;
   alunos_lutas: number;
   dias_lancados: number;
+  neoassist: number;
 };
 
 // Soma as unidades escolhidas. Ativos e inadimplentes: soma do último valor lançado de cada unidade.
@@ -69,12 +70,24 @@ function somar(linhas: TotaisAcademia[]): Totais {
     alunos_coletivas: s("alunos_coletivas"),
     alunos_lutas: s("alunos_lutas"),
     dias_lancados: Math.max(0, ...linhas.map((l) => Number(l.dias_lancados) || 0)),
+    neoassist: 0,
   };
 }
 
 export async function totaisDoPeriodo(p: Periodo, unidade: string | null) {
-  const { linhas, erro } = await totaisPorAcademia(p.inicio, p.fim);
-  return { totais: somar(unidade ? linhas.filter((l) => l.academia_id === unidade) : linhas), erro };
+  const supabase = await createClient();
+  const [{ linhas, erro }, neoassist] = await Promise.all([
+    totaisPorAcademia(p.inicio, p.fim),
+    // Neoassist não vem na função do banco: soma direto do controle diário.
+    todas<{ neoassist: number | null }>((de, ate) => {
+      let q = supabase.from("controle_diario").select("neoassist").gte("data", p.inicio).lte("data", p.fim).range(de, ate);
+      if (unidade) q = q.eq("academia_id", unidade);
+      return q;
+    }),
+  ]);
+  const totais = somar(unidade ? linhas.filter((l) => l.academia_id === unidade) : linhas);
+  totais.neoassist = neoassist.reduce((t, l) => t + (Number(l.neoassist) || 0), 0);
+  return { totais, erro };
 }
 
 // Busca todas as linhas de uma consulta, de mil em mil (o banco devolve no máximo mil por vez).

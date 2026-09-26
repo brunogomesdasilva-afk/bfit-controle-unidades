@@ -40,12 +40,15 @@ export function AbasAcademias({
   situacao,
   mes,
   caminho,
+  seletorMes = true,
 }: {
   academias: Academia[];
   selecionada: string | null;
   situacao?: FiltroSituacao;
   mes?: string;
   caminho: string;
+  // false: o mês só é mantido nos links das abas (a tela tem o próprio seletor).
+  seletorMes?: boolean;
 }) {
   const atuais: Filtros = { academia: selecionada, situacao, mes };
   const abas = [{ id: null as string | null, nome: "Todas" }, ...academias];
@@ -93,7 +96,7 @@ export function AbasAcademias({
         </div>
       )}
 
-      {mes && <SeletorMes caminho={caminho} academia={selecionada} situacao={situacao} mes={mes} />}
+      {mes && seletorMes && <SeletorMes caminho={caminho} academia={selecionada} situacao={situacao} mes={mes} />}
     </div>
   );
 }

@@ -33,6 +33,7 @@ export async function TelaMensal({
   padroesNovo = {},
   usaModalidades = false,
   professores,
+  calcular,
 }: {
   searchParams: Promise<{ academia?: string; mes?: string }>;
   titulo: string;
@@ -49,6 +50,8 @@ export async function TelaMensal({
   usaModalidades?: boolean;
   // A coluna "professor" vira uma lista com os funcionários da academia deste departamento.
   professores?: "professor_coletivas" | "professor_lutas";
+  // Colunas "calculado" montadas a partir dos valores gravados na linha.
+  calcular?: (registro: Record<string, unknown>) => Record<string, number | null>;
 }) {
   const params = await searchParams;
   const { supabase, academias, selecionada, admin } = await contextoAcademias(params.academia);
@@ -57,7 +60,9 @@ export async function TelaMensal({
 
   let consulta = supabase.from(tabela).select("*").gte("data", inicio).lte("data", fim);
   if (selecionada) consulta = consulta.eq("academia_id", selecionada);
-  for (const campo of ordem) consulta = consulta.order(campo, { ascending: true });
+  // Da data (e horário) mais próxima de hoje para a mais antiga; no mesmo dia e horário, a última incluída primeiro.
+  for (const campo of ordem) consulta = consulta.order(campo, { ascending: false });
+  if (!ordem.includes("created_at")) consulta = consulta.order("created_at", { ascending: false });
   const { data } = await consulta;
   const registros = (data ?? []) as Registro[];
 
@@ -78,7 +83,7 @@ export async function TelaMensal({
     listaProfessores = (lista ?? []).map((f) => f.nome as string);
   }
 
-  const linhas = registros.map((r) => paraLinha(r, colunas));
+  const linhas = registros.map((r) => paraLinha(calcular ? { ...r, ...calcular(r) } : r, colunas));
 
   const colunasComListas: Coluna[] = colunas.map((c) => {
     if (usaModalidades && selecionada && c.campo === "modalidade")

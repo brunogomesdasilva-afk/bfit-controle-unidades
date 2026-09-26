@@ -16,7 +16,7 @@ const MARGEM = 36;
 const CORPO = 8.5;
 
 // As fontes padrão do PDF só conhecem os caracteres do português "comum" (latim): troca o resto.
-function limpar(texto: string) {
+export function limpar(texto: string) {
   return texto
     .replace(/[“”]/g, '"')
     .replace(/[‘’]/g, "'")
@@ -24,7 +24,7 @@ function limpar(texto: string) {
     .replace(/[^\x20-\x7E\xA0-\xFF]/g, "?");
 }
 
-function quebrar(texto: string, fonte: PDFFont, tamanho: number, largura: number) {
+export function quebrar(texto: string, fonte: PDFFont, tamanho: number, largura: number) {
   const linhas: string[] = [];
   for (const paragrafo of limpar(texto).split(/\r?\n/)) {
     let atual = "";

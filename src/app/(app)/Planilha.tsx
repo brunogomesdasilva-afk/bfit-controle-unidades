@@ -43,7 +43,8 @@ function horariosCom(atual: string | undefined) {
 
 export type Linha = { id: string } & Record<string, string | null>;
 
-export type Resultado = { erro?: string };
+// aviso: gravou, mas há algo para o usuário saber (ex.: dias anteriores sem lançamento).
+export type Resultado = { erro?: string; aviso?: string };
 
 const COR_SITUACAO: Record<string, string> = {
   Pendente: "bg-amber-100 text-amber-800",
@@ -143,6 +144,7 @@ export function Planilha({
   const [editando, setEditando] = useState<string | null>(null); // id da linha, "novo" ou nada
   const [rascunho, setRascunho] = useState<Record<string, string>>({});
   const [erro, setErro] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, iniciar] = useTransition();
 
   function abrirNovo() {
@@ -189,6 +191,7 @@ export function Planilha({
     iniciar(async () => {
       const r = await salvar(editando === "novo" ? null : editando, rascunho);
       setErro(r.erro ?? null);
+      setAviso(r.aviso ?? null);
       if (!r.erro) setEditando(null);
     });
   }
@@ -299,6 +302,14 @@ export function Planilha({
       )}
 
       {erro && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{erro}</p>}
+      {aviso && (
+        <div role="status" className="mb-3 flex items-start justify-between gap-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p>{aviso}</p>
+          <button type="button" onClick={() => setAviso(null)} className="shrink-0 font-medium text-amber-900 underline">
+            Ok
+          </button>
+        </div>
+      )}
 
       <div className="max-h-[calc(100vh-14rem)] overflow-auto rounded-md border border-slate-300 bg-white">
         <table className="w-full border-collapse text-sm">

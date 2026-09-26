@@ -1,14 +1,14 @@
 import Link from "next/link";
+import { Fragment } from "react";
 import {
   NOTAS,
   PERGUNTAS_ABERTAS,
-  periodoDoHorario,
   QUESTIONARIOS,
   type Avaliacao,
   type Questionario,
 } from "@/lib/adb";
 import { contextoAcademias } from "@/lib/contexto";
-import { DEPARTAMENTOS, type Funcionario } from "@/lib/database.types";
+import { type Funcionario } from "@/lib/database.types";
 import { hoje } from "@/lib/planilha";
 import { AbasAcademias } from "../../AbasAcademias";
 import { SemAcademias } from "../../SemAcademias";
@@ -29,30 +29,26 @@ function corDaNota(n: number | null) {
   return "text-red-700";
 }
 
-const CELULA = "border border-slate-300 px-2 py-1.5 align-top";
-
-// A.D.B: mostra as avaliações de um mês (por padrão, o último mês avaliado) no formato da planilha:
-// funcionários nas colunas, perguntas nas linhas e a linha NOTA com a média de cada um.
+// A.D.B: grupos (recepção e professores) com a média geral; ao abrir, cada funcionário com a média; ao
+// clicar no nome, o detalhamento: uma linha por avaliação (mês), uma coluna por item (nome reduzido) e a
+// média no fim. A descrição completa de cada item só aparece no formulário da avaliação.
 export default async function AdbPage({ searchParams }: { searchParams: Promise<{ academia?: string; mes?: string }> }) {
   const params = await searchParams;
   const { supabase, academias, selecionada, admin } = await contextoAcademias(params.academia);
   const mesAtual = hoje().slice(0, 7);
 
-  // Mês exibido: o da URL ou o último que tem avaliação (histórico da última atualização).
-  let mes = params.mes && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.mes) ? params.mes : null;
-  if (!mes) {
-    let ultima = supabase.from("avaliacoes_adb").select("mes").order("mes", { ascending: false }).limit(1);
-    if (selecionada) ultima = ultima.eq("academia_id", selecionada);
-    const { data } = await ultima;
-    mes = data?.[0]?.mes ? String(data[0].mes).slice(0, 7) : mesAtual;
-  }
+  // Todas as avaliações (da academia da aba ou de todas): alimentam o resumo por grupo e o histórico.
+  let consultaTodas = supabase.from("avaliacoes_adb").select("*").order("mes", { ascending: false });
+  if (selecionada) consultaTodas = consultaTodas.eq("academia_id", selecionada);
+  const todas = ((await consultaTodas).data ?? []) as Avaliacao[];
+  const mesDe = (a: Avaliacao) => String(a.mes).slice(0, 7);
+  const mesesAvaliados = [...new Set(todas.map(mesDe))];
 
-  let consulta = supabase.from("avaliacoes_adb").select("*").eq("mes", `${mes}-01`);
-  if (selecionada) consulta = consulta.eq("academia_id", selecionada);
-  const avaliacoes = ((await consulta).data ?? []) as Avaliacao[];
+  // Mês escolhido no filtro; sem mês, o resumo usa a última avaliação de cada funcionário.
+  const mesEscolhido = params.mes && /^\d{4}-(0[1-9]|1[0-2])$/.test(params.mes) ? params.mes : null;
 
-  const idsFuncionarios = [...new Set(avaliacoes.map((a) => a.funcionario_id))];
-  const idsAvaliadores = [...new Set(avaliacoes.flatMap((a) => [a.criado_por, a.atualizado_por]).filter(Boolean))] as string[];
+  const idsFuncionarios = [...new Set(todas.map((a) => a.funcionario_id))];
+  const idsAvaliadores = [...new Set(todas.flatMap((a) => [a.criado_por, a.atualizado_por]).filter(Boolean))] as string[];
   const [{ data: funcionarios }, { data: perfis }] = await Promise.all([
     idsFuncionarios.length ? supabase.from("funcionarios").select("*").in("id", idsFuncionarios) : Promise.resolve({ data: [] }),
     idsAvaliadores.length ? supabase.from("profiles").select("id, nome").in("id", idsAvaliadores) : Promise.resolve({ data: [] }),
@@ -61,11 +57,24 @@ export default async function AdbPage({ searchParams }: { searchParams: Promise<
   const nomeAvaliador = new Map((perfis ?? []).map((p) => [p.id as string, p.nome as string]));
   const nomeAcademia = new Map(academias.map((a) => [a.id, a.nome]));
 
-  const [ano, m] = mes.split("-").map(Number);
-  const mesAnterior = `${m === 1 ? ano - 1 : ano}-${String(m === 1 ? 12 : m - 1).padStart(2, "0")}`;
-  const mesSeguinte = `${m === 12 ? ano + 1 : ano}-${String(m === 12 ? 1 : m + 1).padStart(2, "0")}`;
-  const linkMes = (x: string) => `/avaliacao/adb?${new URLSearchParams({ ...(selecionada ? { academia: selecionada } : {}), mes: x })}`;
-  const podeAlterar = mes === mesAtual;
+  // Resumo por grupo: a avaliação de cada funcionário no mês escolhido (ou a última dele) e o histórico.
+  const grupos = (["recepcao", "professores"] as Questionario[]).map((q) => {
+    const doGrupo = todas.filter((a) => a.questionario === q);
+    const pessoas = [...new Set(doGrupo.map((a) => a.funcionario_id))]
+      .map((id) => {
+        const historico = doGrupo.filter((a) => a.funcionario_id === id); // do mês mais recente ao mais antigo
+        const exibida = mesEscolhido ? historico.find((a) => mesDe(a) === mesEscolhido) : historico[0];
+        return { id, funcionario: funcionarioPorId.get(id), historico, exibida };
+      })
+      .filter((p): p is typeof p & { exibida: Avaliacao } => Boolean(p.exibida))
+      .sort((a, b) => (a.funcionario?.nome ?? "").localeCompare(b.funcionario?.nome ?? "", "pt-BR"));
+    return {
+      q,
+      nome: q === "recepcao" ? "Recepcionistas" : "Professores",
+      pessoas,
+      media: media(pessoas.map((p) => Number(p.exibida.media))),
+    };
+  });
 
   return (
     <div>
@@ -82,18 +91,26 @@ export default async function AdbPage({ searchParams }: { searchParams: Promise<
           <AbasAcademias academias={academias} selecionada={selecionada} caminho="/avaliacao/adb" />
 
           <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-slate-500">Mês:</span>
-            <div className="inline-flex items-center overflow-hidden rounded-md border border-slate-300 bg-white">
-              <Link href={linkMes(mesAnterior)} aria-label="Mês anterior" className="px-2.5 py-1 text-slate-600 hover:bg-slate-50">
-                ‹
-              </Link>
-              <span className="min-w-36 border-x border-slate-300 px-3 py-1 text-center font-medium capitalize text-slate-900">
-                {nomeDoMes(mes)}
-              </span>
-              <Link href={linkMes(mesSeguinte)} aria-label="Próximo mês" className="px-2.5 py-1 text-slate-600 hover:bg-slate-50">
-                ›
-              </Link>
-            </div>
+            <form action="/avaliacao/adb" className="flex items-center gap-2">
+              {selecionada && <input type="hidden" name="academia" value={selecionada} />}
+              <label htmlFor="mes-adb" className="text-slate-500">
+                Mês:
+              </label>
+              <select
+                id="mes-adb"
+                name="mes"
+                defaultValue={mesEscolhido ?? ""}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1.5 capitalize"
+              >
+                <option value="">Última avaliação de cada um</option>
+                {mesesAvaliados.map((x) => (
+                  <option key={x} value={x}>
+                    {nomeDoMes(x)}
+                  </option>
+                ))}
+              </select>
+              <button className="rounded-md border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-50">Ver</button>
+            </form>
             {selecionada ? (
               <Link
                 href={`/avaliacao/adb/nova?academia=${selecionada}`}
@@ -108,133 +125,120 @@ export default async function AdbPage({ searchParams }: { searchParams: Promise<
             )}
           </div>
 
-          {avaliacoes.length === 0 && (
-            <p className="rounded-md border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
-              Nenhuma avaliação em {nomeDoMes(mes)}.
-            </p>
-          )}
-
-          {(["professores", "recepcao"] as Questionario[]).map((q) => {
-            const doQuestionario = avaliacoes
-              .filter((a) => a.questionario === q)
-              .sort((a, b) =>
-                `${nomeAcademia.get(a.academia_id)} ${funcionarioPorId.get(a.funcionario_id)?.nome}`.localeCompare(
-                  `${nomeAcademia.get(b.academia_id)} ${funcionarioPorId.get(b.funcionario_id)?.nome}`,
-                  "pt-BR"
-                )
-              );
-            if (doQuestionario.length === 0) return null;
-            const { nome, perguntas } = QUESTIONARIOS[q];
-            const mediaGeral = media(doQuestionario.map((a) => Number(a.media)));
-
-            return (
-              <section key={q} className="mb-8">
-                <h2 className="mb-2 text-sm font-semibold text-slate-900">Avaliação {nome}</h2>
-                <div className="overflow-auto rounded-md border border-slate-300 bg-white">
-                  <table className="border-collapse text-sm">
-                    <tbody>
-                      <tr className="bg-slate-100 text-xs font-semibold uppercase text-slate-600">
-                        <th className={`${CELULA} sticky left-0 z-10 min-w-80 bg-slate-100 text-left`}>Avaliado</th>
-                        {doQuestionario.map((a) => (
-                          <th key={a.id} className={`${CELULA} min-w-32 text-center normal-case`}>
-                            <span className="block text-sm text-slate-900">
-                              {funcionarioPorId.get(a.funcionario_id)?.nome ?? "—"}
-                            </span>
-                            {!selecionada && (
-                              <span className="block font-normal text-slate-500">{nomeAcademia.get(a.academia_id)}</span>
-                            )}
-                          </th>
-                        ))}
-                        <th className={`${CELULA} min-w-24 bg-slate-200 text-center`}>Média</th>
-                      </tr>
-                      {[
-                        ["Cargo", (a: Avaliacao) => DEPARTAMENTOS[funcionarioPorId.get(a.funcionario_id)?.departamento ?? "professores"]],
-                        ["Período", (a: Avaliacao) => periodoDoHorario(funcionarioPorId.get(a.funcionario_id)?.horario_entrada ?? null)],
-                        [
-                          "Avaliador",
-                          (a: Avaliacao) => nomeAvaliador.get(a.atualizado_por ?? a.criado_por ?? "") ?? "—",
-                        ],
-                      ].map(([rotulo, valor]) => (
-                        <tr key={rotulo as string} className="text-slate-600">
-                          <th className={`${CELULA} sticky left-0 bg-white text-left font-medium`}>{rotulo as string}</th>
-                          {doQuestionario.map((a) => (
-                            <td key={a.id} className={`${CELULA} text-center`}>
-                              {(valor as (a: Avaliacao) => string)(a)}
-                            </td>
-                          ))}
-                          <td className={`${CELULA} bg-slate-50`} />
-                        </tr>
-                      ))}
-                      <tr className="bg-slate-200 font-semibold">
-                        <th className={`${CELULA} sticky left-0 bg-slate-200 text-left`}>NOTA (Avaliação Desempenho)</th>
-                        {doQuestionario.map((a) => (
-                          <td key={a.id} className={`${CELULA} text-center text-base tabular-nums ${corDaNota(Number(a.media))}`}>
-                            {nota(a.media)}
-                          </td>
-                        ))}
-                        <td className={`${CELULA} text-center text-base tabular-nums ${corDaNota(mediaGeral)}`}>{nota(mediaGeral)}</td>
-                      </tr>
-                      {perguntas.map((p, i) => {
-                        const valores = doQuestionario.map((a) => a[NOTAS[i]]);
-                        return (
-                          <tr key={p.titulo}>
-                            <th className={`${CELULA} sticky left-0 bg-white text-left font-normal`} title={p.descricao}>
-                              <span className="font-medium text-slate-900">
-                                {i + 1}. {p.titulo}
-                              </span>
-                            </th>
-                            {doQuestionario.map((a) => (
-                              <td key={a.id} className={`${CELULA} text-center tabular-nums`}>
-                                {a[NOTAS[i]]}
-                              </td>
-                            ))}
-                            <td className={`${CELULA} bg-slate-50 text-center tabular-nums text-slate-600`}>
-                              {nota(media(valores))}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {PERGUNTAS_ABERTAS.map((p) => (
-                        <tr key={p.campo}>
-                          <th className={`${CELULA} sticky left-0 bg-white text-left font-normal`} title={p.descricao}>
-                            <span className="font-medium text-slate-900">{p.titulo}</span>
-                          </th>
-                          {doQuestionario.map((a) => (
-                            <td key={a.id} className={`${CELULA} max-w-56 whitespace-pre-wrap text-xs text-slate-700`}>
-                              {a[p.campo] ?? ""}
-                            </td>
-                          ))}
-                          <td className={`${CELULA} bg-slate-50`} />
-                        </tr>
-                      ))}
-                      {(podeAlterar || admin) && selecionada && (
-                        <tr>
-                          <th className={`${CELULA} sticky left-0 bg-white`} />
-                          {doQuestionario.map((a) => (
-                            <td key={a.id} className={`${CELULA} space-x-3 text-center`}>
-                              {podeAlterar && (
-                                <Link
-                                  href={`/avaliacao/adb/nova?academia=${selecionada}&funcionario=${a.funcionario_id}`}
-                                  className="text-xs font-medium text-marca underline hover:text-marca-escuro"
-                                >
-                                  Alterar
-                                </Link>
-                              )}
-                              {admin && <ExcluirAvaliacao excluir={excluirAvaliacao.bind(null, a.id)} />}
-                            </td>
-                          ))}
-                          <td className={`${CELULA} bg-slate-50`} />
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+          {/* Resumo: cada grupo com a média geral; ao abrir, cada funcionário com a média; ao abrir o funcionário, o histórico. */}
+          <div className="mb-8 space-y-3">
+            {grupos.map((g) => (
+              <details key={g.q} className="group rounded-lg border border-slate-200 bg-white">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+                  <span className="flex items-center gap-2 font-semibold text-slate-900">
+                    <span className="text-slate-400 transition group-open:rotate-90">›</span>
+                    {g.nome}
+                    <span className="text-sm font-normal text-slate-500">
+                      ({g.pessoas.length} {g.pessoas.length === 1 ? "avaliado" : "avaliados"})
+                    </span>
+                  </span>
+                  <span className="text-sm text-slate-500">
+                    Média geral{" "}
+                    <span className={`ml-1 text-lg font-semibold tabular-nums ${corDaNota(g.media)}`}>{nota(g.media)}</span>
+                  </span>
+                </summary>
+                <div className="border-t border-slate-100 px-2 py-2">
+                  {g.pessoas.length === 0 && (
+                    <p className="px-2 py-3 text-sm text-slate-500">
+                      Nenhuma avaliação {mesEscolhido ? `em ${nomeDoMes(mesEscolhido)}` : "ainda"}.
+                    </p>
+                  )}
+                  {g.pessoas.map((p) => (
+                    <details key={p.id} className="group/pessoa rounded-md open:bg-slate-50 hover:bg-slate-50">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-2 py-2 text-sm">
+                        <span className="flex items-center gap-2">
+                          <span className="text-slate-400 transition group-open/pessoa:rotate-90">›</span>
+                          <span className="font-medium text-slate-900">{p.funcionario?.nome ?? "—"}</span>
+                          {!selecionada && <span className="text-slate-500">· {nomeAcademia.get(p.exibida.academia_id)}</span>}
+                        </span>
+                        <span className="text-slate-500">
+                          <span className="capitalize">{nomeDoMes(mesDe(p.exibida))}</span>
+                          <span className={`ml-3 font-semibold tabular-nums ${corDaNota(Number(p.exibida.media))}`}>
+                            {nota(p.exibida.media)}
+                          </span>
+                        </span>
+                      </summary>
+                      <div className="overflow-auto px-2 pb-3">
+                        <table className="w-full border-collapse text-xs">
+                          <thead className="bg-slate-100 font-semibold text-slate-600">
+                            <tr>
+                              <th className="border border-slate-200 px-2 py-1 text-left uppercase">Mês</th>
+                              <th className="border border-slate-200 px-2 py-1 text-left uppercase">Avaliador</th>
+                              {QUESTIONARIOS[g.q].perguntas.map((pergunta, i) => (
+                                <th key={pergunta.curto} className="border border-slate-200 px-2 py-1 text-center">
+                                  {i + 1}. {pergunta.curto}
+                                </th>
+                              ))}
+                              <th className="border border-slate-200 bg-slate-200 px-2 py-1 text-center uppercase">Média</th>
+                              {(admin || selecionada) && <th className="border border-slate-200 px-2 py-1" />}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {p.historico.map((a) => {
+                              const comentarios = PERGUNTAS_ABERTAS.filter((x) => a[x.campo]);
+                              const alteravel = mesDe(a) === mesAtual && Boolean(selecionada);
+                              return (
+                                <Fragment key={a.id}>
+                                  <tr className={a.id === p.exibida.id ? "bg-white font-semibold" : "bg-white"}>
+                                    <td className="border border-slate-200 px-2 py-1 capitalize">{nomeDoMes(mesDe(a))}</td>
+                                    <td className="border border-slate-200 px-2 py-1 font-normal">
+                                      {nomeAvaliador.get(a.atualizado_por ?? a.criado_por ?? "") ?? "—"}
+                                    </td>
+                                    {NOTAS.slice(0, QUESTIONARIOS[g.q].perguntas.length).map((n) => (
+                                      <td key={n} className="border border-slate-200 px-2 py-1 text-center tabular-nums">
+                                        {a[n]}
+                                      </td>
+                                    ))}
+                                    <td
+                                      className={`border border-slate-200 bg-slate-50 px-2 py-1 text-center text-sm font-semibold tabular-nums ${corDaNota(Number(a.media))}`}
+                                    >
+                                      {nota(a.media)}
+                                    </td>
+                                    {(admin || selecionada) && (
+                                      <td className="space-x-3 whitespace-nowrap border border-slate-200 px-2 py-1 text-center font-normal">
+                                        {alteravel && (
+                                          <Link
+                                            href={`/avaliacao/adb/nova?academia=${a.academia_id}&funcionario=${a.funcionario_id}`}
+                                            className="font-medium text-marca underline hover:text-marca-escuro"
+                                          >
+                                            Alterar
+                                          </Link>
+                                        )}
+                                        {admin && <ExcluirAvaliacao excluir={excluirAvaliacao.bind(null, a.id)} />}
+                                      </td>
+                                    )}
+                                  </tr>
+                                  {comentarios.length > 0 && (
+                                    <tr>
+                                      <td
+                                        colSpan={QUESTIONARIOS[g.q].perguntas.length + 3 + (admin || selecionada ? 1 : 0)}
+                                        className="border border-slate-200 bg-white px-2 py-1 font-normal text-slate-700"
+                                      >
+                                        {comentarios.map((x) => (
+                                          <p key={x.campo} className="whitespace-pre-wrap">
+                                            <span className="font-semibold">{x.titulo}:</span> {a[x.campo]}
+                                          </p>
+                                        ))}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  ))}
                 </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  Passe o mouse sobre uma pergunta para ver a descrição completa.
-                </p>
-              </section>
-            );
-          })}
+              </details>
+            ))}
+          </div>
         </>
       )}
     </div>

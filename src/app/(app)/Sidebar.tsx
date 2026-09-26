@@ -29,6 +29,8 @@ type ItemMenu = {
   href: string;
   rotulo: string;
   somenteAdmin?: boolean;
+  // Escondido de todos, inclusive do administrador (ex.: menu ainda não liberado).
+  oculto?: boolean;
   ativo: (pathname: string) => boolean;
   icone: ReactNode;
   filhos?: ItemMenu[];
@@ -205,6 +207,20 @@ const ITENS: ItemMenu[] = [
     ),
     filhos: [
       {
+        href: "/relatorios/fechamento",
+        rotulo: "Fechamento do mês",
+        ativo: (p: string) => p === "/relatorios/fechamento",
+        icone: (
+          <Icone>
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+            <line x1="16" y1="2" x2="16" y2="6" />
+            <line x1="8" y1="2" x2="8" y2="6" />
+            <line x1="3" y1="10" x2="21" y2="10" />
+            <polyline points="9 16 11 18 15 14" />
+          </Icone>
+        ),
+      },
+      {
         href: "/relatorios/pendencias",
         rotulo: "Compras e manutenção",
         ativo: (p: string) => p === "/relatorios/pendencias",
@@ -221,6 +237,7 @@ const ITENS: ItemMenu[] = [
     href: "/thais",
     rotulo: "Thais",
     somenteAdmin: true,
+    oculto: true, // pedido do Bruno: fora do menu por enquanto
     ativo: (p: string) => p === "/thais",
     icone: (
       <Icone>
@@ -411,12 +428,27 @@ export function Sidebar({
   // No celular o menu nunca fica recolhido (ele abre como gaveta, com os nomes).
   const recolhido = recolhidoNoComputador && telaGrande;
   const [aberto, setAberto] = useState(false);
-  const [abertos, setAbertos] = useState<string[]>(submenusIniciais);
+
+  const itens = ITENS.filter((item) => !item.oculto && (!item.somenteAdmin || perfil === "admin")).map((item) =>
+    item.href === "/academias" ? comSubmenuDeAcademias(item, academias) : item
+  );
+  // Menu com submenu da página atual (ex.: em Vendas → Diário, o de Vendas).
+  const menuDaPagina = (caminho: string) => itens.find((i) => i.filhos?.some((f) => f.ativo(caminho)))?.href ?? null;
+
+  // Só um submenu aberto por vez: abrir um fecha os outros. Ao navegar para a página de outro menu, ele abre
+  // sozinho e os demais fecham; o botão da seta abre e fecha livremente (inclusive o da página atual).
+  const [submenuAberto, setSubmenuAberto] = useState<string | null>(() => menuDaPagina(pathname) ?? submenusIniciais[0] ?? null);
+  const [paginaAnterior, setPaginaAnterior] = useState(pathname);
+  if (pathname !== paginaAnterior) {
+    setPaginaAnterior(pathname);
+    const daPagina = menuDaPagina(pathname);
+    if (daPagina && daPagina !== submenuAberto) setSubmenuAberto(daPagina);
+  }
 
   function alternarSubmenu(href: string) {
-    const proximos = abertos.includes(href) ? abertos.filter((h) => h !== href) : [...abertos, href];
-    setAbertos(proximos);
-    document.cookie = `submenus_abertos=${encodeURIComponent(proximos.join(","))}; path=/; max-age=31536000; samesite=lax`;
+    const proximo = submenuAberto === href ? null : href;
+    setSubmenuAberto(proximo);
+    document.cookie = `submenus_abertos=${encodeURIComponent(proximo ?? "")}; path=/; max-age=31536000; samesite=lax`;
   }
 
   function alternar() {
@@ -492,13 +524,10 @@ export function Sidebar({
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
-        {ITENS.filter((item) => !item.somenteAdmin || perfil === "admin")
-          .map((item) => (item.href === "/academias" ? comSubmenuDeAcademias(item, academias) : item))
-          .map((item) => {
+        {itens.map((item) => {
           // Com o submenu recolhido, o item pai fica destacado se a página atual for de um dos filhos.
           const filhoAtivo = item.filhos?.some((f) => f.ativo(pathname)) ?? false;
-          // Estando numa página do submenu, ele aparece aberto.
-          const submenuAberto = abertos.includes(item.href) || filhoAtivo;
+          const estaAberto = submenuAberto === item.href;
           return (
             <div key={item.href} className="space-y-1">
               <div className="flex items-center">
@@ -507,16 +536,16 @@ export function Sidebar({
                     item={item}
                     pathname={pathname}
                     recolhido={recolhido}
-                    forcarAtivo={filhoAtivo && !submenuAberto}
+                    forcarAtivo={filhoAtivo && !estaAberto}
                   />
                 </div>
                 {item.filhos && !recolhido && (
                   <button
                     type="button"
                     onClick={() => alternarSubmenu(item.href)}
-                    aria-expanded={submenuAberto}
-                    aria-label={submenuAberto ? `Recolher ${item.rotulo}` : `Expandir ${item.rotulo}`}
-                    title={submenuAberto ? "Recolher submenu" : "Expandir submenu"}
+                    aria-expanded={estaAberto}
+                    aria-label={estaAberto ? `Recolher ${item.rotulo}` : `Expandir ${item.rotulo}`}
+                    title={estaAberto ? "Recolher submenu" : "Expandir submenu"}
                     className="ml-1 shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
                   >
                     <svg
@@ -530,12 +559,12 @@ export function Sidebar({
                       strokeLinejoin="round"
                       aria-hidden="true"
                     >
-                      {submenuAberto ? <polyline points="6 9 12 15 18 9" /> : <polyline points="9 6 15 12 9 18" />}
+                      {estaAberto ? <polyline points="6 9 12 15 18 9" /> : <polyline points="9 6 15 12 9 18" />}
                     </svg>
                   </button>
                 )}
               </div>
-              {item.filhos && !recolhido && submenuAberto && (
+              {item.filhos && !recolhido && estaAberto && (
                 <div className="ml-5 space-y-1 border-l border-white/15 pl-2">
                   {item.filhos.map((filho) => (
                     <div key={filho.href} className="space-y-1">

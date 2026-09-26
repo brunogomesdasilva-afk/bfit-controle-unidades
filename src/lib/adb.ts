@@ -3,38 +3,45 @@
 
 export type Questionario = "professores" | "recepcao";
 
-export type Pergunta = { titulo: string; descricao: string };
+// curto: nome reduzido usado nas tabelas; titulo e descricao aparecem só no formulário da avaliação.
+export type Pergunta = { titulo: string; curto: string; descricao: string };
 
 const ENGAJAMENTO: Pergunta = {
   titulo: "Engajamento institucional",
+  curto: "Engajamento",
   descricao:
     "Demonstra comprometimento com a empresa, envolvimento em Programas, Projetos e Treinamentos. Participa das reuniões? Aborda o aluno referente ao NPS? Participa dos treinamentos internos? Participa dos treinamentos da franqueadora? Está antenado no dia a dia da unidade como um todo, nos demais departamentos?",
 };
 
 const PONTUALIDADE: Pergunta = {
   titulo: "Pontualidade, assiduidade, apresentação pessoal",
+  curto: "Pontualidade",
   descricao:
     "Cumpre a jornada de trabalho pré-estabelecida sem atrasos. Cumpre corretamente os horários de entrada, saída e intervalo? Tenta ao máximo marcar seus compromissos fora do horário de trabalho? Tem boa apresentação pessoal e utiliza o uniforme de acordo com sua atividade?",
 };
 
 const TRABALHO_EM_EQUIPE: Pergunta = {
   titulo: "Trabalho em equipe",
+  curto: "Equipe",
   descricao:
     "Tem habilidade de manter bom relacionamento com seus pares, superiores, subordinados (se houver) e colaboradores de outras áreas. Demonstra proatividade no dia a dia. Demonstra ética e espírito de cooperação.",
 };
 
 const COMUNICACAO: Pergunta = {
   titulo: "Comunicação",
+  curto: "Comunicação",
   descricao: "Demonstra clareza, objetividade e assertividade na comunicação, tanto interna quanto externamente.",
 };
 
 const ORGANIZACAO: Pergunta = {
   titulo: "Organização",
+  curto: "Organização",
   descricao: "O colaborador demonstra organização nas atividades; seu posto de trabalho está sempre limpo e organizado.",
 };
 
 const MATERIAIS: Pergunta = {
   titulo: "Utilização de materiais, equipamentos e eletrônicos",
+  curto: "Materiais",
   descricao:
     "Cuidados com materiais e equipamentos, na conservação, quantidades utilizadas e aproveitamento total antes do descarte. Usa de maneira consciente o celular no horário de trabalho.",
 };
@@ -46,11 +53,13 @@ export const QUESTIONARIOS: Record<Questionario, { nome: string; perguntas: Perg
       ENGAJAMENTO,
       {
         titulo: "Qualidade do atendimento",
+        curto: "Atendimento",
         descricao:
           "Habilidade que tem em contribuir para atingir o nível de eficácia desejado. Recepciona bem os alunos? Sabe abordar um cliente em sala? Realiza a setorização e o e.r.e de forma correta?",
       },
       {
         titulo: "Habilidade técnica e desenvolvimento",
+        curto: "Hab. técnica",
         descricao:
           "Conhecimento de procedimentos, sistemas, normas e padrões internos necessários para exercer sua atividade. Entende a necessidade e cumpre as diretrizes internas (e.r.e, setorização, treinos com aulas coletivas)? Consegue contornar as situações rústicas com clientes, mesmo estando na razão da situação? Sabe a importância e os benefícios das aulas coletivas? Tem planos de atualizações, certificações?",
       },
@@ -67,11 +76,13 @@ export const QUESTIONARIOS: Record<Questionario, { nome: string; perguntas: Perg
       ENGAJAMENTO,
       {
         titulo: "Qualidade do atendimento",
+        curto: "Atendimento",
         descricao:
           "Habilidade que tem em contribuir para atingir o nível de eficácia desejado. Recepciona bem os alunos? Sabe abordar um cliente diante de um cancelamento? Entende a necessidade e a forma de apresentar a academia a um novo cliente?",
       },
       {
         titulo: "Habilidade técnica",
+        curto: "Hab. técnica",
         descricao:
           "Conhecimento de procedimentos, sistemas, normas e padrões internos necessários para exercer sua atividade. Entende a necessidade e cumpre as diretrizes internas (contrato assinado, cartão de terceiros, menores etc.)? Consegue contornar as situações rústicas com clientes, mesmo estando na razão da situação? Tem planos de atualizações, certificações?",
       },
@@ -93,10 +104,10 @@ export const PERGUNTAS_ABERTAS = [
 export const CONCEITOS: Record<number, string> = { 5: "Excelente", 4: "Bom", 3: "Regular", 2: "Ruim", 1: "Péssimo" };
 
 // Questionário de cada departamento. Gerente e Limpeza não têm questionário na planilha, e professores de
-// coletivas não entram na A.D.B (regra do Bruno).
+// coletivas e de lutas não entram na A.D.B (regra do Bruno).
 export function questionarioDoDepartamento(departamento: string): Questionario | null {
   if (departamento === "recepcao") return "recepcao";
-  if (["professores", "professor_lutas", "estagiario"].includes(departamento)) return "professores";
+  if (["professores", "estagiario"].includes(departamento)) return "professores";
   return null;
 }
 
