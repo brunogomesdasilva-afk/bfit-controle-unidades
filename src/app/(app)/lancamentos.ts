@@ -38,6 +38,7 @@ const CAMPOS: Record<Tabela, CampoValidado[]> = {
     { campo: "data", rotulo: "Data", tipo: "data", obrigatorio: true },
     { campo: "horario", rotulo: "Horário", tipo: "hora", obrigatorio: true },
     { campo: "professor", rotulo: "Professor", tipo: "texto" },
+    { campo: "professor_substituto", rotulo: "Professor substituto", tipo: "texto" },
     { campo: "modalidade", rotulo: "Modalidade", tipo: "texto" },
     { campo: "quantidade", rotulo: "Quantidade", tipo: "inteiro", obrigatorio: true },
   ],
@@ -72,6 +73,9 @@ async function gravar(
 
   const { registro, erro } = validar(CAMPOS[tabela], dados);
   if (erro || !registro) return { erro };
+  // Coletivas: o professor pode ficar em branco só quando há professor substituto.
+  if (tabela === "contagem_coletivas" && !registro.professor && !registro.professor_substituto)
+    return { erro: "Preencha o professor ou o professor substituto." };
 
   const supabase = await createClient();
   if (id) {

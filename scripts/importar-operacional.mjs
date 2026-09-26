@@ -3,8 +3,9 @@
 //   GINASTICA  → contagem_coletivas (data, horário, professor, modalidade, quantidade)
 //   LUTAS      → contagem_lutas     (data, horário, professor, modalidade, quantidade)
 // Cadastra na academia os professores (Professor de coletivas / de lutas) e as modalidades que faltarem.
-// Uso (na pasta do projeto): node scripts/importar-operacional.mjs "<arquivo.xlsx>" "<academia>" [--gravar]
-// Sem --gravar só confere (simulação).
+// Uso (na pasta do projeto): node scripts/importar-operacional.mjs "<arquivo.xlsx>" "<academia>" [--gravar] [--refazer]
+// Sem --gravar só confere (simulação). --refazer apaga antes as contagens (sala, coletivas, lutas), os professores
+// (de coletivas e de lutas) e as modalidades da academia: use só para refazer uma importação desta mesma planilha.
 import fs from "node:fs";
 import { createRequire } from "node:module";
 
@@ -15,6 +16,7 @@ const { createClient } = require("@supabase/supabase-js");
 
 const [arquivo, nomeAcademia, ...opcoes] = process.argv.slice(2);
 const gravar = opcoes.includes("--gravar");
+const refazer = opcoes.includes("--refazer");
 
 const env = Object.fromEntries(
   fs.readFileSync(raiz + "/.env.local", "utf8").split(/\r?\n/).filter((l) => l.includes("=") && !l.startsWith("#"))
@@ -151,35 +153,46 @@ for (const a of brutas) {
   doHorario.set(k, m);
 }
 const duplasResolvidas = new Map();
+// Dupla: fica com quem dá aquele horário. Em coletivas, se nenhum da dupla dá o horário, a aula vai
+// para "professor substituto" (com o professor em branco), regra do Bruno.
 function professorDaAula(a) {
-  if (a.partes.length <= 1) return a.partes[0] ?? null;
+  if (a.partes.length <= 1) return { professor: a.partes[0] ?? null, substituto: null };
   const frequencia = doHorario.get(`${a.tipo}|${diaDaSemana(a.data)}|${a.horario}`) ?? new Map();
   const ordenados = [...frequencia.entries()].sort((x, y) => y[1] - x[1]);
-  const escolhido = (ordenados.find(([n]) => a.partes.includes(n)) ?? ordenados[0] ?? [a.partes[0]])[0];
-  const rotulo = a.partes.join(" / ") + " → " + escolhido;
+  const daDupla = ordenados.find(([n]) => a.partes.includes(n));
+  const resultado =
+    daDupla
+      ? { professor: daDupla[0], substituto: null }
+      : a.tipo === "coletivas"
+        ? { professor: null, substituto: a.partes.join(" / ") }
+        : { professor: (ordenados[0] ?? [a.partes[0]])[0], substituto: null };
+  const rotulo = `${a.partes.join(" / ")} → ${resultado.professor ?? "substituto"}`;
   duplasResolvidas.set(rotulo, (duplasResolvidas.get(rotulo) ?? 0) + 1);
-  return escolhido;
+  return resultado;
 }
 const contagem = new Map(); // aulas de cada professor por tipo (define o departamento)
 const modalidadesNovas = new Set();
 const coletivas = [], lutas = [];
 for (const a of brutas) {
-  const prof = professorDaAula(a);
+  const { professor: prof, substituto } = professorDaAula(a);
   if (prof) {
     const c = contagem.get(prof) ?? { coletivas: 0, lutas: 0 };
     c[a.tipo]++;
     contagem.set(prof, c);
   }
   if (a.modalidade.unica) modalidadesNovas.add(a.modalidade.nome);
-  (a.tipo === "coletivas" ? coletivas : lutas).push({ data: a.data, horario: a.horario, professor: prof, modalidade: a.modalidade.nome, quantidade: a.quantidade });
+  const base = { data: a.data, horario: a.horario, professor: prof, modalidade: a.modalidade.nome, quantidade: a.quantidade };
+  if (a.tipo === "coletivas") coletivas.push({ ...base, professor_substituto: substituto });
+  else lutas.push(base);
 }
 
 const { data: academia } = await admin.from("academias").select("id, nome").ilike("nome", nomeAcademia).single();
 if (!academia) throw new Error(`Academia "${nomeAcademia}" não encontrada`);
 const { data: funcionariosAtuais } = await admin.from("funcionarios").select("nome").eq("academia_id", academia.id);
 const { data: modalidadesAtuais } = await admin.from("modalidades").select("nome").eq("academia_id", academia.id);
-const jaTem = new Set((funcionariosAtuais ?? []).map((f) => chave(f.nome)));
-const jaTemMod = new Set((modalidadesAtuais ?? []).map((m) => chave(m.nome)));
+// Com --refazer, o que existe hoje será apagado: tudo é cadastrado de novo.
+const jaTem = new Set(refazer ? [] : (funcionariosAtuais ?? []).map((f) => chave(f.nome)));
+const jaTemMod = new Set(refazer ? [] : (modalidadesAtuais ?? []).map((m) => chave(m.nome)));
 
 const novosProfessores = [...contagem.entries()]
   .filter(([nome]) => !jaTem.has(chave(nome)))
@@ -200,6 +213,20 @@ for (const a of avisos.slice(0, 20)) console.log("  - " + a);
 if (!gravar) {
   console.log("(simulação: nada foi gravado)");
   process.exit(0);
+}
+
+if (refazer) {
+  for (const t of ["contagem_sala", "contagem_coletivas", "contagem_lutas", "modalidades"]) {
+    const { error } = await admin.from(t).delete().eq("academia_id", academia.id);
+    if (error) throw new Error(`Erro ao apagar ${t}: ${error.message}`);
+  }
+  const { error } = await admin
+    .from("funcionarios")
+    .delete()
+    .eq("academia_id", academia.id)
+    .in("departamento", ["professor_coletivas", "professor_lutas"]);
+  if (error) throw new Error(`Erro ao apagar professores: ${error.message}`);
+  console.log("Importação anterior apagada.");
 }
 
 async function inserir(tabela, linhas) {
