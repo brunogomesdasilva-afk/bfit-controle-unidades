@@ -22,6 +22,8 @@ export type Coluna = {
   fixa?: boolean;
   // Colunas vizinhas com o mesmo grupo ganham um cabeçalho mesclado em cima (ex.: "Inventário de máquinas").
   grupo?: string;
+  // Coluna "calculado" mostrada em reais (ex.: preço de venda calculado).
+  emReais?: boolean;
 };
 
 const NUMERICOS = new Set<Coluna["tipo"]>(["inteiro", "decimal", "moeda", "calculado", "percentual"]);
@@ -55,7 +57,7 @@ function exibir(coluna: Coluna, valor: string | null) {
   if (coluna.tipo === "opcoes") return coluna.opcoes?.find((o) => o.valor === valor)?.rotulo ?? valor ?? "";
   if (NUMERICOS.has(coluna.tipo) && valor !== null && valor !== "") {
     const n = Number(valor);
-    if (coluna.tipo === "moeda") return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    if (coluna.tipo === "moeda" || coluna.emReais) return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
     if (coluna.tipo === "percentual")
       return n.toLocaleString("pt-BR", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return n.toLocaleString("pt-BR", { maximumFractionDigits: 2 });

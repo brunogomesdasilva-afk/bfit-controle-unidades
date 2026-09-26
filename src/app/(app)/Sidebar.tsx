@@ -218,6 +218,32 @@ const ITENS: ItemMenu[] = [
     ],
   },
   {
+    href: "/thais",
+    rotulo: "Thais",
+    somenteAdmin: true,
+    ativo: (p: string) => p === "/thais",
+    icone: (
+      <Icone>
+        {/* diamante */}
+        <path d="M6 3h12l4 6-10 12L2 9z" />
+        <path d="M2 9h20M12 21 8 9l4-6 4 6z" />
+      </Icone>
+    ),
+    filhos: [
+      {
+        href: "/thais/produtos",
+        rotulo: "Cadastro de produtos",
+        ativo: (p: string) => p === "/thais/produtos",
+        icone: (
+          <Icone>
+            <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+            <line x1="7" y1="7" x2="7.01" y2="7" />
+          </Icone>
+        ),
+      },
+    ],
+  },
+  {
     href: "/academias",
     rotulo: "Academias",
     ativo: (p: string) => p === "/academias",
