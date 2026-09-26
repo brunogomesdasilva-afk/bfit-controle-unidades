@@ -244,7 +244,55 @@ const ITENS: ItemMenu[] = [
   },
 ];
 
-// "Cadastro de academias" ganha um submenu por academia cadastrada (funcionários e modalidades dela).
+// "Academias" ganha um submenu por academia cadastrada e, dentro de cada uma, os cadastros dela.
+const CADASTROS_DA_ACADEMIA = [
+  {
+    caminho: "funcionarios",
+    rotulo: "Funcionários",
+    icone: (
+      <Icone>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20c0-4 4-6 8-6s8 2 8 6" />
+      </Icone>
+    ),
+  },
+  {
+    caminho: "modalidades",
+    rotulo: "Modalidades",
+    icone: (
+      <Icone>
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <circle cx="4" cy="6" r="1" />
+        <circle cx="4" cy="12" r="1" />
+        <circle cx="4" cy="18" r="1" />
+      </Icone>
+    ),
+  },
+  {
+    caminho: "escala",
+    rotulo: "Escala",
+    icone: (
+      <Icone>
+        <rect x="3" y="4" width="18" height="18" rx="2" />
+        <line x1="3" y1="10" x2="21" y2="10" />
+        <line x1="9" y1="4" x2="9" y2="22" />
+      </Icone>
+    ),
+  },
+  {
+    caminho: "fechamento-coletivas",
+    rotulo: "Fechamento coletivas",
+    icone: (
+      <Icone>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </Icone>
+    ),
+  },
+];
+
 function comSubmenuDeAcademias(item: ItemMenu, academias: { id: string; nome: string }[]): ItemMenu {
   if (academias.length === 0) return item;
   return {
@@ -259,6 +307,12 @@ function comSubmenuDeAcademias(item: ItemMenu, academias: { id: string; nome: st
           <path d="M9 21v-6h6v6" />
         </Icone>
       ),
+      filhos: CADASTROS_DA_ACADEMIA.map((c) => ({
+        href: `/academias/${a.id}/${c.caminho}`,
+        rotulo: c.rotulo,
+        ativo: (p: string) => p === `/academias/${a.id}/${c.caminho}`,
+        icone: c.icone,
+      })),
     })),
   };
 }
@@ -458,7 +512,17 @@ export function Sidebar({
               {item.filhos && !recolhido && submenuAberto && (
                 <div className="ml-5 space-y-1 border-l border-white/15 pl-2">
                   {item.filhos.map((filho) => (
-                    <LinkMenu key={filho.href} item={filho} pathname={pathname} recolhido={recolhido} filho />
+                    <div key={filho.href} className="space-y-1">
+                      <LinkMenu item={filho} pathname={pathname} recolhido={recolhido} filho />
+                      {/* Terceiro nível (ex.: cadastros de uma academia): aparece quando se está dentro dela. */}
+                      {filho.filhos && filho.ativo(pathname) && (
+                        <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                          {filho.filhos.map((neto) => (
+                            <LinkMenu key={neto.href} item={neto} pathname={pathname} recolhido={recolhido} filho />
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}

@@ -8,9 +8,11 @@ export function AbasDaAcademia({ id }: { id: string }) {
   const abas = [
     { href: `/academias/${id}/funcionarios`, rotulo: "Funcionários" },
     { href: `/academias/${id}/modalidades`, rotulo: "Modalidades" },
+    { href: `/academias/${id}/escala`, rotulo: "Escala" },
+    { href: `/academias/${id}/fechamento-coletivas`, rotulo: "Fechamento coletivas" },
   ];
   return (
-    <nav className="mb-4 mt-3 flex gap-1 border-b border-slate-200" aria-label="Cadastros da academia">
+    <nav className="mb-4 mt-3 flex flex-wrap gap-1 border-b border-slate-200" aria-label="Cadastros da academia">
       {abas.map((a) => {
         const ativa = pathname === a.href;
         return (
