@@ -9,6 +9,7 @@ export function AbasDaAcademia({ id }: { id: string }) {
     { href: `/academias/${id}/funcionarios`, rotulo: "Funcionários" },
     { href: `/academias/${id}/modalidades`, rotulo: "Modalidades" },
     { href: `/academias/${id}/datas`, rotulo: "Datas importantes" },
+    { href: `/academias/${id}/grade`, rotulo: "Grade de aulas" },
     { href: `/academias/${id}/escala`, rotulo: "Escala" },
     { href: `/academias/${id}/fechamento-coletivas`, rotulo: "Fechamento coletivas" },
   ];
