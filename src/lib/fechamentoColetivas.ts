@@ -35,7 +35,17 @@ export type LinhaProfessor = {
   cobriu: number; // aulas de outros que ele deu
   extras: number; // aulas fora da grade
   aPagar: number; // dadas + cobriu + extras
+  // Mesmas medidas em quantidade de aulas.
+  aulasPrevistas: number;
+  aulasDadas: number;
+  aulasCobertas: number;
+  aulasSemContagem: number;
+  aulasCobriu: number;
+  aulasExtras: number;
 };
+
+// Resumo das substituições: quem cobriu quem, quantas aulas e quantas horas.
+export type ResumoCobertura = { tipo: Tipo; titular: string; quemDeu: string; aulas: number; horas: number };
 
 export type Cobertura = {
   data: string;
@@ -91,7 +101,11 @@ export async function fechamentoColetivas(supabase: Supabase, academiaId: string
   const linhas = new Map<string, LinhaProfessor>();
   const doProfessor = (professor: string, tipo: Tipo) => {
     const k = `${tipo}|${professor}`;
-    if (!linhas.has(k)) linhas.set(k, { professor, tipo, previstas: 0, dadas: 0, cobertoPorOutro: 0, semContagem: 0, cobriu: 0, extras: 0, aPagar: 0 });
+    if (!linhas.has(k))
+      linhas.set(k, {
+        professor, tipo, previstas: 0, dadas: 0, cobertoPorOutro: 0, semContagem: 0, cobriu: 0, extras: 0, aPagar: 0,
+        aulasPrevistas: 0, aulasDadas: 0, aulasCobertas: 0, aulasSemContagem: 0, aulasCobriu: 0, aulasExtras: 0,
+      });
     return linhas.get(k)!;
   };
   const coberturas: Cobertura[] = [];
@@ -115,18 +129,25 @@ export async function fechamentoColetivas(supabase: Supabase, academiaId: string
         const titular = g.professor ?? "(sem professor na grade)";
         const t = doProfessor(titular, tipo);
         t.previstas += horas;
+        t.aulasPrevistas++;
         const c = contagemDe(d, g);
         if (!c) {
           t.semContagem += horas;
+          t.aulasSemContagem++;
           semContagem.push({ data: d, horario: hh(g.horario), tipo, modalidade: g.modalidade, titular, horas });
           continue;
         }
         usadas.add(c);
         const quemDeu = c.professor_substituto || c.professor || "(não informado)";
-        if (chave(quemDeu) === chave(titular)) t.dadas += horas;
-        else {
+        if (chave(quemDeu) === chave(titular)) {
+          t.dadas += horas;
+          t.aulasDadas++;
+        } else {
           t.cobertoPorOutro += horas;
-          doProfessor(quemDeu, tipo).cobriu += horas;
+          t.aulasCobertas++;
+          const substituto = doProfessor(quemDeu, tipo);
+          substituto.cobriu += horas;
+          substituto.aulasCobriu++;
           coberturas.push({ data: d, horario: hh(g.horario), tipo, modalidade: g.modalidade, titular, quemDeu, horas });
         }
       }
@@ -135,13 +156,24 @@ export async function fechamentoColetivas(supabase: Supabase, academiaId: string
     for (const c of contagens) {
       if (usadas.has(c) || c.data > fim) continue;
       const quemDeu = c.professor_substituto || c.professor || "(não informado)";
-      doProfessor(quemDeu, tipo).extras += DURACAO_PADRAO[tipo] / 60;
+      const p = doProfessor(quemDeu, tipo);
+      p.extras += DURACAO_PADRAO[tipo] / 60;
+      p.aulasExtras++;
     }
   }
 
   for (const l of linhas.values()) l.aPagar = l.dadas + l.cobriu + l.extras;
   const professores = [...linhas.values()].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.professor.localeCompare(b.professor, "pt-BR"));
-  return { grade, professores, coberturas, semContagem, periodo: { inicio, fim } };
+  const resumo = new Map<string, ResumoCobertura>();
+  for (const c of coberturas) {
+    const k = `${c.tipo}|${c.titular}|${c.quemDeu}`;
+    if (!resumo.has(k)) resumo.set(k, { tipo: c.tipo, titular: c.titular, quemDeu: c.quemDeu, aulas: 0, horas: 0 });
+    const r = resumo.get(k)!;
+    r.aulas++;
+    r.horas += c.horas;
+  }
+  const resumoCoberturas = [...resumo.values()].sort((a, b) => a.tipo.localeCompare(b.tipo) || a.quemDeu.localeCompare(b.quemDeu, "pt-BR"));
+  return { grade, professores, coberturas, resumoCoberturas, semContagem, periodo: { inicio, fim } };
 }
 
 // Monta a grade a partir das contagens das últimas 8 semanas: aula (dia da semana + horário + modalidade)

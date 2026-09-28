@@ -1,5 +1,13 @@
 import Link from "next/link";
-import { fechamentoColetivas, TIPOS, type Cobertura, type LinhaProfessor, type SemContagem, type Tipo } from "@/lib/fechamentoColetivas";
+import {
+  fechamentoColetivas,
+  TIPOS,
+  type Cobertura,
+  type LinhaProfessor,
+  type ResumoCobertura,
+  type SemContagem,
+  type Tipo,
+} from "@/lib/fechamentoColetivas";
 import { hoje, lerMes } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import { SeletorMes } from "../../../AbasAcademias";
@@ -9,24 +17,34 @@ const horas = (h: number) => (h ? h.toLocaleString("pt-BR", { maximumFractionDig
 const dia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const soma = (l: LinhaProfessor[], c: keyof LinhaProfessor) => l.reduce((t, x) => t + Number(x[c]), 0);
 
+// Cada coluna mostra "aulas (horas)", ex.: "65 (32,5 h)".
+const aulasHoras = (aulas: number, h: number) => (aulas ? `${aulas} (${horas(h)} h)` : "—");
+
 function colunasProfessores(l: LinhaProfessor[]): ColunaRelatorio<LinhaProfessor>[] {
-  const col = (rotulo: string, c: keyof LinhaProfessor, destaque = false): ColunaRelatorio<LinhaProfessor> => ({
+  const col = (rotulo: string, aulas: keyof LinhaProfessor, h: keyof LinhaProfessor): ColunaRelatorio<LinhaProfessor> => ({
     rotulo,
-    valor: (x) => horas(Number(x[c])),
-    total: horas(soma(l, c)),
-    destaque,
+    valor: (x) => aulasHoras(Number(x[aulas]), Number(x[h])),
+    total: aulasHoras(soma(l, aulas), soma(l, h)),
   });
   return [
     { rotulo: "Professor", valor: (x) => x.professor, alinhar: "esquerda", destaque: true },
-    col("Horas previstas (grade)", "previstas"),
-    col("Dadas por ele", "dadas"),
-    col("Cobertas por outro", "cobertoPorOutro"),
-    col("Sem contagem", "semContagem"),
-    col("Cobriu outros", "cobriu"),
-    col("Aulas extras", "extras"),
-    col("Horas a pagar", "aPagar", true),
+    col("Previstas pela grade", "aulasPrevistas", "previstas"),
+    col("Dadas por ele", "aulasDadas", "dadas"),
+    col("Substituído (outro deu)", "aulasCobertas", "cobertoPorOutro"),
+    col("Sem contagem", "aulasSemContagem", "semContagem"),
+    col("Substituiu outros", "aulasCobriu", "cobriu"),
+    col("Aulas extras", "aulasExtras", "extras"),
+    { rotulo: "Horas a pagar", valor: (x) => `${horas(x.aPagar)} h`, total: `${horas(soma(l, "aPagar"))} h`, destaque: true },
   ];
 }
+
+const COLUNAS_RESUMO_COBERTURAS: ColunaRelatorio<ResumoCobertura>[] = [
+  { rotulo: "Tipo", valor: (r) => TIPOS[r.tipo], alinhar: "esquerda" },
+  { rotulo: "Professor substituído", valor: (r) => r.titular, alinhar: "esquerda" },
+  { rotulo: "Quem substituiu", valor: (r) => r.quemDeu, alinhar: "esquerda", destaque: true },
+  { rotulo: "Aulas", valor: (r) => r.aulas },
+  { rotulo: "Horas", valor: (r) => `${horas(r.horas)} h` },
+];
 
 const COLUNAS_COBERTURAS: ColunaRelatorio<Cobertura>[] = [
   { rotulo: "Dia", valor: (c) => dia(c.data), alinhar: "esquerda" },
@@ -94,8 +112,18 @@ export default async function FechamentoColetivasPage({
       })}
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-slate-900">Coberturas (aula da grade dada por outro professor)</h2>
-        <TabelaRelatorio colunas={COLUNAS_COBERTURAS} linhas={f.coberturas} chave={(c) => `${c.data}${c.horario}${c.modalidade}`} vazio="Nenhuma cobertura no mês." />
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">Substituições no mês (resumo)</h2>
+        <TabelaRelatorio
+          colunas={COLUNAS_RESUMO_COBERTURAS}
+          linhas={f.resumoCoberturas}
+          chave={(r) => `${r.tipo}${r.titular}${r.quemDeu}`}
+          vazio="Nenhuma substituição no mês."
+        />
+      </section>
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-slate-900">Substituições aula a aula</h2>
+        <TabelaRelatorio colunas={COLUNAS_COBERTURAS} linhas={f.coberturas} chave={(c) => `${c.data}${c.horario}${c.modalidade}`} vazio="Nenhuma substituição no mês." />
       </section>
 
       <section>
@@ -108,7 +136,8 @@ export default async function FechamentoColetivasPage({
       </section>
 
       <p className="text-xs text-slate-500">
-        Horas a pagar = aulas da grade dadas por ele + aulas que cobriu de outros + aulas extras (lançadas fora da grade).
+        Cada coluna mostra aulas e, entre parênteses, as horas. Horas a pagar = aulas da grade dadas por ele + aulas em
+        que substituiu outros + aulas extras (lançadas fora da grade).
         Coletivas contam 30 minutos por aula e lutas 1 hora, ou a duração ajustada na grade.
       </p>
     </div>
