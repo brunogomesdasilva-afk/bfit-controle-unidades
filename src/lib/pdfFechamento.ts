@@ -20,14 +20,19 @@ export type SecaoPdf = {
   linhas: string[][];
   vazio: string;
   destaques?: ("vermelho" | "amarelo" | null)[];
+  // false: não mostra a quantidade de linhas ao lado do título (seções de resumo).
+  mostrarQuantidade?: boolean;
 };
 const FUNDOS = { vermelho: rgb(0.996, 0.886, 0.886), amarelo: rgb(0.996, 0.953, 0.78) };
 
-export async function gerarPdfFechamento(dados: { academia: string; mesTexto: string; secoes: SecaoPdf[] }) {
+// titulo/subtitulo: por padrão "Fechamento do mês - <academia>" e "Mês de <mês>" (o acompanhamento diário usa outros).
+export async function gerarPdfFechamento(dados: { academia: string; mesTexto: string; secoes: SecaoPdf[]; titulo?: string; subtitulo?: string }) {
+  const titulo = dados.titulo ?? `Fechamento do mês - ${dados.academia}`;
+  const subtitulo = dados.subtitulo ?? `Mês de ${dados.mesTexto}`;
   const pdf = await PDFDocument.create();
   const normal = await pdf.embedFont(StandardFonts.Helvetica);
   const negrito = await pdf.embedFont(StandardFonts.HelveticaBold);
-  pdf.setTitle(limpar(`Fechamento ${dados.mesTexto} - ${dados.academia}`));
+  pdf.setTitle(limpar(titulo));
 
   let pagina: PDFPage = pdf.addPage([LARGURA, ALTURA]);
   let y = ALTURA - MARGEM;
@@ -35,9 +40,9 @@ export async function gerarPdfFechamento(dados: { academia: string; mesTexto: st
   function cabecalhoDaPagina() {
     pagina.drawText("BFIT · Controle de unidades", { x: MARGEM, y, size: 9, font: negrito, color: AZUL });
     y -= 20;
-    pagina.drawText(limpar(`Fechamento do mês - ${dados.academia}`), { x: MARGEM, y, size: 15, font: negrito, color: CINZA });
+    pagina.drawText(limpar(titulo), { x: MARGEM, y, size: 15, font: negrito, color: CINZA });
     y -= 16;
-    pagina.drawText(limpar(`Mês de ${dados.mesTexto}`), { x: MARGEM, y, size: 9.5, font: normal, color: CINZA });
+    pagina.drawText(limpar(subtitulo), { x: MARGEM, y, size: 9.5, font: normal, color: CINZA });
     y -= 26;
   }
   function novaPagina() {
@@ -64,7 +69,7 @@ export async function gerarPdfFechamento(dados: { academia: string; mesTexto: st
   cabecalhoDaPagina();
   for (const secao of dados.secoes) {
     if (y < MARGEM + 80) novaPagina();
-    pagina.drawText(limpar(`${secao.titulo} (${secao.linhas.length})`), { x: MARGEM, y, size: 11, font: negrito, color: AZUL });
+    pagina.drawText(limpar(secao.mostrarQuantidade === false ? secao.titulo : `${secao.titulo} (${secao.linhas.length})`), { x: MARGEM, y, size: 11, font: negrito, color: AZUL });
     y -= 8;
     const cabecalho = () => linha(secao, secao.colunas.map((c) => c.rotulo.toUpperCase()), negrito, CINZA_CLARO);
     cabecalho();

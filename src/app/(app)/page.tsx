@@ -1,54 +1,25 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { contextoAcademias } from "@/lib/contexto";
-import { motivosDeNaoConversao, periodos, seriesMensais, totaisDoPeriodo, ultimoDiaLancado, type Totais } from "@/lib/painel";
+import { TIPOS_MANUTENCAO } from "@/lib/database.types";
+import { ultimoDiaLancado } from "@/lib/painel";
+import {
+  div,
+  formatar,
+  formatarDia,
+  INDICADORES,
+  moeda,
+  montarPainel,
+  numero,
+  type Indicador,
+  type VisitantesPorOrigem,
+} from "@/lib/painelDados";
+import { diasEmAberto } from "@/lib/pendencias";
 import { ontem } from "@/lib/planilha";
-import { GraficoAnual } from "./painel/GraficoAnual";
 import { SemAcademias } from "./SemAcademias";
 
-// Painel gerencial: indicadores do dia, do mês e do ano de uma unidade (ou de todas), com comparação
-// com o mês e o ano anteriores, gráficos anuais e os motivos de não conversão.
-
-const div = (a: number | null, b: number | null) => (a !== null && b ? a / b : null);
-const numero = (n: number | null, casas = 0) =>
-  n === null || !Number.isFinite(n) ? "—" : n.toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
-const moeda = (n: number | null, casas = 2) =>
-  n === null || !Number.isFinite(n)
-    ? "—"
-    : n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: casas, maximumFractionDigits: casas });
-const pct = (n: number | null) =>
-  n === null || !Number.isFinite(n) ? "—" : n.toLocaleString("pt-BR", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const formatarDia = (d: string) => d.split("-").reverse().join("/");
-
-type Formato = "numero" | "moeda" | "percentual" | "decimal";
-type Indicador = { rotulo: string; formato: Formato; valor: (t: Totais) => number | null; sobeEBom: boolean };
-
-// Linhas da tabela de indicadores (mesma ideia do painel gerencial da rede).
-const INDICADORES: Indicador[] = [
-  { rotulo: "Visitas", formato: "numero", valor: (t) => t.visitas, sobeEBom: true },
-  { rotulo: "Vendas", formato: "numero", valor: (t) => t.vendas, sobeEBom: true },
-  { rotulo: "Vendas site", formato: "numero", valor: (t) => t.vendas_site, sobeEBom: true },
-  { rotulo: "ICV", formato: "percentual", valor: (t) => div(t.vendas, t.visitas), sobeEBom: true },
-  { rotulo: "Visitas não convertidas", formato: "numero", valor: (t) => t.nao_convertidas, sobeEBom: false },
-  { rotulo: "Faturamento", formato: "moeda", valor: (t) => t.faturamento, sobeEBom: true },
-  { rotulo: "Cancelamentos solicitados", formato: "numero", valor: (t) => t.cancelamentos_solicitados, sobeEBom: false },
-  { rotulo: "Cancelamentos efetivados", formato: "numero", valor: (t) => t.cancelamentos_efetivados, sobeEBom: false },
-  { rotulo: "Inadimplentes", formato: "numero", valor: (t) => t.inadimplentes, sobeEBom: false },
-  { rotulo: "% inadimplência", formato: "percentual", valor: (t) => div(t.inadimplentes, t.ativos_pagantes), sobeEBom: false },
-  { rotulo: "Churn", formato: "percentual", valor: (t) => div(t.cancelamentos_efetivados, t.ativos_pagantes), sobeEBom: false },
-  { rotulo: "Previsão de churn", formato: "percentual", valor: (t) => div(t.cancelamentos_solicitados, t.ativos_pagantes), sobeEBom: false },
-  { rotulo: "NPS (média)", formato: "decimal", valor: (t) => t.nps, sobeEBom: true },
-  { rotulo: "Neoassist", formato: "numero", valor: (t) => t.neoassist, sobeEBom: false },
-  { rotulo: "Passagens na catraca", formato: "numero", valor: (t) => t.passagens, sobeEBom: true },
-  { rotulo: "Check-ins Gympass", formato: "numero", valor: (t) => t.gympass, sobeEBom: true },
-  { rotulo: "Gympass (R$)", formato: "moeda", valor: (t) => t.gympass_valor, sobeEBom: true },
-  { rotulo: "Contagem de sala", formato: "numero", valor: (t) => t.contagem_sala, sobeEBom: true },
-  { rotulo: "Alunos em coletivas", formato: "numero", valor: (t) => t.alunos_coletivas, sobeEBom: true },
-  { rotulo: "Alunos em lutas", formato: "numero", valor: (t) => t.alunos_lutas, sobeEBom: true },
-];
-
-function formatar(n: number | null, f: Formato) {
-  return f === "moeda" ? moeda(n) : f === "percentual" ? pct(n) : f === "decimal" ? numero(n, 1) : numero(n);
-}
+// Painel gerencial: faturamento do dia, do mês e do ano; os principais números do mês; alunos de outras
+// unidades; não conversão; indicadores com comparação e o resumo de compras e manutenção.
 
 // Variação: em % para quantidades; em pontos percentuais (p.p.) para taxas. Verde = melhorou, vermelho = piorou.
 function Variacao({ atual, anterior, indicador }: { atual: number | null; anterior: number | null; indicador: Indicador }) {
@@ -82,16 +53,83 @@ function Cartao({ titulo, valor, detalhe, destaque }: { titulo: string; valor: R
   );
 }
 
-function ListaMotivos({ titulo, motivos, total }: { titulo: string; motivos: [string, number][]; total: number }) {
+// Cartão com três números (dia, mês e ano) que abre um detalhamento ao clicar.
+function CartaoTres({
+  titulo,
+  valores,
+  detalhe,
+  children,
+}: {
+  titulo: string;
+  valores: [string, string][];
+  detalhe?: string;
+  children?: ReactNode;
+}) {
+  const corpo = (
+    <>
+      <p className="text-xs text-slate-500">{titulo}</p>
+      <div className="mt-1 grid grid-cols-3 gap-2">
+        {valores.map(([rotulo, valor]) => (
+          <div key={rotulo}>
+            <p className="text-lg font-semibold tabular-nums text-slate-900">{valor}</p>
+            <p className="text-[11px] text-slate-500">{rotulo}</p>
+          </div>
+        ))}
+      </div>
+      {detalhe && <p className="mt-1 text-xs text-slate-500">{detalhe}</p>}
+    </>
+  );
+  if (!children) return <div className="rounded-lg border border-slate-200 bg-white p-3">{corpo}</div>;
+  return (
+    <details className="group rounded-lg border border-slate-200 bg-white p-3 open:col-span-full">
+      <summary className="cursor-pointer list-none">
+        {corpo}
+        <p className="mt-1 text-xs font-medium text-marca group-open:hidden">Clique para ver o detalhe</p>
+      </summary>
+      <div className="mt-3 border-t border-slate-100 pt-3">{children}</div>
+    </details>
+  );
+}
+
+function TabelaOrigens({ titulo, linhas }: { titulo: string; linhas: VisitantesPorOrigem[] }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <p className="mb-1 text-xs font-semibold text-slate-700">{titulo}</p>
+      {linhas.length === 0 ? (
+        <p className="text-xs text-slate-500">Nenhuma passagem de outras unidades.</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead className="text-slate-500">
+            <tr>
+              <th className="py-1 text-left font-medium">Unidade de origem</th>
+              <th className="py-1 text-right font-medium">Passagens</th>
+              <th className="py-1 text-right font-medium">Alunos</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {linhas.map((l) => (
+              <tr key={l.unidade_origem}>
+                <td className="py-1">{l.unidade_origem}</td>
+                <td className="py-1 text-right tabular-nums">{numero(l.passagens)}</td>
+                <td className="py-1 text-right tabular-nums">{numero(l.alunos)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function Motivos({ titulo, motivos, total }: { titulo: string; motivos: [string, number][]; total: number }) {
   const maior = Math.max(1, ...motivos.map(([, n]) => n));
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <p className="text-sm font-semibold text-slate-900">{titulo}</p>
-        <p className="text-sm font-semibold tabular-nums text-slate-900">{numero(total)}</p>
-      </div>
+    <div className="min-w-0 flex-1">
+      <p className="mb-1 text-xs font-semibold text-slate-700">
+        {titulo} ({numero(total)})
+      </p>
       {motivos.length === 0 ? (
-        <p className="py-4 text-center text-sm text-slate-500">Nenhuma visita não convertida no período.</p>
+        <p className="text-xs text-slate-500">Nenhuma visita não convertida.</p>
       ) : (
         <ul className="space-y-1.5">
           {motivos.map(([motivo, n]) => (
@@ -100,7 +138,7 @@ function ListaMotivos({ titulo, motivos, total }: { titulo: string; motivos: [st
                 <span className="truncate" title={motivo}>
                   {motivo}
                 </span>
-                <span className="tabular-nums font-medium">{numero(n)}</span>
+                <span className="font-medium tabular-nums">{numero(n)}</span>
               </div>
               <div className="mt-0.5 h-1.5 rounded-full bg-slate-100">
                 <div className="h-1.5 rounded-full bg-marca" style={{ width: `${(n / maior) * 100}%` }} />
@@ -131,39 +169,12 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
     params.data && /^\d{4}-\d{2}-\d{2}$/.test(params.data)
       ? params.data
       : ((await ultimoDiaLancado(supabase, unidade, ontem())) ?? ontem());
-  const p = periodos(referencia);
-
-  const [dia, mes, mesAnterior, ano, anoAnterior, series, motivosMes, motivosAno] = await Promise.all([
-    totaisDoPeriodo(p.dia, unidade),
-    totaisDoPeriodo(p.mes, unidade),
-    totaisDoPeriodo(p.mesAnterior, unidade),
-    totaisDoPeriodo(p.ano, unidade),
-    totaisDoPeriodo(p.anoAnterior, unidade),
-    seriesMensais(supabase, referencia, unidade),
-    motivosDeNaoConversao(supabase, p.mes, unidade),
-    motivosDeNaoConversao(supabase, p.ano, unidade),
-  ]);
-  const erro = dia.erro ?? mes.erro ?? mesAnterior.erro ?? ano.erro ?? anoAnterior.erro;
-
-  // Estrutura das unidades escolhidas (cadastro de academias).
-  const escolhidas = unidade ? academias.filter((a) => a.id === unidade) : academias;
-  const area = escolhidas.reduce((t, a) => t + (Number(a.area_m2) || 0), 0) || null;
-  const custo = escolhidas.reduce((t, a) => t + (Number(a.custo_financeiro) || 0), 0) || null;
-  const inventario = escolhidas.reduce(
-    (t, a) =>
-      t +
-      (a.maquinas_peitoral ?? 0) +
-      (a.maquinas_costas ?? 0) +
-      (a.maquinas_pernas ?? 0) +
-      (a.maquinas_cardio ?? 0) +
-      (a.maquinas_bancos_abdomen ?? 0),
-    0
-  );
-
-  const m = mes.totais;
+  const d = await montarPainel(supabase, { unidade, referencia, academias });
+  const m = d.mes;
   const ativos = m.ativos_pagantes;
   const adimplentes = ativos !== null ? ativos - (m.inadimplentes ?? 0) : null;
-  const diasNoMes = Number(referencia.slice(8, 10));
+  const { area, custo, inventario } = d.estrutura;
+  const ano = referencia.slice(0, 4);
 
   return (
     <div className="space-y-5">
@@ -172,8 +183,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Painel gerencial</h1>
           <p className="text-sm text-slate-500">
-            {unidade ? academias.find((a) => a.id === unidade)?.nome : "Todas as unidades"} · referência{" "}
-            <span className="font-medium text-slate-700">{formatarDia(referencia)}</span>
+            {d.unidadeNome} · referência <span className="font-medium text-slate-700">{formatarDia(referencia)}</span>
           </p>
         </div>
         <form action="/" className="flex flex-wrap items-end gap-3 text-sm">
@@ -198,81 +208,177 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         </form>
       </div>
 
-      {erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">Erro ao calcular o painel: {erro}</p>}
+      {d.erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">Erro ao calcular o painel: {d.erro}</p>}
 
-      {/* Números principais */}
+      {/* Faturamento: dia, mês e ano */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Cartao destaque titulo={`Faturamento do dia (${formatarDia(referencia).slice(0, 5)})`} valor={moeda(d.dia.faturamento)} />
+        <Cartao destaque titulo="Faturamento acumulado no mês" valor={moeda(m.faturamento)} detalhe={`${numero(m.dias_lancados)} dias lançados`} />
+        <Cartao destaque titulo={`Faturamento acumulado no ano (${ano})`} valor={moeda(d.ano.faturamento, 0)} />
+      </div>
+
+      {/* Números do mês */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-        <Cartao destaque titulo={`Faturamento no ano (${referencia.slice(0, 4)})`} valor={moeda(ano.totais.faturamento, 0)} detalhe={`No mês: ${moeda(m.faturamento, 0)}`} />
-        <Cartao titulo="Vendas no mês" valor={numero(m.vendas)} detalhe={`ICV ${pct(div(m.vendas, m.visitas))} · ${numero(m.visitas)} visitas`} />
+        <Cartao titulo="Vendas no mês" valor={numero(m.vendas)} detalhe={`ICV ${formatar(div(m.vendas, m.visitas), "percentual")} · ${numero(m.visitas)} visitas`} />
         <Cartao titulo="Ativos pagantes" valor={numero(ativos)} detalhe={`Adimplentes: ${numero(adimplentes)}`} />
-        <Cartao titulo="Inadimplentes" valor={numero(m.inadimplentes)} detalhe={`${pct(div(m.inadimplentes, ativos))} dos ativos`} />
+        <Cartao titulo="Inadimplentes" valor={numero(m.inadimplentes)} detalhe={`${formatar(div(m.inadimplentes, ativos), "percentual")} dos ativos`} />
         <Cartao
           titulo="Cancelamentos no mês"
           valor={`${numero(m.cancelamentos_efetivados)} efet.`}
-          detalhe={`${numero(m.cancelamentos_solicitados)} solicitados · churn ${pct(div(m.cancelamentos_efetivados, ativos))}`}
+          detalhe={`${numero(m.cancelamentos_solicitados)} solicitados · churn ${formatar(div(m.cancelamentos_efetivados, ativos), "percentual")}`}
         />
-        <Cartao titulo="NPS médio no mês" valor={numero(m.nps, 1)} detalhe={`${numero(m.dias_lancados)} dias lançados`} />
-        <Cartao titulo="Passagens no mês" valor={numero(m.passagens)} detalhe={`${numero(div(m.passagens, diasNoMes), 0)} por dia`} />
+        <Cartao
+          titulo="Alunos por professor na sala (mês)"
+          valor={numero(d.medias.alunosPorProfessor, 1)}
+          detalhe={d.medias.contagensSala ? `média de ${numero(d.medias.contagensSala)} contagens` : "sem quantidade de professores lançada"}
+        />
+        <Cartao
+          titulo="Média de alunos por aula coletiva (mês)"
+          valor={numero(d.medias.mediaAlunosColetiva, 1)}
+          detalhe={`${numero(d.medias.aulasColetivas)} aulas`}
+        />
+        <Cartao titulo="NPS médio no mês" valor={numero(m.nps, 1)} />
+        <Cartao titulo="Passagens no mês" valor={numero(m.passagens)} />
         <Cartao titulo="Gympass no mês" valor={numero(m.gympass)} detalhe={moeda(m.gympass_valor)} />
         <Cartao titulo="Área" valor={area ? `${numero(area)} m²` : "—"} detalhe={`Aluno/m²: ${numero(div(ativos, area), 2)}`} />
-        <Cartao titulo="Custo financeiro" valor={moeda(custo, 0)} detalhe={`Custo/m²: ${moeda(div(custo, area))}`} />
-        <Cartao titulo="Custo por aluno" valor={moeda(div(custo, ativos))} detalhe="custo ÷ ativos pagantes" />
+        <Cartao titulo="Custo financeiro" valor={moeda(custo, 0)} detalhe={`Custo por aluno: ${moeda(div(custo, ativos))}`} />
         <Cartao titulo="Inventário" valor={`${numero(inventario)} máquinas`} detalhe={`Máquinas/aluno: ${numero(div(inventario, ativos), 3)}`} />
       </div>
 
-      {/* Gráficos do ano */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <GraficoAnual titulo="Faturamento por mês" ano={series.ano} atual={series.faturamento.atual} anterior={series.faturamento.anterior} formato="moeda" />
-        <GraficoAnual titulo="Ativos pagantes (fim de cada mês)" ano={series.ano} atual={series.ativos.atual} anterior={series.ativos.anterior} formato="numero" />
+      {/* Outras unidades e não conversão (clicar abre o detalhe) */}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <CartaoTres
+          titulo="Alunos de outras unidades (sem repetir o aluno)"
+          valores={[
+            ["no dia", numero(d.visitantes.dia.total.alunos)],
+            ["no mês", numero(d.visitantes.mes.total.alunos)],
+            ["no ano", numero(d.visitantes.ano.total.alunos)],
+          ]}
+          detalhe={d.visitantes.mes.disponivel ? undefined : "Rode o SQL 0027 para ver este número."}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <TabelaOrigens titulo="No mês, por unidade de origem" linhas={d.visitantes.mes.porOrigem} />
+            <TabelaOrigens titulo="No ano, por unidade de origem" linhas={d.visitantes.ano.porOrigem} />
+          </div>
+        </CartaoTres>
+        <CartaoTres
+          titulo="Passagens de alunos de outras unidades"
+          valores={[
+            ["no dia", numero(d.visitantes.dia.total.passagens)],
+            ["no mês", numero(d.visitantes.mes.total.passagens)],
+            ["no ano", numero(d.visitantes.ano.total.passagens)],
+          ]}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <TabelaOrigens titulo="No mês, por unidade de origem" linhas={d.visitantes.mes.porOrigem} />
+            <TabelaOrigens titulo="No ano, por unidade de origem" linhas={d.visitantes.ano.porOrigem} />
+          </div>
+        </CartaoTres>
+        <CartaoTres
+          titulo="Visitas não convertidas"
+          valores={[
+            ["no dia", numero(d.naoConversao.dia.total)],
+            ["no mês", numero(d.naoConversao.mes.total)],
+            ["no ano", numero(d.naoConversao.ano.total)],
+          ]}
+        >
+          <div className="flex flex-col gap-4 sm:flex-row">
+            <Motivos titulo="Motivos no mês" motivos={d.naoConversao.mes.motivos} total={d.naoConversao.mes.total} />
+            <Motivos titulo="Motivos no ano" motivos={d.naoConversao.ano.motivos} total={d.naoConversao.ano.total} />
+          </div>
+        </CartaoTres>
       </div>
 
-      {/* Indicadores e motivos */}
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_20rem]">
-        <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full border-collapse text-sm">
-            <thead className="bg-slate-100 text-xs font-semibold uppercase text-slate-600">
-              <tr>
-                <th className="px-3 py-2 text-left">Indicador</th>
-                <th className="px-3 py-2 text-right">Dia</th>
-                <th className="px-3 py-2 text-right">Acum. mês</th>
-                <th className="px-3 py-2 text-right">Mês anterior</th>
-                <th className="px-3 py-2 text-right">Var.</th>
-                <th className="px-3 py-2 text-right">Acum. ano</th>
-                <th className="px-3 py-2 text-right">Ano anterior</th>
-                <th className="px-3 py-2 text-right">Var.</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {INDICADORES.map((ind) => {
-                const [vd, vm, vma, va, vaa] = [dia, mes, mesAnterior, ano, anoAnterior].map((x) => ind.valor(x.totais));
-                return (
-                  <tr key={ind.rotulo} className="hover:bg-slate-50">
-                    <td className="px-3 py-1.5 font-medium text-slate-800">{ind.rotulo}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums">{formatar(vd, ind.formato)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatar(vm, ind.formato)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatar(vma, ind.formato)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-xs">
-                      <Variacao atual={vm} anterior={vma} indicador={ind} />
-                    </td>
-                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{formatar(va, ind.formato)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatar(vaa, ind.formato)}</td>
-                    <td className="px-3 py-1.5 text-right tabular-nums text-xs">
-                      <Variacao atual={va} anterior={vaa} indicador={ind} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
-            Mês anterior e ano anterior: mesmo trecho do período (até o dia {Number(referencia.slice(8, 10))}). Ativos e
-            inadimplentes: último valor lançado no período. Variação em p.p. = pontos percentuais.
-          </p>
+      {/* Indicadores com comparação */}
+      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-slate-100 text-xs font-semibold uppercase text-slate-600">
+            <tr>
+              <th className="px-3 py-2 text-left">Indicador</th>
+              <th className="px-3 py-2 text-right">Dia</th>
+              <th className="px-3 py-2 text-right">Acum. mês</th>
+              <th className="px-3 py-2 text-right">Mês anterior</th>
+              <th className="px-3 py-2 text-right">Var.</th>
+              <th className="px-3 py-2 text-right">Acum. ano</th>
+              <th className="px-3 py-2 text-right">Ano anterior</th>
+              <th className="px-3 py-2 text-right">Var.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {INDICADORES.map((ind) => {
+              const [vd, vm, vma, va, vaa] = [d.dia, d.mes, d.mesAnterior, d.ano, d.anoAnterior].map((t) => ind.valor(t));
+              return (
+                <tr key={ind.rotulo} className="hover:bg-slate-50">
+                  <td className="px-3 py-1.5 font-medium text-slate-800">{ind.rotulo}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{formatar(vd, ind.formato)}</td>
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{formatar(vm, ind.formato)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatar(vma, ind.formato)}</td>
+                  <td className="px-3 py-1.5 text-right text-xs tabular-nums">
+                    <Variacao atual={vm} anterior={vma} indicador={ind} />
+                  </td>
+                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">{formatar(va, ind.formato)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-600">{formatar(vaa, ind.formato)}</td>
+                  <td className="px-3 py-1.5 text-right text-xs tabular-nums">
+                    <Variacao atual={va} anterior={vaa} indicador={ind} />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+          Mês anterior e ano anterior: mesmo trecho do período (até o dia {Number(referencia.slice(8, 10))}). Ativos e
+          inadimplentes: último valor lançado no período. Variação em p.p. = pontos percentuais.
+        </p>
+      </div>
+
+      {/* Resumo de compras e manutenção */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <p className="text-sm font-semibold text-slate-900">Compras pendentes</p>
+            <p className="text-sm text-slate-600">
+              {numero(d.pendencias.compras.length)}
+              {d.pendencias.comprasAtrasadas > 0 && (
+                <span className="ml-2 font-semibold text-red-700">{d.pendencias.comprasAtrasadas} atrasadas</span>
+              )}
+            </p>
+          </div>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {d.pendencias.compras.slice(0, 5).map((c) => (
+              <li key={c.id} className="flex justify-between gap-3 py-1.5">
+                <span className="truncate">{c.descricao}</span>
+                <span className="shrink-0 text-xs text-slate-500">{diasEmAberto(c.data_solicitacao)} dias</span>
+              </li>
+            ))}
+            {d.pendencias.compras.length === 0 && <li className="py-2 text-slate-500">Nenhuma compra pendente.</li>}
+          </ul>
         </div>
-        <div className="space-y-4">
-          <ListaMotivos titulo="Não conversão · motivos no mês" motivos={motivosMes.motivos} total={motivosMes.total} />
-          <ListaMotivos titulo="Não conversão · motivos no ano" motivos={motivosAno.motivos} total={motivosAno.total} />
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="mb-2 flex items-baseline justify-between">
+            <p className="text-sm font-semibold text-slate-900">Manutenções pendentes</p>
+            <p className="text-sm text-slate-600">{numero(d.pendencias.manutencoes.length)}</p>
+          </div>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {d.pendencias.manutencoes.slice(0, 5).map((mt) => (
+              <li key={mt.id} className="flex justify-between gap-3 py-1.5">
+                <span className="truncate">
+                  <span className="text-slate-500">{TIPOS_MANUTENCAO[mt.tipo]} · </span>
+                  {mt.descricao}
+                </span>
+                <span className="shrink-0 text-xs text-slate-500">{diasEmAberto(mt.data_inclusao)} dias</span>
+              </li>
+            ))}
+            {d.pendencias.manutencoes.length === 0 && <li className="py-2 text-slate-500">Nenhuma manutenção pendente.</li>}
+          </ul>
         </div>
+        <p className="text-xs text-slate-500 lg:col-span-2">
+          Mais antigas primeiro.{" "}
+          <Link href={`/relatorios/pendencias${unidade ? `?academia=${unidade}` : ""}`} className="text-marca underline">
+            Ver o relatório completo de compras e manutenção
+          </Link>
+          .
+        </p>
       </div>
     </div>
   );

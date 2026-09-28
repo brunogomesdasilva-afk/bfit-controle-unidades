@@ -1,10 +1,11 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { totaisPorAcademia, type TotaisAcademia } from "@/lib/relatorios";
 
 // Números do Painel: períodos de comparação (dia, mês, mês anterior, ano, ano anterior), totais
 // somados das unidades escolhidas, séries mensais para os gráficos e motivos de não conversão.
 
-type Supabase = Awaited<ReturnType<typeof createClient>>;
+type Supabase = Awaited<ReturnType<typeof createClient>> | SupabaseClient;
 
 const dois = (n: number) => String(n).padStart(2, "0");
 const iso = (a: number, m: number, d: number) => `${a}-${dois(m)}-${dois(d)}`;
@@ -74,10 +75,10 @@ function somar(linhas: TotaisAcademia[]): Totais {
   };
 }
 
-export async function totaisDoPeriodo(p: Periodo, unidade: string | null) {
-  const supabase = await createClient();
+export async function totaisDoPeriodo(p: Periodo, unidade: string | null, sistema?: SupabaseClient) {
+  const supabase = sistema ?? (await createClient());
   const [{ linhas, erro }, neoassist] = await Promise.all([
-    totaisPorAcademia(p.inicio, p.fim),
+    totaisPorAcademia(p.inicio, p.fim, sistema),
     // Neoassist não vem na função do banco: soma direto do controle diário.
     todas<{ neoassist: number | null }>((de, ate) => {
       let q = supabase.from("controle_diario").select("neoassist").gte("data", p.inicio).lte("data", p.fim).range(de, ate);

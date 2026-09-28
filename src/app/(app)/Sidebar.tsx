@@ -207,6 +207,17 @@ const ITENS: ItemMenu[] = [
     ),
     filhos: [
       {
+        href: "/relatorios/acompanhamento",
+        rotulo: "Acompanhamento diário",
+        somenteAdmin: true,
+        ativo: (p: string) => p === "/relatorios/acompanhamento",
+        icone: (
+          <Icone>
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </Icone>
+        ),
+      },
+      {
         href: "/relatorios/fechamento",
         rotulo: "Fechamento do mês",
         ativo: (p: string) => p === "/relatorios/fechamento",
@@ -606,7 +617,7 @@ export function Sidebar({
               </div>
               {item.filhos && !recolhido && estaAberto && (
                 <div className="ml-5 space-y-1 border-l border-white/15 pl-2">
-                  {item.filhos.map((filho) => (
+                  {item.filhos.filter((filho) => !filho.somenteAdmin || perfil === "admin").map((filho) => (
                     <div key={filho.href} className="space-y-1">
                       <LinkMenu item={filho} pathname={pathname} recolhido={recolhido} filho />
                       {/* Terceiro nível (ex.: cadastros de uma academia): aparece quando se está dentro dela. */}

@@ -28,6 +28,8 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   // /auth/confirm troca o link do e-mail (redefinir senha etc.) por uma sessão; roda sem estar logado.
+  // /api/cron/ é chamado pelo agendador da Vercel (sem login); a rota confere o segredo CRON_SECRET.
+  if (request.nextUrl.pathname.startsWith("/api/cron/")) return supabaseResponse;
   const isPublicRoute =
     request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/auth/");
 
