@@ -33,7 +33,7 @@ export default async function NovaAvaliacaoPage({
   }
 
   // Só entram os funcionários que têm questionário (professores e recepção).
-  const { data } = await supabase.from("funcionarios").select("*").eq("academia_id", selecionada).order("nome");
+  const { data } = await supabase.from("funcionarios").select("*").eq("academia_id", selecionada).eq("ativo", true).order("nome");
   const funcionarios = ((data ?? []) as Funcionario[]).filter((f) => questionarioDoDepartamento(f.departamento));
   const escolhido = funcionarios.find((f) => f.id === params.funcionario) ?? null;
   const questionario = escolhido ? questionarioDoDepartamento(escolhido.departamento) : null;

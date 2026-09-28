@@ -35,17 +35,43 @@ export async function salvarFuncionario(
       { campo: "horario_saida", rotulo: "Horário de saída", tipo: "hora" },
       { campo: "genero", rotulo: "Gênero", tipo: "texto" },
       { campo: "data_nascimento", rotulo: "Data de nascimento", tipo: "data" },
+      { campo: "ativo", rotulo: "Ativo", tipo: "texto" },
     ],
     dados
   );
   if (erro || !registro) return { erro };
+  (registro as Record<string, unknown>).ativo = registro.ativo !== "nao";
   if (!(String(registro.departamento) in DEPARTAMENTOS)) return { erro: "Escolha o departamento da lista." };
   if (registro.genero !== null && !(String(registro.genero) in GENEROS)) return { erro: "Escolha o gênero da lista." };
 
   return gravar("funcionarios", academiaId, id, registro);
 }
 
+// Quem já tem histórico (aulas dadas, avaliação, escala) não é excluído: é inativado (Ativo = Não).
 export async function excluirFuncionario(id: string): Promise<Resultado> {
+  const supabase = await createClient();
+  const { data: f } = await supabase.from("funcionarios").select("nome, academia_id").eq("id", id).maybeSingle();
+  if (f) {
+    const aulas = (tabela: string) =>
+      supabase
+        .from(tabela)
+        .select("id", { count: "exact", head: true })
+        .eq("academia_id", f.academia_id)
+        .or(`professor.eq."${f.nome}",professor_substituto.eq."${f.nome}"`);
+    const [coletivas, lutas, adb, escala] = await Promise.all([
+      aulas("contagem_coletivas"),
+      aulas("contagem_lutas"),
+      supabase.from("avaliacoes_adb").select("id", { count: "exact", head: true }).eq("funcionario_id", id),
+      supabase.from("escala").select("id", { count: "exact", head: true }).eq("funcionario_id", id),
+    ]);
+    const historico = [
+      (coletivas.count ?? 0) + (lutas.count ?? 0) ? `${(coletivas.count ?? 0) + (lutas.count ?? 0)} aulas lançadas` : null,
+      adb.count ? "avaliação na A.D.B" : null,
+      escala.count ? "dias na escala" : null,
+    ].filter(Boolean);
+    if (historico.length)
+      return { erro: `${f.nome} tem histórico (${historico.join(", ")}) e não pode ser excluído. Para tirar das listas, altere “Ativo” para “Não”.` };
+  }
   return apagar("funcionarios", id);
 }
 

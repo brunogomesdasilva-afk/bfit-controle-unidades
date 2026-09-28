@@ -79,6 +79,7 @@ export async function TelaMensal({
       .select("nome")
       .eq("academia_id", selecionada)
       .eq("departamento", professores)
+      .eq("ativo", true)
       .order("nome");
     listaProfessores = (lista ?? []).map((f) => f.nome as string);
   }

@@ -52,6 +52,7 @@ async function funcionariosComNascimento(supabase: Supabase, academiaIds: string
     .select("*")
     .in("academia_id", academiaIds)
     .not("data_nascimento", "is", null)
+    .eq("ativo", true)
     .order("nome");
   return (data ?? []) as Funcionario[];
 }

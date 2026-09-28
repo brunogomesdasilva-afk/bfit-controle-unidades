@@ -44,7 +44,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
       .order("data")
       .order("setor")
       .order("ordem"),
-    supabase.from("funcionarios").select("id, nome, departamento").eq("academia_id", id).in("departamento", ["recepcao", "limpeza"]).order("nome"),
+    supabase.from("funcionarios").select("id, nome, departamento").eq("academia_id", id).eq("ativo", true).in("departamento", ["recepcao", "limpeza"]).order("nome"),
     supabase.from("feriados").select("id, data, nome, fechada, academia_id").or(`academia_id.is.null,academia_id.eq.${id}`).gte("data", `${dataHoje.slice(0, 4)}-01-01`).order("data"),
   ]);
   const lista = (turnos ?? []) as Turno[];

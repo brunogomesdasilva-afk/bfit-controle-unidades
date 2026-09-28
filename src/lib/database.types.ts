@@ -76,6 +76,7 @@ export type Funcionario = {
   horario_saida: string | null;
   genero: keyof typeof GENEROS | null;
   data_nascimento: string | null;
+  ativo: boolean;
 };
 
 export type Modalidade = {

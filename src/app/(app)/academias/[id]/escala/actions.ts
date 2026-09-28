@@ -32,6 +32,7 @@ export async function gerarEscalaDaUnidade(academiaId: string): Promise<Resultad
       .from("funcionarios")
       .select("id, nome, departamento, genero, horario_entrada, horario_saida")
       .eq("academia_id", academiaId)
+      .eq("ativo", true)
       .in("departamento", setores),
     supabase
       .from("feriados")
