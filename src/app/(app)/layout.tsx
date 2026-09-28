@@ -5,6 +5,7 @@ import { getPerfilAtual } from "@/lib/auth";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import { AvisoContagens } from "./AvisoContagens";
+import { AvisoVencimentos, type Vencimento } from "./AvisoVencimentos";
 import { LembreteAniversario, type Lembrete } from "./LembreteAniversario";
 import { Sidebar } from "./Sidebar";
 
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   // uma academia, só a dele (a regra de acesso do banco já filtra).
   let academias: { id: string; nome: string }[] = [];
   let lembretes: Lembrete[] = [];
+  let vencimentos: Vencimento[] = [];
   // Identifica o login atual: o aviso de contagens faltando volta a cada novo login.
   let sessao = "";
   // Backup em andamento: só o administrador usa o sistema (o banco também bloqueia os demais).
@@ -33,6 +35,22 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     sessao = auth.user?.last_sign_in_at ?? "";
     const { data } = await supabase.from("academias").select("id, nome").order("nome");
     academias = data ?? [];
+    // Datas importantes vencidas ou vencendo nos próximos 30 dias (a regra do banco já filtra a academia).
+    const limite = new Date(Date.parse(`${dataHoje}T12:00:00Z`) + 30 * 86400000).toISOString().slice(0, 10);
+    const { data: datas } = await supabase
+      .from("datas_importantes")
+      .select("id, academia_id, item, vencimento")
+      .not("vencimento", "is", null)
+      .lte("vencimento", limite)
+      .order("vencimento");
+    vencimentos = (datas ?? []).map((d) => ({
+      id: d.id as string,
+      academiaId: d.academia_id as string,
+      academia: academias.find((a) => a.id === d.academia_id)?.nome ?? "",
+      item: d.item as string,
+      vencimento: d.vencimento as string,
+      dias: Math.round((Date.parse(`${d.vencimento}T12:00:00Z`) - Date.parse(`${dataHoje}T12:00:00Z`)) / 86400000),
+    }));
     // Aniversários de hoje (e do fim de semana/feriado seguinte, avisados no último dia útil).
     lembretes = (await lembretesDeAniversario(supabase, academias.map((a) => a.id))).map((a) => ({
       chave: `${a.academiaId}-${a.nome}-${a.dia}`,
@@ -77,6 +95,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </p>
         )}
         {atual && <AvisoContagens sessao={sessao} />}
+        {atual && <AvisoVencimentos sessao={sessao} vencimentos={vencimentos} />}
         <LembreteAniversario dia={dataHoje} lembretes={lembretes} />
         {children}
       </main>
