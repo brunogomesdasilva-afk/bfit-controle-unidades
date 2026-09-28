@@ -13,7 +13,15 @@ const ALTURA = 842;
 const MARGEM = 36;
 const CORPO = 8.5;
 
-export type SecaoPdf = { titulo: string; colunas: { rotulo: string; largura: number }[]; linhas: string[][]; vazio: string };
+// destaques: cor de fundo de cada linha (ex.: vencimentos) — vermelho, amarelo ou nenhum.
+export type SecaoPdf = {
+  titulo: string;
+  colunas: { rotulo: string; largura: number }[];
+  linhas: string[][];
+  vazio: string;
+  destaques?: ("vermelho" | "amarelo" | null)[];
+};
+const FUNDOS = { vermelho: rgb(0.996, 0.886, 0.886), amarelo: rgb(0.996, 0.953, 0.78) };
 
 export async function gerarPdfFechamento(dados: { academia: string; mesTexto: string; secoes: SecaoPdf[] }) {
   const pdf = await PDFDocument.create();
@@ -64,13 +72,16 @@ export async function gerarPdfFechamento(dados: { academia: string; mesTexto: st
       y -= 12;
       pagina.drawText(limpar(secao.vazio), { x: MARGEM + 4, y, size: CORPO, font: normal, color: CINZA });
     }
-    for (const celulas of secao.linhas) {
-      if (!linha(secao, celulas)) {
+    secao.linhas.forEach((celulas, i) => {
+      const destaque = secao.destaques?.[i];
+      const fundo = destaque ? FUNDOS[destaque] : undefined;
+      const fonte = destaque ? negrito : normal;
+      if (!linha(secao, celulas, fonte, fundo)) {
         novaPagina();
         cabecalho();
-        linha(secao, celulas);
+        linha(secao, celulas, fonte, fundo);
       }
-    }
+    });
     y -= 24;
   }
 

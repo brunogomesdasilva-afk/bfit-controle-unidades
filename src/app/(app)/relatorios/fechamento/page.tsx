@@ -1,6 +1,6 @@
 import type { Aniversariante } from "@/lib/aniversarios";
 import { contextoAcademias } from "@/lib/contexto";
-import { dadosDoFechamento, diaCurto, mesDeFechamento, mesesDisponiveis, nomeDoMes } from "@/lib/fechamento";
+import { dadosDoFechamento, diaCurto, mesDeFechamento, mesesDisponiveis, nomeDoMes, type DataImportante } from "@/lib/fechamento";
 import { AbasAcademias } from "../../AbasAcademias";
 import { SemAcademias } from "../../SemAcademias";
 import { CabecalhoRelatorio, TabelaRelatorio, type ColunaRelatorio } from "../comum";
@@ -20,6 +20,26 @@ const COLUNAS_CONTAGEM: ColunaRelatorio<Contagem>[] = [
   { rotulo: "Dia", valor: (c) => diaCurto(c.data), alinhar: "esquerda" },
   { rotulo: "Contagem", valor: (c) => c.contagem, alinhar: "esquerda" },
   { rotulo: "Horários faltando", valor: (c) => c.horarios.join(", "), alinhar: "esquerda" },
+];
+
+const COR_SITUACAO: Record<string, string> = {
+  Vencido: "bg-red-100 text-red-800",
+  "Vence em breve": "bg-amber-100 text-amber-800",
+  "Em dia": "bg-emerald-100 text-emerald-800",
+  "Sem data": "bg-slate-100 text-slate-600",
+};
+const urgente = (d: DataImportante) => d.situacao === "Vencido" || d.situacao === "Vence em breve";
+const COLUNAS_DATAS: ColunaRelatorio<DataImportante>[] = [
+  { rotulo: "Item", valor: (d) => <span className={urgente(d) ? "font-semibold" : ""}>{d.item}</span>, alinhar: "esquerda" },
+  { rotulo: "Vencimento", valor: (d) => (d.vencimento ? d.vencimento.split("-").reverse().join("/") : "—") },
+  {
+    rotulo: "Dias para vencer",
+    valor: (d) => <span className={urgente(d) ? "font-semibold" : ""}>{d.dias === null ? "—" : d.dias}</span>,
+  },
+  {
+    rotulo: "Situação",
+    valor: (d) => <span className={`rounded px-2 py-0.5 text-xs font-medium ${COR_SITUACAO[d.situacao]}`}>{d.situacao}</span>,
+  },
 ];
 
 // Fechamento do mês: escolhe o mês (do atual para trás) e, por unidade, abre o PDF e envia por e-mail
@@ -104,6 +124,20 @@ export default async function FechamentoDoMesPage({
                     linhas={d.contagens}
                     chave={(c) => `${c.data}-${c.contagem}`}
                     vazio="Todas as contagens do mês foram feitas."
+                  />
+                  <h3 className="mb-2 mt-5 text-sm font-semibold text-marca">
+                    Datas importantes{" "}
+                    {d.datas.some(urgente) && (
+                      <span className="ml-1 rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                        {d.datas.filter(urgente).length} vencidas ou vencendo em 30 dias
+                      </span>
+                    )}
+                  </h3>
+                  <TabelaRelatorio
+                    colunas={COLUNAS_DATAS}
+                    linhas={d.datas}
+                    chave={(x) => x.item}
+                    vazio="Nenhuma data importante cadastrada (Academias → unidade → Datas importantes)."
                   />
                 </section>
               );

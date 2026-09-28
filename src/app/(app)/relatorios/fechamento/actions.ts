@@ -24,7 +24,7 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
     ),
   ];
 
-  const { proximoMes, aniversariantes, semDiario, contagens, pdf, arquivo } = await montarFechamento(supabase, academia, mesPedido);
+  const { proximoMes, aniversariantes, semDiario, contagens, datas, pdf, arquivo } = await montarFechamento(supabase, academia, mesPedido);
   try {
     await enviarEmail({
       para,
@@ -35,6 +35,9 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
         `Segue em anexo o fechamento de ${nomeDoMes(mesPedido)} da academia ${academia.nome}.`,
         `- Aniversariantes de ${nomeDoMes(proximoMes)}: ${aniversariantes.length}`,
         `- Dias sem lançamento no diário: ${semDiario.length}`,
+        ...datas
+          .filter((d) => d.situacao === "Vencido" || d.situacao === "Vence em breve")
+          .map((d) => `- ATENÇÃO: ${d.item} ${d.situacao === "Vencido" ? "vencido" : "vence"} em ${d.vencimento!.split("-").reverse().join("/")}`),
         `- Contagens não feitas: ${contagens.reduce((n, c) => n + c.horarios.length, 0)} horários em ${new Set(contagens.map((c) => c.data)).size} dias`,
         ``,
         `Enviado por ${atual.nome} pelo sistema BFIT · Controle de unidades.`,
