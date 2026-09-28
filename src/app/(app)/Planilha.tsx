@@ -49,6 +49,11 @@ export type Resultado = { erro?: string; aviso?: string };
 const COR_SITUACAO: Record<string, string> = {
   Pendente: "bg-amber-100 text-amber-800",
   Concluído: "bg-emerald-100 text-emerald-800",
+  // Datas importantes da academia
+  Vencido: "bg-red-100 text-red-800",
+  "Vence em breve": "bg-amber-100 text-amber-800",
+  "Em dia": "bg-emerald-100 text-emerald-800",
+  "Sem data": "bg-slate-100 text-slate-600",
 };
 
 function formatarData(valor: string | null) {

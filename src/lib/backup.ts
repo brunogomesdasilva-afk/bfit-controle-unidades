@@ -22,6 +22,7 @@ const TABELAS: [tabela: string, ordem: string[]][] = [
   ["profiles", ["id"]],
   ["funcionarios", ["id"]],
   ["modalidades", ["id"]],
+  ["datas_importantes", ["id"]],
   ["feriados", ["id"]],
   ["escala", ["id"]],
   ["controle_diario", ["id"]],

@@ -8,6 +8,7 @@ export function AbasDaAcademia({ id }: { id: string }) {
   const abas = [
     { href: `/academias/${id}/funcionarios`, rotulo: "Funcionários" },
     { href: `/academias/${id}/modalidades`, rotulo: "Modalidades" },
+    { href: `/academias/${id}/datas`, rotulo: "Datas importantes" },
     { href: `/academias/${id}/escala`, rotulo: "Escala" },
     { href: `/academias/${id}/fechamento-coletivas`, rotulo: "Fechamento coletivas" },
   ];

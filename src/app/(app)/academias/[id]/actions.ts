@@ -69,8 +69,37 @@ export async function excluirModalidade(id: string): Promise<Resultado> {
   return apagar("modalidades", id);
 }
 
+export async function salvarDataImportante(
+  academiaId: string,
+  id: string | null,
+  dados: Record<string, string>
+): Promise<Resultado> {
+  const semAcesso = await semAcessoAAcademia(academiaId);
+  if (semAcesso) return { erro: semAcesso };
+
+  const { registro, erro } = validar(
+    [
+      { campo: "item", rotulo: "Item", tipo: "texto", obrigatorio: true },
+      { campo: "vencimento", rotulo: "Vencimento", tipo: "data" },
+      { campo: "observacao", rotulo: "Observação", tipo: "texto" },
+    ],
+    dados
+  );
+  if (erro || !registro) return { erro };
+
+  const r = await gravar("datas_importantes", academiaId, id, registro);
+  if (r.erro?.startsWith("Já existe")) return { erro: "Esse item já está cadastrado nesta academia." };
+  return r;
+}
+
+export async function excluirDataImportante(id: string): Promise<Resultado> {
+  return apagar("datas_importantes", id);
+}
+
+type Tabela = "funcionarios" | "modalidades" | "datas_importantes";
+
 async function gravar(
-  tabela: "funcionarios" | "modalidades",
+  tabela: Tabela,
   academiaId: string,
   id: string | null,
   registro: Record<string, string | number | null>
@@ -89,7 +118,7 @@ async function gravar(
 }
 
 // A regra do banco garante que o usuário de uma academia só exclui o que é dela.
-async function apagar(tabela: "funcionarios" | "modalidades", id: string): Promise<Resultado> {
+async function apagar(tabela: Tabela, id: string): Promise<Resultado> {
   const semAcesso = await verificarAcesso();
   if (semAcesso) return { erro: semAcesso };
 
