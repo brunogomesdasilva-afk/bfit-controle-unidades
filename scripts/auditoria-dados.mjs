@@ -1,4 +1,5 @@
 // Auditoria dos dados do BFIT: gera uma planilha com tudo que foge do padrão e (com --enviar) manda por e-mail ao Bruno.
+// Gera uma planilha por unidade (uma aba por tipo de ajuste).
 // Uso (na pasta do projeto): node scripts/auditoria-dados.mjs "<pasta de saída>" [--enviar]
 import fs from "node:fs";
 import { createRequire } from "node:module";
@@ -238,59 +239,59 @@ const iso = (x) => String(x ?? "").split(" ")[0].split("/").reverse().join("-");
 for (const s of secoes) if (s.aba === "Contagens fora do padrão" || s.aba === "Diário fora do padrão")
   s.linhas.sort((x, y) => String(x[0]).localeCompare(String(y[0])) || iso(x[s.aba === "Diário fora do padrão" ? 1 : 2]).localeCompare(iso(y[s.aba === "Diário fora do padrão" ? 1 : 2])));
 
-// ---------- Planilha ----------
-const wb = new ExcelJS.Workbook();
-const resumo = wb.addWorksheet("Resumo");
-resumo.columns = [{ width: 34 }, { width: 12 }, { width: 110 }];
-resumo.addRow(["BFIT · Auditoria dos dados", "", `Gerada em ${br(hoje)}`]).font = { bold: true, size: 14 };
-resumo.addRow([]);
-resumo.addRow(["Aba", "Itens", "O que é"]).font = { bold: true };
-for (const s of secoes) resumo.addRow([s.aba, s.linhas.length, s.explicacao]).alignment = { wrapText: true, vertical: "top" };
-for (const s of secoes) {
-  const ws = wb.addWorksheet(s.aba.slice(0, 31));
-  ws.addRow([s.titulo]).font = { bold: true, size: 13 };
-  ws.addRow([s.explicacao]).alignment = { wrapText: false };
-  ws.addRow([]);
-  const cab = ws.addRow(s.colunas);
-  cab.font = { bold: true, color: { argb: "FFFFFFFF" } };
-  cab.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0B4EA2" } }));
-  for (const l of s.linhas) ws.addRow(l);
-  if (!s.linhas.length) ws.addRow(["Nada encontrado."]);
-  ws.columns.forEach((c, i) => (c.width = Math.min(90, Math.max(12, ...[s.colunas[i] ?? "", ...s.linhas.map((l) => String(l[i] ?? ""))].map((x) => String(x).length + 2)))));
-  ws.views = [{ state: "frozen", ySplit: 4 }];
-  ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: s.colunas.length } };
+// ---------- Planilhas: uma por unidade, uma aba por tipo de ajuste (só as abas com itens) ----------
+const saida = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : ".";
+const arquivos = [];
+for (const ac of academias) {
+  // Itens da unidade (e os que valem para todas); a coluna "Unidade" sai, porque o arquivo já é da unidade.
+  const daUnidade = secoes
+    .map((s) => ({ ...s, colunas: s.colunas.slice(1), linhas: s.linhas.filter((l) => l[0] === ac.nome || l[0] === "Todas").map((l) => l.slice(1)) }))
+    .filter((s) => s.linhas.length);
+  const wb = new ExcelJS.Workbook();
+  const resumo = wb.addWorksheet("Resumo");
+  resumo.columns = [{ width: 30 }, { width: 10 }, { width: 110 }];
+  resumo.addRow([`BFIT · Conferência · ${ac.nome}`, "", `Gerada em ${br(hoje)}`]).font = { bold: true, size: 14 };
+  resumo.addRow([]);
+  resumo.addRow(["Aba", "Itens", "O que ajustar"]).font = { bold: true };
+  for (const s of daUnidade) resumo.addRow([s.aba, s.linhas.length, s.explicacao]).alignment = { wrapText: true, vertical: "top" };
+  if (!daUnidade.length) resumo.addRow(["Nada a ajustar nesta unidade."]);
+  for (const s of daUnidade) {
+    const ws = wb.addWorksheet(s.aba.slice(0, 31));
+    ws.addRow([`${s.titulo} · ${ac.nome}`]).font = { bold: true, size: 13 };
+    ws.addRow([s.explicacao]);
+    ws.addRow([]);
+    const cab = ws.addRow(s.colunas);
+    cab.font = { bold: true, color: { argb: "FFFFFFFF" } };
+    cab.eachCell((c) => (c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0B4EA2" } }));
+    for (const l of s.linhas) ws.addRow(l);
+    ws.columns.forEach((c, i) => (c.width = Math.min(90, Math.max(12, ...[s.colunas[i] ?? "", ...s.linhas.map((l) => String(l[i] ?? ""))].map((x) => String(x).length + 2)))));
+    ws.views = [{ state: "frozen", ySplit: 4 }];
+    ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: s.colunas.length } };
+  }
+  const arquivo = `${saida}/Conferência ${ac.nome} ${hoje}.xlsx`;
+  await wb.xlsx.writeFile(arquivo);
+  arquivos.push({ unidade: ac.nome, arquivo, abas: daUnidade.map((s) => `${s.aba}: ${s.linhas.length}`) });
+  console.log(ac.nome, "→", daUnidade.map((s) => `${s.aba} ${s.linhas.length}`).join(" · "));
 }
-const arquivo = `${process.argv[2] ?? "."}/Auditoria BFIT ${hoje}.xlsx`;
-await wb.xlsx.writeFile(arquivo);
-for (const s of secoes) console.log(`${s.aba}: ${s.linhas.length}`);
-console.log("arquivo:", arquivo);
 
 if (process.argv.includes("--enviar")) {
   const porta = Number(env.SMTP_PORT ?? 587);
   const t = nodemailer.createTransport({ host: env.SMTP_HOST, port: porta, secure: porta === 465, auth: { user: env.SMTP_USER, pass: env.SMTP_PASS } });
-  const linhasResumo = secoes.map((s) => `- ${s.titulo}: ${s.linhas.length}`).join("\n");
-  const porUnidade = (s) => Object.entries(s.linhas.reduce((m, l) => ((m[l[0]] = (m[l[0]] ?? 0) + 1), m), {})).map(([u, n]) => `${u} ${n}`).join(" · ");
   await t.sendMail({
     from: env.SMTP_FROM ?? env.SMTP_USER,
     to: "brunogomesdasilva@gmail.com",
-    subject: `BFIT · Auditoria dos dados antes de liberar o sistema · ${br(hoje)}`,
+    subject: `BFIT · Conferência dos dados por unidade · ${br(hoje)}`,
     text: [
       "Olá, Bruno,",
       "",
-      "Segue em anexo a auditoria dos dados do BFIT - Controle de unidades: tudo o que encontrei fora do padrão e que vale limpar antes de liberar o sistema para as unidades. Cada aba da planilha tem uma explicação no topo e filtro nas colunas.",
+      "Seguem em anexo as planilhas de conferência, uma por unidade. Cada arquivo tem uma aba por tipo de ajuste (só as que têm itens), com a explicação no topo e filtro nas colunas.",
       "",
-      "Resumo:",
-      linhasResumo,
-      "",
-      ...secoes.filter((s) => s.linhas.length).map((s) => `${s.titulo} por unidade: ${porUnidade(s)}`),
-      "",
-      "Já foi feito automaticamente: remoção das contagens repetidas idênticas (sala 103, coletivas 136, lutas 3) e correção do faturamento da Km18 em 07/05/2026.",
-      "",
-      "Sugestão de ordem: 1) Cadastros (funcionários e usuários de cada unidade), 2) Contagens repetidas, 3) Diário fora do padrão, 4) Contagens faltando e fora do padrão, 5) Passagens e Gympass que faltam importar.",
+      ...arquivos.flatMap((a) => [`${a.unidade}:`, ...(a.abas.length ? a.abas.map((x) => `  - ${x}`) : ["  - nada a ajustar"]), ""]),
+      "Sugestão de ordem: 1) Cadastros, 2) Contagens repetidas, 3) Diário fora do padrão, 4) Contagens faltando e fora do padrão, 5) Passagens e Gympass que faltam importar.",
       "",
       "Gerado pelo Claude para o sistema BFIT · Controle de unidades.",
     ].join("\n"),
-    attachments: [{ filename: `Auditoria BFIT ${hoje}.xlsx`, path: arquivo }],
+    attachments: arquivos.map((a) => ({ filename: a.arquivo.split("/").pop(), path: a.arquivo })),
   });
   console.log("e-mail enviado");
 }
