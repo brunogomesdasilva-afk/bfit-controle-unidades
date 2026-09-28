@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 export type Vencimento = { id: string; academiaId: string; academia: string; item: string; vencimento: string; dias: number };
 
@@ -11,20 +11,26 @@ const data = (d: string) => d.split("-").reverse().join("/");
 // login enquanto a data não for renovada (alterada para mais de 30 dias); fechado, só volta no próximo login.
 export function AvisoVencimentos({ sessao, vencimentos }: { sessao: string; vencimentos: Vencimento[] }) {
   const chave = `vencimentos_vistos_${sessao}`;
-  const [aberto, setAberto] = useState(false);
-  useEffect(() => {
-    let visto = false;
-    try {
-      visto = localStorage.getItem(chave) === "1";
-    } catch {}
-    setAberto(!visto && vencimentos.length > 0);
-  }, [chave, vencimentos.length]);
+  // Já fechado neste login? (lido do navegador; no servidor conta como fechado, para não piscar)
+  const visto = useSyncExternalStore(
+    () => () => {},
+    () => {
+      try {
+        return localStorage.getItem(chave) === "1";
+      } catch {
+        return false;
+      }
+    },
+    () => true
+  );
+  const [fechadoAgora, setFechadoAgora] = useState(false);
+  const aberto = !visto && !fechadoAgora && vencimentos.length > 0;
 
   const fechar = () => {
     try {
       localStorage.setItem(chave, "1");
     } catch {}
-    setAberto(false);
+    setFechadoAgora(true);
   };
   if (!aberto) return null;
   const variasUnidades = new Set(vencimentos.map((v) => v.academiaId)).size > 1;
