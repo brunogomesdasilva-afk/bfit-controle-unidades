@@ -9,6 +9,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 //   - se quem deu é o professor da grade: hora dada; se foi outro: "coberto por outro" para o titular e
 //     "cobriu" para quem deu; se não há contagem: "sem contagem" (aula não lançada ou não dada).
 // Aulas lançadas fora da grade contam como "extra" para quem deu. Feriados não têm aula prevista.
+// A grade tem histórico (vigente_de / vigente_ate): cada dia é comparado com a grade que valia naquele dia.
 
 export type Tipo = "coletivas" | "lutas";
 export const TIPOS: Record<Tipo, string> = { coletivas: "Coletivas", lutas: "Lutas" };
@@ -23,7 +24,13 @@ export type AulaDaGrade = {
   modalidade: string;
   professor: string | null;
   duracao_min: number;
+  vigente_de: string;
+  vigente_ate: string | null;
 };
+
+// A aula da grade valia neste dia?
+export const vigenteEm = (g: Pick<AulaDaGrade, "vigente_de" | "vigente_ate">, d: string) =>
+  g.vigente_de <= d && (!g.vigente_ate || g.vigente_ate >= d);
 
 export type LinhaProfessor = {
   professor: string;
@@ -60,6 +67,7 @@ export type Cobertura = {
 export type SemContagem = { data: string; horario: string; tipo: Tipo; modalidade: string; titular: string; horas: number };
 
 const somarDias = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+export { somarDias };
 // Dia da semana 1 (segunda) ... 7 (domingo)
 export const diaIso = (d: string) => ((new Date(`${d}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
 const chave = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").trim().toLowerCase();
@@ -73,14 +81,16 @@ type Contagem = {
   professor_substituto: string | null;
 };
 
+// Todas as versões da grade (a vigente e o histórico).
 export async function carregarGrade(supabase: Supabase, academiaId: string) {
   const { data } = await supabase
     .from("grade_aulas")
-    .select("id, tipo, dia_semana, horario, modalidade, professor, duracao_min")
+    .select("id, tipo, dia_semana, horario, modalidade, professor, duracao_min, vigente_de, vigente_ate")
     .eq("academia_id", academiaId)
     .order("tipo")
     .order("dia_semana")
-    .order("horario");
+    .order("horario")
+    .order("vigente_de");
   return (data ?? []) as AulaDaGrade[];
 }
 
@@ -124,7 +134,7 @@ export async function fechamentoColetivas(supabase: Supabase, academiaId: string
     // Aulas previstas pela grade, dia a dia.
     for (let d = inicio; d <= fim; d = somarDias(d, 1)) {
       if (feriado.has(d)) continue;
-      for (const g of daGrade.filter((x) => x.dia_semana === diaIso(d))) {
+      for (const g of daGrade.filter((x) => x.dia_semana === diaIso(d) && vigenteEm(x, d))) {
         const horas = g.duracao_min / 60;
         const titular = g.professor ?? "(sem professor na grade)";
         const t = doProfessor(titular, tipo);
@@ -181,7 +191,7 @@ export async function fechamentoColetivas(supabase: Supabase, academiaId: string
 export async function gradePelasContagens(supabase: Supabase, academiaId: string) {
   const fim = somarDias(hoje(), -1);
   const inicio = somarDias(fim, -55);
-  const aulas: Omit<AulaDaGrade, "id">[] = [];
+  const aulas: Omit<AulaDaGrade, "id">[] = []; // vigentes desde o início das 8 semanas analisadas
   for (const tipo of ["coletivas", "lutas"] as Tipo[]) {
     const { data } = await supabase
       .from(tipo === "coletivas" ? "contagem_coletivas" : "contagem_lutas")
@@ -214,6 +224,8 @@ export async function gradePelasContagens(supabase: Supabase, academiaId: string
         modalidade: maisFrequente(v.modalidades)!,
         professor: maisFrequente(v.professores),
         duracao_min: DURACAO_PADRAO[tipo],
+        vigente_de: inicio,
+        vigente_ate: null,
       });
     }
   }

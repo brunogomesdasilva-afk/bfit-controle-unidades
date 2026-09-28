@@ -4,8 +4,8 @@ import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { DEPARTAMENTOS, GENEROS } from "@/lib/database.types";
-import { gradePelasContagens } from "@/lib/fechamentoColetivas";
-import { mensagemErro, validar, verificarAcesso } from "@/lib/planilha";
+import { gradePelasContagens, somarDias } from "@/lib/fechamentoColetivas";
+import { hoje, mensagemErro, validar, verificarAcesso } from "@/lib/planilha";
 import type { Resultado } from "../../Planilha";
 
 // Cadastros de cada academia (funcionários e modalidades): o administrador cuida de todas; o usuário de
@@ -139,18 +139,60 @@ export async function salvarAulaGrade(
       { campo: "modalidade", rotulo: "Modalidade", tipo: "texto", obrigatorio: true },
       { campo: "professor", rotulo: "Professor", tipo: "texto" },
       { campo: "duracao_min", rotulo: "Duração (min)", tipo: "inteiro", obrigatorio: true },
+      { campo: "vigente_de", rotulo: "Vale a partir de", tipo: "data" },
     ],
     dados
   );
   if (erro || !registro) return { erro };
   if (registro.tipo !== "coletivas" && registro.tipo !== "lutas") return { erro: "Escolha o tipo da lista." };
-  const r = await gravar("grade_aulas", academiaId, id, registro);
-  if (r.erro?.startsWith("Já existe")) return { erro: "Essa aula já está na grade (mesmo dia, horário e modalidade)." };
+  const dataHoje = hoje();
+  const aPartirDe = (registro.vigente_de as string | null) ?? dataHoje;
+  const repetida = "Essa aula já está na grade (mesmo dia, horário e modalidade).";
+
+  // Aula nova: vale a partir da data informada (padrão: hoje).
+  if (!id) {
+    const r = await gravar("grade_aulas", academiaId, null, { ...registro, vigente_de: aPartirDe });
+    return r.erro?.startsWith("Já existe") ? { erro: repetida } : r;
+  }
+
+  // Alteração: guarda o histórico. A versão atual é encerrada no dia anterior e a nova começa na data
+  // informada (se não mudou a data, a partir de hoje). Só corrige no lugar se a versão começa hoje ou depois,
+  // ou se a data informada é anterior ao início da versão (correção desde o começo).
+  const supabase = await createClient();
+  const { data: atual } = await supabase.from("grade_aulas").select("*").eq("id", id).maybeSingle();
+  if (!atual) return { erro: "Aula não encontrada." };
+  if (atual.vigente_ate) return { erro: "Esta é uma versão antiga (histórico). Altere a aula da grade vigente." };
+  const inicio = aPartirDe !== atual.vigente_de ? aPartirDe : dataHoje;
+  if (inicio <= atual.vigente_de) {
+    const r = await gravar("grade_aulas", academiaId, id, { ...registro, vigente_de: inicio });
+    return r.erro?.startsWith("Já existe") ? { erro: repetida } : r;
+  }
+  const { error: erroEncerrar } = await supabase.from("grade_aulas").update({ vigente_ate: somarDias(inicio, -1) }).eq("id", id);
+  if (erroEncerrar) return { erro: mensagemErro(erroEncerrar) };
+  const r = await gravar("grade_aulas", academiaId, null, { ...registro, vigente_de: inicio });
+  if (r.erro) {
+    await supabase.from("grade_aulas").update({ vigente_ate: null }).eq("id", id); // desfaz o encerramento
+    return r.erro.startsWith("Já existe") ? { erro: repetida } : r;
+  }
   return r;
 }
 
+// Excluir encerra a aula ontem (ela some da grade vigente, mas o histórico fica para os meses anteriores).
+// Aula que ainda nem começou a valer é apagada de verdade; versões antigas só o administrador apaga.
 export async function excluirAulaGrade(id: string): Promise<Resultado> {
-  return apagar("grade_aulas", id);
+  const supabase = await createClient();
+  const { data: atual } = await supabase.from("grade_aulas").select("vigente_de, vigente_ate").eq("id", id).maybeSingle();
+  if (!atual) return { erro: "Aula não encontrada." };
+  const ontem = somarDias(hoje(), -1);
+  if (atual.vigente_ate || atual.vigente_de > ontem) {
+    if (atual.vigente_ate && (await getPerfilAtual())?.perfil !== "admin") return { erro: "Só o administrador apaga o histórico da grade." };
+    return apagar("grade_aulas", id);
+  }
+  const { error } = await supabase.from("grade_aulas").update({ vigente_ate: ontem }).eq("id", id);
+  if (error) return { erro: mensagemErro(error) };
+  revalidatePath("/academias", "layout");
+  refresh();
+  return {};
 }
 
 // Monta (ou refaz) a grade da academia a partir das contagens das últimas 8 semanas.
@@ -160,9 +202,23 @@ export async function montarGradePelasContagens(academiaId: string): Promise<Res
   const supabase = await createClient();
   const aulas = await gradePelasContagens(supabase, academiaId);
   if (aulas.length === 0) return { erro: "Não há contagens nas últimas 8 semanas para montar a grade." };
-  const { error: erroApagar } = await supabase.from("grade_aulas").delete().eq("academia_id", academiaId);
-  if (erroApagar) return { erro: mensagemErro(erroApagar) };
-  const { error } = await supabase.from("grade_aulas").insert(aulas.map((a) => ({ ...a, academia_id: academiaId })));
+  // Já tem grade: a atual é encerrada ontem (fica no histórico) e a nova vale a partir de hoje.
+  // Primeira grade: vale desde o início das 8 semanas analisadas.
+  const { data: vigentes } = await supabase.from("grade_aulas").select("id").eq("academia_id", academiaId).is("vigente_ate", null);
+  const dataHoje = hoje();
+  if (vigentes?.length) {
+    const { error: erroEncerrar } = await supabase
+      .from("grade_aulas")
+      .update({ vigente_ate: somarDias(dataHoje, -1) })
+      .eq("academia_id", academiaId)
+      .is("vigente_ate", null)
+      .lt("vigente_de", dataHoje);
+    if (erroEncerrar) return { erro: mensagemErro(erroEncerrar) };
+    await supabase.from("grade_aulas").delete().eq("academia_id", academiaId).is("vigente_ate", null); // as que começavam hoje
+  }
+  const { error } = await supabase
+    .from("grade_aulas")
+    .insert(aulas.map((a) => ({ ...a, academia_id: academiaId, vigente_de: vigentes?.length ? dataHoje : a.vigente_de })));
   if (error) return { erro: mensagemErro(error) };
   revalidatePath("/academias", "layout");
   refresh();
