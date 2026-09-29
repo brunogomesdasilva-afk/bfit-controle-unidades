@@ -25,6 +25,10 @@ export default async function AcompanhamentoPage() {
           para os administradores.
         </p>
       </div>
+      <p className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">
+        Em teste: o envio automático das 8h está indo só para os administradores. Os gerentes passam a receber quando o
+        Bruno liberar.
+      </p>
       {!cronConfigurado && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           O envio automático ainda não está ativo: falta a variável CRON_SECRET na Vercel.

@@ -12,6 +12,9 @@ export async function GET(request: Request) {
     return new Response("Não autorizado.", { status: 401 });
   const db = createAdminClient();
   if (!db) return new Response("Chave de serviço não configurada.", { status: 500 });
-  const resultado = await enviarAcompanhamento(db, { referencia: ontem() });
+  // Período de teste (pedido do Bruno): o envio automático vai só para os administradores até ele liberar
+  // para os gerentes. Para liberar, troque para false.
+  const SO_ADMINISTRADORES = true;
+  const resultado = await enviarAcompanhamento(db, { referencia: ontem(), soAdministradores: SO_ADMINISTRADORES });
   return Response.json(resultado);
 }
