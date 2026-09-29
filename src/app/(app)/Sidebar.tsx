@@ -285,7 +285,6 @@ const ITENS: ItemMenu[] = [
   {
     href: "/clientes",
     rotulo: "Clientes",
-    somenteAdmin: true,
     ativo: (p: string) => p === "/clientes",
     icone: (
       <Icone>
