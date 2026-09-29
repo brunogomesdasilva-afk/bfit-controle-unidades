@@ -24,6 +24,7 @@ const TABELAS: [tabela: string, ordem: string[]][] = [
   ["modalidades", ["id"]],
   ["datas_importantes", ["id"]],
   ["grade_aulas", ["id"]],
+  ["clientes", ["academia_id", "cliente_id"]],
   ["feriados", ["id"]],
   ["escala", ["id"]],
   ["controle_diario", ["id"]],

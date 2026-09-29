@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const data = url.searchParams.get("data");
   const referencia = data && /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : ontem();
   const { data: todas } = await db.from("academias").select("*").order("nome");
-  const { pdf, arquivo } = await acompanhamentoDiario(db, academia as Academia, (todas ?? []) as Academia[], referencia);
+  const { pdf, arquivo } = await acompanhamentoDiario(db, academia as Academia, (todas ?? []) as Academia[], referencia, (await getPerfilAtual())?.perfil === "admin");
   return new Response(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Academia, Compra, Manutencao } from "@/lib/database.types";
 import { motivosDeNaoConversao, periodos, totaisDoPeriodo, type Periodo, type Totais } from "@/lib/painel";
+import { ocupacao } from "@/lib/ocupacao";
 import { atrasada, carregarPendencias } from "@/lib/pendencias";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -98,13 +99,32 @@ async function medias(db: Supabase, unidade: string | null, p: Periodo) {
   };
 }
 
+export type PerfilCliente = { genero: string; faixa: string; contrato: string; clientes: number };
+export const FAIXAS = ["Menor de 18", "18 a 30", "31 a 40", "41 a 50", "51 ou mais", "Sem data"];
+export const GENEROS_CLIENTE: Record<string, string> = { M: "Masculino", F: "Feminino" };
+export const nomeGenero = (g: string) => GENEROS_CLIENTE[g] ?? "Não informado";
+
+// Clientes ativos por gênero, faixa etária e plano (cadastro importado em Clientes).
+async function perfilClientes(db: Supabase, unidade: string | null, referencia: string) {
+  const { data, error } = await db.rpc("clientes_perfil", { p_academia: unidade, referencia });
+  return {
+    linhas: ((data ?? []) as PerfilCliente[]).map((l) => ({ ...l, clientes: Number(l.clientes) })),
+    disponivel: !error,
+  };
+}
+
+async function gympassPessoas(db: Supabase, unidade: string | null, p: Periodo) {
+  const { data } = await db.rpc("gympass_pessoas", { p_academia: unidade, inicio: p.inicio, fim: p.fim });
+  return Number(data ?? 0);
+}
+
 export async function montarPainel(
   db: Supabase,
   opcoes: { unidade: string | null; referencia: string; academias: Academia[]; sistema?: SupabaseClient }
 ) {
   const { unidade, referencia, academias, sistema } = opcoes;
   const p = periodos(referencia);
-  const [dia, mes, mesAnterior, ano, anoAnterior, visDia, visMes, visAno, mediasMes, ncDia, ncMes, ncAno, pendencias] = await Promise.all([
+  const [dia, mes, mesAnterior, ano, anoAnterior, visDia, visMes, visAno, mediasMes, ncDia, ncMes, ncAno, pendencias, ocup, clientes, gympassPessoasMes] = await Promise.all([
     totaisDoPeriodo(p.dia, unidade, sistema),
     totaisDoPeriodo(p.mes, unidade, sistema),
     totaisDoPeriodo(p.mesAnterior, unidade, sistema),
@@ -118,6 +138,9 @@ export async function montarPainel(
     motivosDeNaoConversao(db, p.mes, unidade),
     motivosDeNaoConversao(db, p.ano, unidade),
     carregarPendencias(db as Awaited<ReturnType<typeof createClient>>, unidade),
+    ocupacao(db, unidade, p.mes.inicio, p.mes.fim, referencia),
+    perfilClientes(db, unidade, referencia),
+    gympassPessoas(db, unidade, p.mes),
   ]);
 
   const escolhidas = unidade ? academias.filter((a) => a.id === unidade) : academias;
@@ -141,6 +164,9 @@ export async function montarPainel(
     anoAnterior: anoAnterior.totais,
     erro: dia.erro ?? mes.erro ?? mesAnterior.erro ?? ano.erro ?? anoAnterior.erro,
     visitantes: { dia: visDia, mes: visMes, ano: visAno },
+    ocupacao: ocup,
+    clientes,
+    gympassPessoasMes,
     medias: mediasMes,
     naoConversao: { dia: ncDia, mes: ncMes, ano: ncAno },
     estrutura: { area, custo, inventario },
