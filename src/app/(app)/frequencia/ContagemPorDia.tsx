@@ -33,10 +33,13 @@ function Dia({
   dia,
   salvar,
   somenteLeitura,
+  unidade,
 }: {
   dia: DiaDeAulas;
   salvar: Salvar;
   somenteLeitura: boolean;
+  // Aba "Todas": dentro do dia, cada unidade aparece com o nome no lugar da data.
+  unidade?: string;
 }) {
   const inicial = (a: AulaDoDia) => ({
     quantidade: a.quantidade === null ? "" : String(a.quantidade),
@@ -69,10 +72,18 @@ function Dia({
           <span className="text-slate-400 transition group-open:rotate-90">
             ›
           </span>
-          <span className="font-medium text-slate-900">{dataBr(dia.data)}</span>
-          <span className="capitalize text-slate-500">
-            {DIAS[new Date(`${dia.data}T12:00:00Z`).getUTCDay()]}
-          </span>
+          {unidade ? (
+            <span className="font-medium text-slate-900">{unidade}</span>
+          ) : (
+            <>
+              <span className="font-medium text-slate-900">
+                {dataBr(dia.data)}
+              </span>
+              <span className="capitalize text-slate-500">
+                {DIAS[new Date(`${dia.data}T12:00:00Z`).getUTCDay()]}
+              </span>
+            </>
+          )}
           {dia.feriado && (
             <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800">
               feriado
@@ -267,6 +278,97 @@ export function ContagemPorDia({
           somenteLeitura={somenteLeitura}
         />
       ))}
+    </div>
+  );
+}
+
+export type DiaTodas = {
+  data: string;
+  feriado: boolean;
+  previstas: number;
+  lancadas: number;
+  alunos: number;
+  unidades: { nome: string; dia: DiaDeAulas }[];
+};
+
+const nadaParaSalvar: Salvar = async () => ({
+  erro: "Na aba Todas é só consulta. Abra a aba da academia para lançar.",
+});
+
+// Aba "Todas": o dia com o total das unidades; ao abrir, cada unidade com o resumo e, ao abrir a unidade, a
+// grade do dia com as quantidades (só consulta).
+export function ContagemPorDiaTodas({ dias }: { dias: DiaTodas[] }) {
+  if (!dias.length)
+    return (
+      <p className="rounded-md border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+        Nenhuma aula neste mês.
+      </p>
+    );
+  return (
+    <div className="space-y-2">
+      {dias.map((d) => {
+        const faltando = d.unidades.reduce(
+          (t, u) =>
+            t + u.dia.aulas.filter((a) => a.naGrade && a.id === null).length,
+          0,
+        );
+        return (
+          <details
+            key={d.data}
+            className="group rounded-lg border border-slate-200 bg-white"
+          >
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50">
+              <span className="flex items-center gap-2">
+                <span className="text-slate-400 transition group-open:rotate-90">
+                  ›
+                </span>
+                <span className="font-medium text-slate-900">
+                  {dataBr(d.data)}
+                </span>
+                <span className="capitalize text-slate-500">
+                  {DIAS[new Date(`${d.data}T12:00:00Z`).getUTCDay()]}
+                </span>
+                {d.feriado && (
+                  <span className="rounded bg-amber-100 px-1.5 text-xs text-amber-800">
+                    feriado
+                  </span>
+                )}
+              </span>
+              <span className="flex items-center gap-4 tabular-nums text-slate-600">
+                <span>
+                  <strong className="text-slate-900">{d.lancadas}</strong> de{" "}
+                  {d.previstas} aulas
+                </span>
+                <span>
+                  <strong className="text-slate-900">
+                    {d.alunos.toLocaleString("pt-BR")}
+                  </strong>{" "}
+                  alunos
+                </span>
+                <span className="text-xs text-slate-500">
+                  {d.unidades.length} unidades
+                </span>
+                {faltando > 0 && (
+                  <span className="rounded bg-red-100 px-1.5 text-xs font-medium text-red-800">
+                    {faltando} sem contagem
+                  </span>
+                )}
+              </span>
+            </summary>
+            <div className="space-y-2 border-t border-slate-100 p-3">
+              {d.unidades.map((u) => (
+                <Dia
+                  key={u.nome}
+                  dia={u.dia}
+                  unidade={u.nome}
+                  salvar={nadaParaSalvar}
+                  somenteLeitura
+                />
+              ))}
+            </div>
+          </details>
+        );
+      })}
     </div>
   );
 }

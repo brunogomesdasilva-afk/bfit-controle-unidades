@@ -3,7 +3,11 @@ import { hoje, intervaloDoMes, lerMes } from "@/lib/planilha";
 import { AbasAcademias, SeletorMes } from "./AbasAcademias";
 import { SemAcademias } from "./SemAcademias";
 import { diasDeAulas } from "@/lib/contagemPorDia";
-import { ContagemPorDia } from "./frequencia/ContagemPorDia";
+import {
+  ContagemPorDia,
+  ContagemPorDiaTodas,
+  type DiaTodas,
+} from "./frequencia/ContagemPorDia";
 import { salvarDiaDeAulas } from "./lancamentos";
 import { Planilha, type Coluna, type Linha, type Resultado } from "./Planilha";
 
@@ -21,6 +25,40 @@ function paraLinha(registro: Registro, colunas: Coluna[]): Linha {
     linha[c.campo] = v === null || v === undefined ? null : String(v);
   }
   return { ...linha, academia_id: registro.academia_id };
+}
+
+// Aba "Todas" das contagens de coletivas/lutas: os dias de cada unidade somados por data.
+async function diasDeTodas(
+  supabase: Parameters<typeof diasDeAulas>[0],
+  academias: { id: string; nome: string }[],
+  tipo: "coletivas" | "lutas",
+  mes: string,
+): Promise<DiaTodas[]> {
+  const porUnidade = await Promise.all(
+    academias.map(async (a) => ({
+      nome: a.nome,
+      dias: await diasDeAulas(supabase, a.id, tipo, mes),
+    })),
+  );
+  const porData = new Map<string, DiaTodas>();
+  for (const u of porUnidade)
+    for (const dia of u.dias) {
+      const d = porData.get(dia.data) ?? {
+        data: dia.data,
+        feriado: false,
+        previstas: 0,
+        lancadas: 0,
+        alunos: 0,
+        unidades: [],
+      };
+      d.feriado ||= Boolean(dia.feriado);
+      d.previstas += dia.previstas;
+      d.lancadas += dia.lancadas;
+      d.alunos += dia.alunos;
+      d.unidades.push({ nome: u.nome, dia });
+      porData.set(dia.data, d);
+    }
+  return [...porData.values()].sort((a, b) => b.data.localeCompare(a.data));
 }
 
 // Tela padrão dos lançamentos por academia e por mês (vendas e frequência): abas das
@@ -223,7 +261,26 @@ export async function TelaMensal({
               <div className="mt-3">{planilha}</div>
             </details>
           ) : null}
-          {!(agruparPorDia && selecionada) && planilha}
+          {agruparPorDia && !selecionada && (
+            <div className="mb-4 space-y-3">
+              <SeletorMes caminho={caminho} academia={null} mes={mes} />
+              <ContagemPorDiaTodas
+                dias={await diasDeTodas(
+                  supabase,
+                  academias,
+                  agruparPorDia,
+                  mes,
+                )}
+              />
+              <details className="rounded-lg border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-sm font-medium text-slate-700">
+                  Lista completa do mês
+                </summary>
+                <div className="mt-3">{planilha}</div>
+              </details>
+            </div>
+          )}
+          {!agruparPorDia && planilha}
         </>
       )}
     </div>
