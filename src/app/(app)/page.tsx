@@ -416,6 +416,15 @@ export default async function PainelPage({
           }
         />
         <Cartao
+          titulo="Alunos por professor no pico (mês)"
+          valor={numero(d.medias.alunosPorProfessorPico, 1)}
+          detalhe={
+            d.medias.contagensPico
+              ? `seg a sex, 5h–9h e 18h–21h · ${numero(d.medias.contagensPico)} contagens`
+              : "seg a sex, 5h–9h e 18h–21h · sem contagens com professores"
+          }
+        />
+        <Cartao
           titulo="Média de alunos por aula coletiva (mês)"
           valor={numero(d.medias.mediaAlunosColetiva, 1)}
           detalhe={`${numero(d.medias.aulasColetivas)} aulas`}

@@ -82,6 +82,10 @@ function secoes(d: DadosPainel, comFaturamento: boolean): SecaoPdf[] {
           numero(d.medias.alunosPorProfessor, 1),
         ],
         [
+          "Alunos por professor no pico (seg a sex, 5h-9h e 18h-21h)",
+          numero(d.medias.alunosPorProfessorPico, 1),
+        ],
+        [
           "Média de alunos por aula coletiva",
           `${numero(d.medias.mediaAlunosColetiva, 1)} (${numero(d.medias.aulasColetivas)} aulas)`,
         ],

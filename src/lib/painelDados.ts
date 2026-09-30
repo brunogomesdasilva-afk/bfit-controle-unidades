@@ -70,7 +70,7 @@ async function visitantes(db: Supabase, unidade: string | null, p: Periodo) {
 // Média de alunos por professor na sala (contagens do período com professores informados) e média de alunos
 // por aula coletiva.
 async function medias(db: Supabase, unidade: string | null, p: Periodo) {
-  let sala = db.from("contagem_sala").select("musculacao, cardio, professores").gte("data", p.inicio).lte("data", p.fim).gt("professores", 0);
+  let sala = db.from("contagem_sala").select("data, horario, musculacao, cardio, professores").gte("data", p.inicio).lte("data", p.fim).gt("professores", 0);
   let coletivas = db.from("contagem_coletivas").select("quantidade").gte("data", p.inicio).lte("data", p.fim);
   if (unidade) {
     sala = sala.eq("academia_id", unidade);
@@ -85,14 +85,26 @@ async function medias(db: Supabase, unidade: string | null, p: Periodo) {
     }
   };
   const [ls, lc] = await Promise.all([
-    lerTudo<{ musculacao: number; cardio: number; professores: number }>(sala),
+    lerTudo<{ data: string; horario: string; musculacao: number; cardio: number; professores: number }>(sala),
     lerTudo<{ quantidade: number }>(coletivas),
   ]);
   const alunosSala = ls.reduce((t, r) => t + r.musculacao + r.cardio, 0);
   const professoresSala = ls.reduce((t, r) => t + r.professores, 0);
   const alunosColetivas = lc.reduce((t, r) => t + r.quantidade, 0);
+  // Horário de pico: segunda a sexta, das 05:00 às 09:00 e das 18:00 às 21:00 (contagens que começam nessas
+  // faixas: 05h, 06h, 07h e 08h; 18h, 19h e 20h). Só a sala (musculação + cardio) ÷ professores de sala.
+  const pico = ls.filter((r) => {
+    const semana = new Date(`${r.data}T12:00:00Z`).getUTCDay();
+    const h = r.horario.slice(0, 5);
+    return semana >= 1 && semana <= 5 && ((h >= "05:00" && h < "09:00") || (h >= "18:00" && h < "21:00"));
+  });
   return {
     alunosPorProfessor: div(alunosSala, professoresSala),
+    alunosPorProfessorPico: div(
+      pico.reduce((t, r) => t + r.musculacao + r.cardio, 0),
+      pico.reduce((t, r) => t + r.professores, 0)
+    ),
+    contagensPico: pico.length,
     contagensSala: ls.length,
     mediaAlunosColetiva: div(alunosColetivas, lc.length),
     aulasColetivas: lc.length,
