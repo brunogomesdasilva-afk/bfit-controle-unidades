@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
-export type Vencimento = { id: string; academiaId: string; academia: string; item: string; vencimento: string; dias: number };
+export type Vencimento = { id: string; academiaId: string; academia: string; item: string; vencimento: string; dias: number; link: string };
 
 const data = (d: string) => d.split("-").reverse().join("/");
 
-// Aviso das datas importantes vencidas ou que vencem nos próximos 30 dias, no meio da tela. Aparece a cada
-// login enquanto a data não for renovada (alterada para mais de 30 dias); fechado, só volta no próximo login.
+// Aviso de prazos no meio da tela: datas importantes (30 dias), CREF dos professores (7 dias) e limite das
+// férias (60 dias), inclusive os vencidos. Aparece todo dia (e a cada login) enquanto a data não for alterada;
+// fechado, só volta no dia seguinte ou no próximo login.
 export function AvisoVencimentos({ sessao, vencimentos }: { sessao: string; vencimentos: Vencimento[] }) {
   const chave = `vencimentos_vistos_${sessao}`;
   // Já fechado neste login? (lido do navegador; no servidor conta como fechado, para não piscar)
@@ -46,9 +47,12 @@ export function AvisoVencimentos({ sessao, vencimentos }: { sessao: string; venc
       >
         <div className="border-b border-slate-200 px-5 py-4">
           <h2 id="aviso-vencimentos-titulo" className="text-lg font-semibold text-red-700">
-            Datas importantes para renovar
+            Prazos e vencimentos
           </h2>
-          <p className="text-sm text-slate-600">Vencidas ou vencendo nos próximos 30 dias. Depois de renovar, atualize a data.</p>
+          <p className="text-sm text-slate-600">
+            Datas importantes (próximos 30 dias), CREF dos professores (7 dias) e férias (60 dias). Depois de resolver,
+            atualize a data no cadastro.
+          </p>
         </div>
         <ul className="space-y-2 overflow-auto px-5 py-4 text-sm">
           {vencimentos.map((v) => (
@@ -57,7 +61,7 @@ export function AvisoVencimentos({ sessao, vencimentos }: { sessao: string; venc
               className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2 ${v.dias < 0 ? "bg-red-50" : "bg-amber-50"}`}
             >
               <span>
-                <Link href={`/academias/${v.academiaId}/datas`} onClick={fechar} className="font-semibold text-slate-900 underline">
+                <Link href={v.link} onClick={fechar} className="font-semibold text-slate-900 underline">
                   {v.item}
                 </Link>
                 {variasUnidades && <span className="text-slate-500"> · {v.academia}</span>}

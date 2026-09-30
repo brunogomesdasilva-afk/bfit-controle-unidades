@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { diaDaSemana, formatarDia, lembretesDeAniversario } from "@/lib/aniversarios";
 import { logout } from "@/app/login/actions";
 import { getPerfilAtual } from "@/lib/auth";
+import { COM_CREF } from "@/lib/database.types";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import { AvisoContagens } from "./AvisoContagens";
@@ -43,14 +44,55 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       .not("vencimento", "is", null)
       .lte("vencimento", limite)
       .order("vencimento");
+    const diasAte = (d: string) => Math.round((Date.parse(`${d}T12:00:00Z`) - Date.parse(`${dataHoje}T12:00:00Z`)) / 86400000);
+    const ate = (dias: number) => new Date(Date.parse(`${dataHoje}T12:00:00Z`) + dias * 86400000).toISOString().slice(0, 10);
+    const nomeDe = (id: string) => academias.find((a) => a.id === id)?.nome ?? "";
     vencimentos = (datas ?? []).map((d) => ({
       id: d.id as string,
       academiaId: d.academia_id as string,
-      academia: academias.find((a) => a.id === d.academia_id)?.nome ?? "",
+      academia: nomeDe(d.academia_id as string),
       item: d.item as string,
       vencimento: d.vencimento as string,
-      dias: Math.round((Date.parse(`${d.vencimento}T12:00:00Z`) - Date.parse(`${dataHoje}T12:00:00Z`)) / 86400000),
+      dias: diasAte(d.vencimento as string),
+      link: `/academias/${d.academia_id}/datas`,
     }));
+    // Funcionários ativos: CREF vencido ou vencendo em 7 dias (professores) e férias com limite em 60 dias.
+    const [{ data: crefs }, { data: ferias }] = await Promise.all([
+      supabase
+        .from("funcionarios")
+        .select("id, academia_id, nome, cref_vencimento")
+        .eq("ativo", true)
+        .in("departamento", COM_CREF)
+        .not("cref_vencimento", "is", null)
+        .lte("cref_vencimento", ate(7)),
+      supabase
+        .from("funcionarios")
+        .select("id, academia_id, nome, ferias_limite")
+        .eq("ativo", true)
+        .not("ferias_limite", "is", null)
+        .lte("ferias_limite", ate(60)),
+    ]);
+    for (const f of crefs ?? [])
+      vencimentos.push({
+        id: `cref-${f.id}`,
+        academiaId: f.academia_id as string,
+        academia: nomeDe(f.academia_id as string),
+        item: `CREF de ${f.nome}`,
+        vencimento: f.cref_vencimento as string,
+        dias: diasAte(f.cref_vencimento as string),
+        link: `/academias/${f.academia_id}/funcionarios`,
+      });
+    for (const f of ferias ?? [])
+      vencimentos.push({
+        id: `ferias-${f.id}`,
+        academiaId: f.academia_id as string,
+        academia: nomeDe(f.academia_id as string),
+        item: `Férias de ${f.nome} (limite para tirar)`,
+        vencimento: f.ferias_limite as string,
+        dias: diasAte(f.ferias_limite as string),
+        link: `/academias/${f.academia_id}/funcionarios`,
+      });
+    vencimentos.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
     // Aniversários de hoje (e do fim de semana/feriado seguinte, avisados no último dia útil).
     lembretes = (await lembretesDeAniversario(supabase, academias.map((a) => a.id))).map((a) => ({
       chave: `${a.academiaId}-${a.nome}-${a.dia}`,
@@ -95,7 +137,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
           </p>
         )}
         {atual && <AvisoContagens sessao={sessao} />}
-        {atual && <AvisoVencimentos sessao={sessao} vencimentos={vencimentos} />}
+        {atual && <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />}
         <LembreteAniversario dia={dataHoje} lembretes={lembretes} />
         {children}
       </main>

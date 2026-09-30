@@ -3,7 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { DEPARTAMENTOS, GENEROS } from "@/lib/database.types";
+import { COM_CREF, DEPARTAMENTOS, GENEROS } from "@/lib/database.types";
 import { gradePelasContagens, somarDias } from "@/lib/fechamentoColetivas";
 import { hoje, mensagemErro, validar, verificarAcesso } from "@/lib/planilha";
 import type { Resultado } from "../../Planilha";
@@ -37,11 +37,18 @@ export async function salvarFuncionario(
       { campo: "genero", rotulo: "Gênero", tipo: "texto" },
       { campo: "data_nascimento", rotulo: "Data de nascimento", tipo: "data" },
       { campo: "ativo", rotulo: "Ativo", tipo: "texto" },
+      { campo: "data_contratacao", rotulo: "Data de contratação", tipo: "data" },
+      { campo: "ferias_limite", rotulo: "Limite para tirar férias", tipo: "data" },
+      { campo: "cref", rotulo: "CREF", tipo: "texto" },
+      { campo: "cref_vencimento", rotulo: "Vencimento do CREF", tipo: "data" },
     ],
     dados
   );
   if (erro || !registro) return { erro };
   (registro as Record<string, unknown>).ativo = registro.ativo !== "nao";
+  // CREF só vale para professores de sala e de coletivas.
+  if (!COM_CREF.includes(String(registro.departamento)) && (registro.cref || registro.cref_vencimento))
+    return { erro: "CREF e vencimento do CREF são só para Professores e Professor de coletivas." };
   if (!(String(registro.departamento) in DEPARTAMENTOS)) return { erro: "Escolha o departamento da lista." };
   if (registro.genero !== null && !(String(registro.genero) in GENEROS)) return { erro: "Escolha o gênero da lista." };
 

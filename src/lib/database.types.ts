@@ -77,7 +77,14 @@ export type Funcionario = {
   genero: keyof typeof GENEROS | null;
   data_nascimento: string | null;
   ativo: boolean;
+  cref: string | null;
+  cref_vencimento: string | null;
+  data_contratacao: string | null;
+  ferias_limite: string | null;
 };
+
+// Departamentos que precisam de CREF (professores de sala e de coletivas).
+export const COM_CREF = ["professores", "professor_coletivas"];
 
 export type Modalidade = {
   id: string;

@@ -139,6 +139,24 @@ export default async function FechamentoDoMesPage({
                     chave={(x) => x.item}
                     vazio="Nenhuma data importante cadastrada (Academias → unidade → Datas importantes)."
                   />
+                  {(
+                    [
+                      ["CREF dos professores", "vencidos ou vencendo em 30 dias", d.crefs, "Nenhum professor de sala ou de coletivas ativo."],
+                      ["Limite para tirar férias", "vencidas ou vencendo em 60 dias", d.ferias, "Nenhum funcionário ativo."],
+                    ] as const
+                  ).map(([titulo, legenda, linhas, vazio]) => (
+                    <div key={titulo}>
+                      <h3 className="mb-2 mt-5 text-sm font-semibold text-marca">
+                        {titulo}{" "}
+                        {linhas.some(urgente) && (
+                          <span className="ml-1 rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                            {linhas.filter(urgente).length} {legenda}
+                          </span>
+                        )}
+                      </h3>
+                      <TabelaRelatorio colunas={COLUNAS_DATAS} linhas={[...linhas]} chave={(x) => x.item} vazio={vazio} />
+                    </div>
+                  ))}
                 </section>
               );
             })}

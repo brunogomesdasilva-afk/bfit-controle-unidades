@@ -13,6 +13,10 @@ const COLUNAS: Coluna[] = [
   { campo: "horario_saida", rotulo: "Horário de saída", tipo: "hora", largura: "w-36" },
   { campo: "genero", rotulo: "Gênero", tipo: "opcoes", largura: "w-36", opcoes: lista(GENEROS) },
   { campo: "data_nascimento", rotulo: "Data de nascimento", tipo: "data", largura: "w-40" },
+  { campo: "data_contratacao", rotulo: "Data de contratação", tipo: "data", largura: "w-40" },
+  { campo: "ferias_limite", rotulo: "Limite para tirar férias", tipo: "data", largura: "w-44" },
+  { campo: "cref", rotulo: "CREF (professores)", tipo: "texto", largura: "w-40" },
+  { campo: "cref_vencimento", rotulo: "Vencimento do CREF", tipo: "data", largura: "w-40" },
   {
     campo: "ativo",
     rotulo: "Ativo",
@@ -43,6 +47,10 @@ export default async function FuncionariosPage({ params, searchParams }: PagePro
     genero: f.genero,
     data_nascimento: f.data_nascimento,
     ativo: f.ativo === false ? "nao" : "sim",
+    data_contratacao: f.data_contratacao,
+    ferias_limite: f.ferias_limite,
+    cref: f.cref,
+    cref_vencimento: f.cref_vencimento,
   }));
   const filtro = (ativo: boolean, rotulo: string, href: string) => (
     <Link

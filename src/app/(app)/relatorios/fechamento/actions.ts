@@ -24,7 +24,7 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
     ),
   ];
 
-  const { proximoMes, aniversariantes, semDiario, contagens, datas, pdf, arquivo } = await montarFechamento(supabase, academia, mesPedido);
+  const { proximoMes, aniversariantes, semDiario, contagens, datas, crefs, ferias, pdf, arquivo } = await montarFechamento(supabase, academia, mesPedido);
   try {
     await enviarEmail({
       para,
@@ -35,6 +35,12 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
         `Segue em anexo o fechamento de ${nomeDoMes(mesPedido)} da academia ${academia.nome}.`,
         `- Aniversariantes de ${nomeDoMes(proximoMes)}: ${aniversariantes.length}`,
         `- Dias sem lançamento no diário: ${semDiario.length}`,
+        ...crefs
+          .filter((d) => d.situacao === "Vencido" || d.situacao === "Vence em breve")
+          .map((d) => `- ATENÇÃO: CREF de ${d.item} ${d.situacao === "Vencido" ? "vencido" : "vence"} em ${d.vencimento!.split("-").reverse().join("/")}`),
+        ...ferias
+          .filter((d) => d.situacao === "Vencido" || d.situacao === "Vence em breve")
+          .map((d) => `- ATENÇÃO: férias de ${d.item} com limite em ${d.vencimento!.split("-").reverse().join("/")}`),
         ...datas
           .filter((d) => d.situacao === "Vencido" || d.situacao === "Vence em breve")
           .map((d) => `- ATENÇÃO: ${d.item} ${d.situacao === "Vencido" ? "vencido" : "vence"} em ${d.vencimento!.split("-").reverse().join("/")}`),

@@ -1,6 +1,7 @@
 import { aniversariantesDoMes, diaDaSemana, formatarDia, somarMes } from "@/lib/aniversarios";
 import { CONTAGENS, contagensFaltando, diasSemDiario } from "@/lib/contagensFaltando";
 import { gerarPdfFechamento } from "@/lib/pdfFechamento";
+import { COM_CREF } from "@/lib/database.types";
 import { hoje, intervaloDoMes } from "@/lib/planilha";
 import type { createClient } from "@/lib/supabase/server";
 
@@ -21,12 +22,46 @@ export const mesesDisponiveis = () => Array.from({ length: 25 }, (_, i) => somar
 
 export type DataImportante = { item: string; vencimento: string | null; dias: number | null; situacao: string };
 
-// Situação de uma data importante em relação a hoje (mesma regra da aba Datas importantes da academia).
-export function situacaoDaData(dias: number | null) {
+// Situação de uma data em relação a hoje: "Vence em breve" dentro da antecedência (30 dias nas datas importantes
+// e no CREF, 60 dias nas férias).
+export function situacaoDaData(dias: number | null, antecedencia = 30) {
   if (dias === null) return "Sem data";
   if (dias < 0) return "Vencido";
-  if (dias <= 30) return "Vence em breve";
+  if (dias <= antecedencia) return "Vence em breve";
   return "Em dia";
+}
+
+const diasAte = (d: string | null) => (d ? Math.round((Date.parse(`${d}T12:00:00Z`) - Date.parse(`${hoje()}T12:00:00Z`)) / 86400000) : null);
+const porVencimento = (a: DataImportante, b: DataImportante) =>
+  (a.vencimento ?? "9999").localeCompare(b.vencimento ?? "9999") || a.item.localeCompare(b.item, "pt-BR");
+
+// Funcionários ativos da unidade: CREF dos professores (sala e coletivas) e limite para tirar férias.
+async function prazosDosFuncionarios(supabase: Supabase, academiaId: string) {
+  const { data } = await supabase
+    .from("funcionarios")
+    .select("nome, departamento, cref, cref_vencimento, ferias_limite")
+    .eq("academia_id", academiaId)
+    .eq("ativo", true);
+  const lista = data ?? [];
+  const crefs = lista
+    .filter((f) => COM_CREF.includes(f.departamento as string))
+    .map((f): DataImportante => {
+      const dias = diasAte(f.cref_vencimento as string | null);
+      return {
+        item: f.cref ? `${f.nome} (CREF ${f.cref})` : `${f.nome} (sem número de CREF)`,
+        vencimento: (f.cref_vencimento as string | null) ?? null,
+        dias,
+        situacao: situacaoDaData(dias, 30),
+      };
+    })
+    .sort(porVencimento);
+  const ferias = lista
+    .map((f): DataImportante => {
+      const dias = diasAte(f.ferias_limite as string | null);
+      return { item: f.nome as string, vencimento: (f.ferias_limite as string | null) ?? null, dias, situacao: situacaoDaData(dias, 60) };
+    })
+    .sort(porVencimento);
+  return { crefs, ferias };
 }
 
 async function datasImportantes(supabase: Supabase, academiaId: string): Promise<DataImportante[]> {
@@ -49,11 +84,12 @@ async function datasImportantes(supabase: Supabase, academiaId: string): Promise
 export async function dadosDoFechamento(supabase: Supabase, academiaId: string, mes: string) {
   const proximoMes = somarMes(mes, 1);
   const { inicio, fim } = intervaloDoMes(mes);
-  const [aniversariantes, semDiario, contagens, datas] = await Promise.all([
+  const [aniversariantes, semDiario, contagens, datas, prazos] = await Promise.all([
     aniversariantesDoMes(supabase, [academiaId], proximoMes),
     diasSemDiario(supabase, academiaId, inicio, fim),
     contagensFaltando(supabase, [academiaId], { inicio, fim }),
     datasImportantes(supabase, academiaId),
+    prazosDosFuncionarios(supabase, academiaId),
   ]);
   return {
     proximoMes,
@@ -61,6 +97,29 @@ export async function dadosDoFechamento(supabase: Supabase, academiaId: string, 
     semDiario,
     contagens: contagens.map((c) => ({ data: c.data, contagem: CONTAGENS[c.contagem], horarios: c.horarios })),
     datas,
+    crefs: prazos.crefs,
+    ferias: prazos.ferias,
+  };
+}
+
+// Seção do PDF com vencimentos destacados (vermelho = vencido, amarelo = dentro da antecedência).
+function secaoDeVencimentos(titulo: string, rotuloItem: string, linhas: DataImportante[], vazio: string) {
+  const urgentes = linhas.filter((d) => d.situacao === "Vencido" || d.situacao === "Vence em breve").length;
+  return {
+    titulo: `${titulo} - ${urgentes} vencidos ou para vencer; total`,
+    colunas: [
+      { rotulo: rotuloItem, largura: 213 },
+      { rotulo: "Vencimento", largura: 90 },
+      { rotulo: "Dias para vencer", largura: 100 },
+      { rotulo: "Situação", largura: 120 },
+    ],
+    linhas: linhas.map((d) => [d.item, d.vencimento ? formatarDia(d.vencimento) : "-", d.dias === null ? "-" : String(d.dias), d.situacao]),
+    destaques: linhas.map((d) => (d.situacao === "Vencido" ? "vermelho" : d.situacao === "Vence em breve" ? "amarelo" : null)) as (
+      | "vermelho"
+      | "amarelo"
+      | null
+    )[],
+    vazio,
   };
 }
 
@@ -109,6 +168,8 @@ export async function montarFechamento(supabase: Supabase, academia: { id: strin
         destaques: dados.datas.map((d) => (d.situacao === "Vencido" ? "vermelho" : d.situacao === "Vence em breve" ? "amarelo" : null)),
         vazio: "Nenhuma data importante cadastrada (Academias → unidade → Datas importantes).",
       },
+      secaoDeVencimentos("CREF dos professores (destaque: 30 dias)", "Professor", dados.crefs, "Nenhum professor de sala ou de coletivas ativo."),
+      secaoDeVencimentos("Limite para tirar férias (destaque: 60 dias)", "Funcionário", dados.ferias, "Nenhum funcionário ativo."),
     ],
   });
   return { ...dados, pdf, arquivo: `Fechamento ${academia.nome} ${mes}.pdf` };
