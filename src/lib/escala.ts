@@ -44,6 +44,9 @@ const INTERJORNADA = 11 * 60;
 const MAX_DIAS_SEGUIDOS = 6;
 
 const minutos = (h: string) => Number(h.slice(0, 2)) * 60 + Number(h.slice(3, 5));
+// Fim da jornada em minutos a partir do início do dia em que ela começou: expediente que termina à meia-noite
+// ou depois dela (ex.: 15:30 às 00:00, 18:00 às 00:30) acaba no dia seguinte, então soma 24 horas.
+const fimDaJornada = (t: Turno) => minutos(t.fim) + (minutos(t.fim) <= minutos(t.inicio) ? 24 * 60 : 0);
 const diaDaSemana = (d: string) => new Date(`${d}T12:00:00Z`).getUTCDay(); // 0 = domingo
 export function somarDias(d: string, n: number) {
   const x = new Date(`${d}T12:00:00Z`);
@@ -102,10 +105,11 @@ export function gerarEscala({
     for (let x = somarDias(d, 1); jornada(p, x); x = somarDias(x, 1)) seguidos++;
     if (seguidos > MAX_DIAS_SEGUIDOS) return false;
     // Interjornada de 11h com o dia anterior e com o seguinte.
+    // Descanso = do fim da jornada de um dia até o início da do dia seguinte (24h depois do início do dia).
     const antes = jornada(p, somarDias(d, -1));
-    if (antes && antes !== "sem-horario" && 24 * 60 - minutos(antes.fim) + minutos(turno.inicio) < INTERJORNADA) return false;
+    if (antes && antes !== "sem-horario" && 24 * 60 + minutos(turno.inicio) - fimDaJornada(antes) < INTERJORNADA) return false;
     const depois = jornada(p, somarDias(d, 1));
-    if (depois && depois !== "sem-horario" && 24 * 60 - minutos(turno.fim) + minutos(depois.inicio) < INTERJORNADA) return false;
+    if (depois && depois !== "sem-horario" && 24 * 60 + minutos(depois.inicio) - fimDaJornada(turno) < INTERJORNADA) return false;
     // Revezamento de domingos.
     if (diaDaSemana(d) === 0) {
       const domingosAnteriores = [7, 14].map((n) => escalado.get(p.id)!.has(somarDias(d, -n)));
