@@ -1,7 +1,6 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
-import { carregarGrade, diaIso, vigenteEm, type AulaDaGrade } from "@/lib/fechamentoColetivas";
 import { createClient } from "@/lib/supabase/server";
 import { mensagemErro, validar, verificarAcesso, type CampoValidado } from "@/lib/planilha";
 import type { Resultado } from "./Planilha";
@@ -195,45 +194,25 @@ export const salvarLuta: Salvar = async (a, id, d) => gravar("contagem_lutas", a
 export const excluirLuta = async (id: string) => apagar("contagem_lutas", id);
 
 // ---------------------------------------------------------------------------------------------------
-// Lançar pela grade: as aulas da grade do dia (que ainda não têm contagem) com horário, modalidade e
-// professor já preenchidos; o gerente só digita a quantidade de alunos.
+// Contagem por dia (coletivas e lutas): salva as quantidades de um dia. Aula com id é corrigida; aula da grade
+// ainda sem contagem é lançada quando tem quantidade.
 // ---------------------------------------------------------------------------------------------------
-export type AulaParaLancar = { horario: string; modalidade: string; professor: string | null };
-
-export async function aulasDaGradeDoDia(academiaId: string, tipo: "coletivas" | "lutas", data: string) {
-  const supabase = await createClient();
-  const [grade, { data: lancadas }, { data: feriados }] = await Promise.all([
-    carregarGrade(supabase, academiaId),
-    supabase.from(tipo === "lutas" ? "contagem_lutas" : "contagem_coletivas").select("horario, modalidade").eq("academia_id", academiaId).eq("data", data),
-    supabase.from("feriados").select("nome, academia_id").eq("data", data),
-  ]);
-  const feriado = (feriados ?? []).find((f) => !f.academia_id || f.academia_id === academiaId);
-  const jaLancada = (a: AulaDaGrade) =>
-    (lancadas ?? []).some(
-      (l) => l.horario.slice(0, 5) === a.horario.slice(0, 5) && (tipo === "coletivas" || (l.modalidade ?? "").toLowerCase() === a.modalidade.toLowerCase())
-    );
-  const doDia = grade.filter((a) => a.tipo === tipo && a.dia_semana === diaIso(data) && vigenteEm(a, data));
-  return {
-    aulas: doDia.filter((a) => !jaLancada(a)).map((a): AulaParaLancar => ({ horario: a.horario.slice(0, 5), modalidade: a.modalidade, professor: a.professor })),
-    jaLancadas: doDia.filter(jaLancada).length,
-    temGrade: grade.some((a) => a.tipo === tipo),
-    feriado: (feriado?.nome as string | undefined) ?? null,
-  };
-}
-
-export async function lancarAulasDaGrade(
+export async function salvarDiaDeAulas(
   academiaId: string,
   tipo: "coletivas" | "lutas",
   data: string,
-  itens: (AulaParaLancar & { quantidade: string; substituto: string })[]
+  itens: { id: string | null; horario: string; modalidade: string; professor: string | null; substituto: string; quantidade: string }[]
 ): Promise<Resultado & { ok?: string }> {
   const tabela = tipo === "lutas" ? "contagem_lutas" : "contagem_coletivas";
-  const preenchidas = itens.filter((i) => i.quantidade.trim() !== "");
-  if (!preenchidas.length) return { erro: "Digite a quantidade de alunos de pelo menos uma aula." };
   const erros: string[] = [];
   let gravadas = 0;
-  for (const i of preenchidas) {
-    const r = await gravar(tabela, academiaId, null, {
+  for (const i of itens) {
+    if (!i.id && i.quantidade.trim() === "") continue;
+    if (i.id && i.quantidade.trim() === "") {
+      erros.push(`${i.horario} ${i.modalidade}: para apagar uma contagem, use a lista completa abaixo`);
+      continue;
+    }
+    const r = await gravar(tabela, academiaId, i.id, {
       data,
       horario: i.horario,
       modalidade: i.modalidade,
@@ -245,5 +224,5 @@ export async function lancarAulasDaGrade(
     else gravadas++;
   }
   if (erros.length) return { erro: `${gravadas} aula(s) gravada(s). Não gravou: ${erros.join(" · ")}` };
-  return { ok: `${gravadas} aula(s) lançada(s).` };
+  return { ok: `${gravadas} aula(s) gravada(s).` };
 }

@@ -25,7 +25,7 @@ export default function ContagemColetivasPage({ searchParams }: { searchParams: 
       salvar={salvarColetiva}
       excluir={excluirColetiva}
       rotuloNovo="+ Aula fora da grade"
-      lancarPelaGrade="coletivas"
+      agruparPorDia="coletivas"
       usaModalidades
       professores="professor_coletivas"
     />
