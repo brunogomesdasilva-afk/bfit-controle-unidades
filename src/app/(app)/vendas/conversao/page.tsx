@@ -2,10 +2,24 @@ import { excluirConversao, salvarConversao } from "../../lancamentos";
 import type { Coluna } from "../../Planilha";
 import { TelaMensal } from "../../TelaMensal";
 
+// Motivos de não conversão (lista fixa). Motivos antigos digitados à mão continuam aparecendo nas linhas já lançadas.
+const MOTIVOS = [
+  "Só veio conhecer e saber valores",
+  "Vai verificar com familiares",
+  "Conhecer o Wellhub / Gympass",
+  "Voltará em um outro dia / Vai pensar",
+];
+
 const COLUNAS: Coluna[] = [
   { campo: "data", rotulo: "Data", tipo: "data", obrigatorio: true, largura: "w-36" },
   { campo: "visita", rotulo: "Visita", tipo: "texto", obrigatorio: true, largura: "min-w-56" },
-  { campo: "motivo", rotulo: "Motivo da não conversão", tipo: "texto", largura: "min-w-80" },
+  {
+    campo: "motivo",
+    rotulo: "Motivo da não conversão",
+    tipo: "opcoes",
+    largura: "min-w-80",
+    opcoes: MOTIVOS.map((m) => ({ valor: m, rotulo: m })),
+  },
 ];
 
 export default function ControleConversaoPage({
