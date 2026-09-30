@@ -55,9 +55,13 @@ export function somarDias(d: string, n: number) {
 }
 
 // Turnos que a unidade precisa num dia (vazio = dia útil comum ou academia fechada).
+// Dias em que as academias ficam fechadas todo ano (véspera e dia de Natal, véspera e dia de Ano Novo):
+// não entram na escala, mesmo sem estarem cadastrados como feriado.
+const SEMPRE_FECHADA = ["12-24", "12-25", "12-31", "01-01"];
+
 export function turnosDoDia(data: string, setor: Setor, feriados: Map<string, Feriado>): Turno[] {
   const feriado = feriados.get(data);
-  if (feriado?.fechada) return [];
+  if (feriado?.fechada || SEMPRE_FECHADA.includes(data.slice(5))) return [];
   if (feriado || diaDaSemana(data) === 0) return SETORES[setor].domingoEFeriado;
   if (diaDaSemana(data) === 6) return SETORES[setor].sabado;
   return [];
