@@ -51,6 +51,17 @@ const ITENS: ItemMenu[] = [
     ),
   },
   {
+    href: "/academias",
+    rotulo: "Academias",
+    ativo: (p: string) => p === "/academias",
+    icone: (
+      <Icone>
+        <path d="M6.5 6.5h11M6.5 17.5h11" />
+        <path d="M3 9v6M21 9v6M6.5 5v14M17.5 5v14" />
+      </Icone>
+    ),
+  },
+  {
     href: "/vendas",
     rotulo: "Vendas",
     ativo: (p: string) => p === "/vendas",
@@ -270,17 +281,6 @@ const ITENS: ItemMenu[] = [
         ),
       },
     ],
-  },
-  {
-    href: "/academias",
-    rotulo: "Academias",
-    ativo: (p: string) => p === "/academias",
-    icone: (
-      <Icone>
-        <path d="M6.5 6.5h11M6.5 17.5h11" />
-        <path d="M3 9v6M21 9v6M6.5 5v14M17.5 5v14" />
-      </Icone>
-    ),
   },
   {
     href: "/clientes",
