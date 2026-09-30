@@ -73,13 +73,16 @@ export function gerarEscala({
   pessoas,
   feriados: listaFeriados,
   anteriores,
+  indisponiveis = [],
 }: {
   inicio: string;
   fim: string;
   pessoas: Pessoa[];
   feriados: Feriado[];
-  anteriores: Atribuicao[]; // escala já existente antes do início (para as regras na virada)
+  anteriores: Atribuicao[]; // escala já existente fora do período (antes e depois), para as regras na virada
+  indisponiveis?: { funcionarioId: string; data: string }[]; // folgas pedidas: a pessoa não entra nesse dia
 }) {
+  const folga = new Set(indisponiveis.map((i) => `${i.funcionarioId}|${i.data}`));
   const feriados = new Map(listaFeriados.map((f) => [f.data, f]));
   // Turnos de fim de semana/feriado de cada pessoa: data -> turno
   const escalado = new Map<string, Map<string, Turno>>(pessoas.map((p) => [p.id, new Map()]));
@@ -103,6 +106,7 @@ export function gerarEscala({
 
   function pode(p: Pessoa, d: string, turno: Turno) {
     if (escalado.get(p.id)!.has(d)) return false; // já tem turno no dia
+    if (folga.has(`${p.id}|${d}`)) return false; // folga pedida para este dia
     // Dias seguidos: conta para trás e para frente a partir do dia.
     let seguidos = 1;
     for (let x = somarDias(d, -1); jornada(p, x); x = somarDias(x, -1)) seguidos++;

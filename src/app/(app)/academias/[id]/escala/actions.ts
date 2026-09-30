@@ -16,16 +16,26 @@ async function semAcesso(academiaId: string) {
   return null;
 }
 
-// Gera (ou refaz) a escala de fins de semana e feriados de hoje até 31/12. Os turnos já passados ficam
-// como estão e entram no cálculo das regras (dias seguidos, interjornada, domingos).
-export async function gerarEscalaDaUnidade(academiaId: string): Promise<ResultadoEscala> {
+export type OpcoesEscala = { mes: string; indisponiveis: { funcionarioId: string; data: string }[] };
+
+// Gera (ou refaz) a escala de fins de semana e feriados de UM mês (aaaa-mm). No mês atual, só de hoje em
+// diante (os turnos que já passaram ficam como estão). A escala dos outros meses não muda e entra no cálculo
+// das regras na virada do mês (dias seguidos, interjornada, domingos). "indisponiveis" são folgas pedidas:
+// o funcionário não entra na escala naquele dia.
+export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEscala): Promise<ResultadoEscala> {
   const bloqueio = await semAcesso(academiaId);
   if (bloqueio) return { erro: bloqueio };
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(opcoes.mes)) return { erro: "Escolha o mês da escala." };
+  const dataHoje = hoje();
+  if (opcoes.mes < dataHoje.slice(0, 7)) return { erro: "Não dá para gerar a escala de um mês que já passou." };
 
   const supabase = await createClient();
-  const inicio = hoje();
-  const fim = `${inicio.slice(0, 4)}-12-31`;
+  const [ano, m] = opcoes.mes.split("-").map(Number);
+  const ultimoDia = new Date(Date.UTC(ano, m, 0)).toISOString().slice(0, 10);
+  const inicio = `${opcoes.mes}-01` > dataHoje ? `${opcoes.mes}-01` : dataHoje;
+  const fim = ultimoDia;
   const setores: Setor[] = ["recepcao", "limpeza"];
+  const indisponiveis = opcoes.indisponiveis.filter((i) => i.funcionarioId && i.data >= inicio && i.data <= fim);
 
   const [{ data: funcionarios }, { data: feriados }, { data: anteriores }] = await Promise.all([
     supabase
@@ -39,14 +49,15 @@ export async function gerarEscalaDaUnidade(academiaId: string): Promise<Resultad
       .select("data, nome, fechada, academia_id")
       .or(`academia_id.is.null,academia_id.eq.${academiaId}`)
       .gte("data", somarDias(inicio, -21))
-      .lte("data", fim),
+      .lte("data", somarDias(fim, 21)),
     supabase
       .from("escala")
       .select("data, setor, inicio, fim, ordem, funcionario_id")
       .eq("academia_id", academiaId)
       .in("setor", setores)
       .gte("data", somarDias(inicio, -21))
-      .lt("data", inicio),
+      .lte("data", somarDias(fim, 21))
+      .or(`data.lt.${inicio},data.gt.${fim}`),
   ]);
 
   const pessoas: Pessoa[] = (funcionarios ?? []).map((f) => ({
@@ -78,6 +89,7 @@ export async function gerarEscalaDaUnidade(academiaId: string): Promise<Resultad
       ordem: a.ordem,
       funcionarioId: a.funcionario_id,
     })),
+    indisponiveis,
   });
 
   const {
@@ -88,7 +100,8 @@ export async function gerarEscalaDaUnidade(academiaId: string): Promise<Resultad
     .delete()
     .eq("academia_id", academiaId)
     .in("setor", setores)
-    .gte("data", inicio);
+    .gte("data", inicio)
+    .lte("data", fim);
   if (erroApagar) return { erro: mensagemErro(erroApagar) };
   if (atribuicoes.length) {
     const { error } = await supabase.from("escala").insert(
@@ -109,7 +122,11 @@ export async function gerarEscalaDaUnidade(academiaId: string): Promise<Resultad
   revalidatePath(`/academias/${academiaId}/escala`);
   refresh();
   const faltas = avisos.length ? ` ${avisos.length} ${avisos.length === 1 ? "turno ficou" : "turnos ficaram"} sem pessoa disponível.` : "";
-  return { ok: `Escala gerada: ${atribuicoes.length} turnos até ${fim.split("-").reverse().join("/")}.${faltas}`, avisos };
+  const folgas = indisponiveis.length ? ` ${indisponiveis.length} folga(s) respeitada(s).` : "";
+  return {
+    ok: `Escala gerada: ${atribuicoes.length} turnos de ${inicio.split("-").reverse().join("/")} a ${fim.split("-").reverse().join("/")}.${folgas}${faltas}`,
+    avisos,
+  };
 }
 
 // Feriados da cidade da unidade (os nacionais já vêm cadastrados).

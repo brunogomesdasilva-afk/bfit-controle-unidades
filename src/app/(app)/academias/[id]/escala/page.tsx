@@ -27,7 +27,8 @@ const COLUNAS_FERIADOS: Coluna[] = [
 
 type Turno = { data: string; setor: Setor; inicio: string; fim: string; ordem: number; funcionario_id: string | null };
 
-// Escala de fins de semana e feriados da unidade (recepção e limpeza), de hoje até o fim do ano.
+// Escala de fins de semana e feriados da unidade (recepção e limpeza), de hoje em diante. É gerada um mês por
+// vez (a janela do botão pergunta o mês e as folgas pedidas).
 export default async function EscalaPage({ params }: PageProps<"/academias/[id]/escala">) {
   const { id } = await params;
   const supabase = await createClient();
@@ -104,7 +105,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
             seguidos, mulheres 1). Considera que recepção e limpeza trabalham de segunda a sexta no horário do cadastro.
           </p>
         </div>
-        <BotaoGerarEscala gerar={gerarEscalaDaUnidade.bind(null, id)} temEscala={lista.length > 0} />
+        <BotaoGerarEscala gerar={gerarEscalaDaUnidade.bind(null, id)} mesAtual={dataHoje.slice(0, 7)} funcionarios={(funcionarios ?? []) as { id: string; nome: string; departamento: string }[]} />
       </div>
 
       {(funcionarios ?? []).length === 0 && (
