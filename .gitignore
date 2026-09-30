@@ -43,3 +43,6 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# pasta temporária (pode apagar)
+/_tmp_grade/

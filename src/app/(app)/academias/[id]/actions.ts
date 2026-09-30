@@ -130,11 +130,14 @@ export async function excluirDataImportante(id: string): Promise<Resultado> {
   return apagar("datas_importantes", id);
 }
 
+// O tipo (coletivas ou lutas) vem da aba aberta na grade.
 export async function salvarAulaGrade(
   academiaId: string,
+  tipo: "coletivas" | "lutas",
   id: string | null,
   dados: Record<string, string>
 ): Promise<Resultado> {
+  dados = { ...dados, tipo };
   const semAcesso = await semAcessoAAcademia(academiaId);
   if (semAcesso) return { erro: semAcesso };
 

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { carregarGrade, DIAS_SEMANA, TIPOS } from "@/lib/fechamentoColetivas";
+import { carregarGrade, DIAS_SEMANA, TIPOS, type Tipo } from "@/lib/fechamentoColetivas";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import { Planilha, type Coluna, type Linha } from "../../../Planilha";
@@ -10,7 +10,10 @@ import { BotaoMontarGrade } from "./BotaoMontarGrade";
 // Guarda histórico: alterar encerra a versão anterior; "Histórico" mostra também as versões encerradas.
 export default async function GradeDeAulasPage({ params, searchParams }: PageProps<"/academias/[id]/grade">) {
   const { id } = await params;
-  const historico = (await searchParams).historico === "1";
+  const sp = await searchParams;
+  const historico = sp.historico === "1";
+  // Uma grade para coletivas e outra para lutas (abas).
+  const tipo: Tipo = sp.tipo === "lutas" ? "lutas" : "coletivas";
   const supabase = await createClient();
   const [todas, { data: modalidades }, { data: professores }] = await Promise.all([
     carregarGrade(supabase, id),
@@ -20,19 +23,11 @@ export default async function GradeDeAulasPage({ params, searchParams }: PagePro
       .select("nome")
       .eq("academia_id", id)
       .eq("ativo", true)
-      .in("departamento", ["professor_coletivas", "professor_lutas"])
+      .eq("departamento", tipo === "lutas" ? "professor_lutas" : "professor_coletivas")
       .order("nome"),
   ]);
 
   const colunas: Coluna[] = [
-    {
-      campo: "tipo",
-      rotulo: "Tipo",
-      tipo: "opcoes",
-      obrigatorio: true,
-      largura: "w-32",
-      opcoes: Object.entries(TIPOS).map(([valor, rotulo]) => ({ valor, rotulo })),
-    },
     {
       campo: "dia_semana",
       rotulo: "Dia da semana",
@@ -61,11 +56,12 @@ export default async function GradeDeAulasPage({ params, searchParams }: PagePro
     { campo: "vigente_de", rotulo: "Vale a partir de", tipo: "data", largura: "w-40" },
     ...(historico ? [{ campo: "vigente_ate", rotulo: "Vale até", tipo: "info" as const, largura: "w-32" }] : []),
   ];
-  const grade = historico ? todas : todas.filter((g) => !g.vigente_ate);
-  const encerradas = todas.filter((g) => g.vigente_ate).length;
+  const doTipo = todas.filter((g) => g.tipo === tipo);
+  const grade = historico ? doTipo : doTipo.filter((g) => !g.vigente_ate);
+  const encerradas = doTipo.filter((g) => g.vigente_ate).length;
+  const aba = (t: Tipo) => `/academias/${id}/grade${t === "lutas" ? "?tipo=lutas" : ""}`;
   const linhas: Linha[] = grade.map((g) => ({
     id: g.id,
-    tipo: g.tipo,
     dia_semana: String(g.dia_semana),
     horario: g.horario.slice(0, 5),
     modalidade: g.modalidade,
@@ -95,23 +91,37 @@ export default async function GradeDeAulasPage({ params, searchParams }: PagePro
         partir de”); excluir encerra a aula ontem. Assim o fechamento de cada mês usa a grade que valia na época.
       </p>
       <BotaoMontarGrade montar={montarGradePelasContagens.bind(null, id)} temGrade={todas.some((g) => !g.vigente_ate)} />
+      <nav className="flex gap-1 border-b border-slate-200" aria-label="Tipo de aula">
+        {(Object.keys(TIPOS) as Tipo[]).map((t) => (
+          <Link
+            key={t}
+            href={aba(t)}
+            aria-current={t === tipo ? "page" : undefined}
+            className={`-mb-px rounded-t-md border px-4 py-1.5 text-sm ${
+              t === tipo ? "border-slate-200 border-b-white bg-white font-medium text-slate-900" : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            Grade de {TIPOS[t].toLowerCase()} ({todas.filter((g) => g.tipo === t && !g.vigente_ate).length})
+          </Link>
+        ))}
+      </nav>
       <Planilha
         colunas={colunas}
         linhas={linhas}
-        salvar={salvarAulaGrade.bind(null, id)}
+        salvar={salvarAulaGrade.bind(null, id, tipo)}
         excluir={excluirAulaGrade}
         rotuloNovo="+ Nova aula"
-        padroesNovo={{ tipo: "coletivas", duracao_min: "30", vigente_de: hoje() }}
+        padroesNovo={{ duracao_min: tipo === "lutas" ? "60" : "30", vigente_de: hoje() }}
         barra={
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Mostrar:</span>
             <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
-              {filtro(!historico, "Grade vigente", `/academias/${id}/grade`)}
-              {filtro(historico, `Histórico (${encerradas} encerradas)`, `/academias/${id}/grade?historico=1`)}
+              {filtro(!historico, "Grade vigente", aba(tipo))}
+              {filtro(historico, `Histórico (${encerradas} encerradas)`, `${aba(tipo)}${tipo === "lutas" ? "&" : "?"}historico=1`)}
             </div>
           </div>
         }
-        vazio="Grade vazia. Clique em “Montar grade pelas contagens” ou em “+ Nova aula”."
+        vazio={`Grade de ${TIPOS[tipo].toLowerCase()} vazia. Clique em “+ Nova aula” ou em “Montar grade pelas contagens”.`}
       />
     </div>
   );
