@@ -2,6 +2,8 @@ import { AVISO_TODAS, contextoAcademias } from "@/lib/contexto";
 import { hoje, intervaloDoMes, lerMes } from "@/lib/planilha";
 import { AbasAcademias, SeletorMes } from "./AbasAcademias";
 import { SemAcademias } from "./SemAcademias";
+import { LancarPelaGrade } from "./frequencia/LancarPelaGrade";
+import { aulasDaGradeDoDia, lancarAulasDaGrade } from "./lancamentos";
 import { Planilha, type Coluna, type Linha, type Resultado } from "./Planilha";
 
 type Registro = Record<string, unknown> & { id: string; academia_id: string; data: string };
@@ -34,6 +36,7 @@ export async function TelaMensal({
   usaModalidades = false,
   professores,
   calcular,
+  lancarPelaGrade,
 }: {
   searchParams: Promise<{ academia?: string; mes?: string }>;
   titulo: string;
@@ -52,6 +55,8 @@ export async function TelaMensal({
   professores?: "professor_coletivas" | "professor_lutas";
   // Colunas "calculado" montadas a partir dos valores gravados na linha.
   calcular?: (registro: Record<string, unknown>) => Record<string, number | null>;
+  // Contagem de coletivas/lutas: botão para lançar as aulas do dia a partir da grade da academia.
+  lancarPelaGrade?: "coletivas" | "lutas";
 }) {
   const params = await searchParams;
   const { supabase, academias, selecionada, admin } = await contextoAcademias(params.academia);
@@ -133,6 +138,14 @@ export async function TelaMensal({
             avisoCadastro(
               `Nenhum funcionário do departamento “${professores === "professor_lutas" ? "Professor de lutas" : "Professor de coletivas"}” cadastrado`
             )}
+          {lancarPelaGrade && selecionada && (
+            <LancarPelaGrade
+              tipo={lancarPelaGrade}
+              hoje={hoje()}
+              carregar={aulasDaGradeDoDia.bind(null, selecionada, lancarPelaGrade)}
+              lancar={lancarAulasDaGrade.bind(null, selecionada, lancarPelaGrade)}
+            />
+          )}
           <Planilha
             colunas={colunasDaTela}
             linhas={linhas}

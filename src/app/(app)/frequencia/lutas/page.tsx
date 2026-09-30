@@ -24,7 +24,8 @@ export default function ContagemLutasPage({ searchParams }: { searchParams: Prom
       ordem={["data", "horario"]}
       salvar={salvarLuta}
       excluir={excluirLuta}
-      rotuloNovo="+ Nova aula"
+      rotuloNovo="+ Aula fora da grade"
+      lancarPelaGrade="lutas"
       usaModalidades
       professores="professor_lutas"
     />
