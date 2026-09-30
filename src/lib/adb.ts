@@ -6,13 +6,6 @@ export type Questionario = "professores" | "recepcao";
 // curto: nome reduzido usado nas tabelas; titulo e descricao aparecem só no formulário da avaliação.
 export type Pergunta = { titulo: string; curto: string; descricao: string };
 
-const ENGAJAMENTO: Pergunta = {
-  titulo: "Engajamento institucional",
-  curto: "Engajamento",
-  descricao:
-    "Demonstra comprometimento com a empresa, envolvimento em Programas, Projetos e Treinamentos. Participa das reuniões? Aborda o aluno referente ao NPS? Participa dos treinamentos internos? Participa dos treinamentos da franqueadora? Está antenado no dia a dia da unidade como um todo, nos demais departamentos?",
-};
-
 const PONTUALIDADE: Pergunta = {
   titulo: "Pontualidade, assiduidade, apresentação pessoal",
   curto: "Pontualidade",
@@ -50,7 +43,6 @@ export const QUESTIONARIOS: Record<Questionario, { nome: string; perguntas: Perg
   professores: {
     nome: "Professores",
     perguntas: [
-      ENGAJAMENTO,
       {
         titulo: "Qualidade do atendimento",
         curto: "Atendimento",
@@ -73,7 +65,6 @@ export const QUESTIONARIOS: Record<Questionario, { nome: string; perguntas: Perg
   recepcao: {
     nome: "Recepção",
     perguntas: [
-      ENGAJAMENTO,
       {
         titulo: "Qualidade do atendimento",
         curto: "Atendimento",
@@ -118,7 +109,9 @@ export function periodoDoHorario(entrada: string | null) {
   return hora < 12 ? "Matutino" : hora < 18 ? "Vespertino" : "Noturno";
 }
 
-export const NOTAS = ["nota_1", "nota_2", "nota_3", "nota_4", "nota_5", "nota_6", "nota_7", "nota_8"] as const;
+// Colunas das notas, na ordem dos itens. O item "Engajamento institucional" (nota_1) foi retirado: os 7 itens
+// atuais usam nota_2 a nota_8 e aparecem numerados de 1 a 7.
+export const NOTAS = ["nota_2", "nota_3", "nota_4", "nota_5", "nota_6", "nota_7", "nota_8"] as const;
 
 export type Avaliacao = {
   id: string;
