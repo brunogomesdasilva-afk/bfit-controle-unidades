@@ -2,7 +2,7 @@
 
 import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
-import { gerarEscala, somarDias, type Pessoa, type Setor } from "@/lib/escala";
+import { gerarEscala, SETORES, setorDoDepartamento, somarDias, type Pessoa, type Setor } from "@/lib/escala";
 import { hoje, mensagemErro, validar } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import type { Resultado } from "../../../Planilha";
@@ -34,7 +34,8 @@ export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEsc
   const ultimoDia = new Date(Date.UTC(ano, m, 0)).toISOString().slice(0, 10);
   const inicio = `${opcoes.mes}-01` > dataHoje ? `${opcoes.mes}-01` : dataHoje;
   const fim = ultimoDia;
-  const setores: Setor[] = ["recepcao", "limpeza"];
+  const setores = Object.keys(SETORES) as Setor[];
+  const departamentos = setores.flatMap((s) => SETORES[s].departamentos);
   const indisponiveis = opcoes.indisponiveis.filter((i) => i.funcionarioId && i.data >= inicio && i.data <= fim);
 
   const [{ data: funcionarios }, { data: feriados }, { data: anteriores }] = await Promise.all([
@@ -43,7 +44,7 @@ export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEsc
       .select("id, nome, departamento, genero, horario_entrada, horario_saida")
       .eq("academia_id", academiaId)
       .eq("ativo", true)
-      .in("departamento", setores),
+      .in("departamento", departamentos),
     supabase
       .from("feriados")
       .select("data, nome, fechada, academia_id")
@@ -63,13 +64,13 @@ export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEsc
   const pessoas: Pessoa[] = (funcionarios ?? []).map((f) => ({
     id: f.id,
     nome: f.nome,
-    setor: f.departamento as Setor,
+    setor: setorDoDepartamento(f.departamento)!,
+    papel: f.departamento,
     genero: f.genero,
     entrada: f.horario_entrada?.slice(0, 5) ?? null,
     saida: f.horario_saida?.slice(0, 5) ?? null,
   }));
-  if (!pessoas.some((p) => p.setor === "recepcao") && !pessoas.some((p) => p.setor === "limpeza"))
-    return { erro: "Nenhum funcionário de Recepção ou Limpeza cadastrado nesta unidade." };
+  if (!pessoas.length) return { erro: "Nenhum funcionário de Recepção, Limpeza, Professores ou Estagiário cadastrado nesta unidade." };
 
   // Feriado da unidade vale no lugar do nacional do mesmo dia (ex.: marcar o Natal como fechado).
   const porData = new Map<string, { data: string; nome: string; fechada: boolean }>();

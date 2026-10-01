@@ -4,35 +4,61 @@
 //   do mesmo fim de semana, nem domingo e o sábado seguinte);
 // - revezamento de domingos: homens no máximo 2 domingos seguidos (Lei 10.101: folga no domingo ao
 //   menos 1 vez a cada 3 semanas) e mulheres no máximo 1 (CLT art. 386, revezamento quinzenal).
-// Considera que recepção e limpeza trabalham de segunda a sexta (exceto feriados) no horário do cadastro.
+// Considera que todos trabalham de segunda a sexta (exceto feriados) no horário do cadastro.
+// Professores: entram os professores de sala e os estagiários (professores de coletivas e de lutas não). Alguns
+// turnos são só de estagiário (sábado e domingo 11:00–16:00); no feriado só professores trabalham.
 // Entre quem pode pegar o turno, vai quem tem menos turnos de fim de semana e está há mais tempo sem pegar.
 
-export type Setor = "recepcao" | "limpeza";
-export type Turno = { inicio: string; fim: string };
+export type Setor = "recepcao" | "limpeza" | "professores";
+// papel: o turno só pode ser de quem é desse departamento (ex.: "estagiario"); sem papel, qualquer um do setor.
+export type Turno = { inicio: string; fim: string; papel?: string };
 
-export const SETORES: Record<Setor, { nome: string; sabado: Turno[]; domingoEFeriado: Turno[] }> = {
+export const SETORES: Record<Setor, { nome: string; departamentos: string[]; sabado: Turno[]; domingo: Turno[]; feriado: Turno[] }> = {
   recepcao: {
     nome: "Recepção",
+    departamentos: ["recepcao"],
     sabado: [
       { inicio: "08:00", fim: "14:00" },
       { inicio: "11:00", fim: "16:00" },
     ],
-    domingoEFeriado: [{ inicio: "10:00", fim: "16:00" }],
+    domingo: [{ inicio: "10:00", fim: "16:00" }],
+    feriado: [{ inicio: "10:00", fim: "16:00" }],
   },
   limpeza: {
     nome: "Limpeza",
+    departamentos: ["limpeza"],
     sabado: [
       { inicio: "08:00", fim: "16:00" },
       { inicio: "08:00", fim: "16:00" },
     ],
-    domingoEFeriado: [{ inicio: "10:00", fim: "16:00" }],
+    domingo: [{ inicio: "10:00", fim: "16:00" }],
+    feriado: [{ inicio: "10:00", fim: "16:00" }],
+  },
+  professores: {
+    nome: "Professores",
+    departamentos: ["professores", "estagiario"],
+    sabado: [
+      { inicio: "08:00", fim: "14:00", papel: "professores" },
+      { inicio: "10:00", fim: "16:00", papel: "professores" },
+      { inicio: "11:00", fim: "16:00", papel: "estagiario" },
+    ],
+    domingo: [
+      { inicio: "10:00", fim: "16:00", papel: "professores" },
+      { inicio: "11:00", fim: "16:00", papel: "estagiario" },
+    ],
+    feriado: [{ inicio: "10:00", fim: "16:00", papel: "professores" }],
   },
 };
+
+// Setor da escala de cada departamento.
+export const setorDoDepartamento = (departamento: string): Setor | null =>
+  (Object.keys(SETORES) as Setor[]).find((s) => SETORES[s].departamentos.includes(departamento)) ?? null;
 
 export type Pessoa = {
   id: string;
   nome: string;
   setor: Setor;
+  papel: string; // departamento (ex.: "professores" ou "estagiario" no setor Professores)
   genero: "masculino" | "feminino" | null;
   entrada: string | null; // horário de entrada de segunda a sexta
   saida: string | null; // horário de saída de segunda a sexta
@@ -62,7 +88,8 @@ const SEMPRE_FECHADA = ["12-24", "12-25", "12-31", "01-01"];
 export function turnosDoDia(data: string, setor: Setor, feriados: Map<string, Feriado>): Turno[] {
   const feriado = feriados.get(data);
   if (feriado?.fechada || SEMPRE_FECHADA.includes(data.slice(5))) return [];
-  if (feriado || diaDaSemana(data) === 0) return SETORES[setor].domingoEFeriado;
+  if (feriado) return SETORES[setor].feriado;
+  if (diaDaSemana(data) === 0) return SETORES[setor].domingo;
   if (diaDaSemana(data) === 6) return SETORES[setor].sabado;
   return [];
 }
@@ -133,7 +160,7 @@ export function gerarEscala({
     for (const setor of Object.keys(SETORES) as Setor[]) {
       turnosDoDia(d, setor, feriados).forEach((turno, i) => {
         const candidatos = pessoas
-          .filter((p) => p.setor === setor && pode(p, d, turno))
+          .filter((p) => p.setor === setor && (!turno.papel || p.papel === turno.papel) && pode(p, d, turno))
           .sort(
             (a, b) =>
               (total.get(a.id) ?? 0) - (total.get(b.id) ?? 0) ||
@@ -146,7 +173,9 @@ export function gerarEscala({
           total.set(escolhido.id, (total.get(escolhido.id) ?? 0) + 1);
           ultimo.set(escolhido.id, d);
         } else {
-          avisos.push(`${d.split("-").reverse().join("/")} · ${SETORES[setor].nome} ${turno.inicio}–${turno.fim}: sem pessoa disponível`);
+          avisos.push(
+            `${d.split("-").reverse().join("/")} · ${SETORES[setor].nome} ${turno.inicio}–${turno.fim}${turno.papel === "estagiario" ? " (estagiário)" : ""}: sem pessoa disponível`
+          );
         }
         atribuicoes.push({ data: d, setor, inicio: turno.inicio, fim: turno.fim, ordem: i + 1, funcionarioId: escolhido?.id ?? null });
       });

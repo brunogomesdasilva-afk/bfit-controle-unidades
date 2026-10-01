@@ -1,3 +1,4 @@
+import { DEPARTAMENTOS } from "@/lib/database.types";
 import { SETORES, type Setor } from "@/lib/escala";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
@@ -27,7 +28,7 @@ const COLUNAS_FERIADOS: Coluna[] = [
 
 type Turno = { data: string; setor: Setor; inicio: string; fim: string; ordem: number; funcionario_id: string | null };
 
-// Escala de fins de semana e feriados da unidade (recepção e limpeza), de hoje em diante. É gerada um mês por
+// Escala de fins de semana e feriados da unidade (recepção, limpeza e professores), de hoje em diante. É gerada um mês por
 // vez (a janela do botão pergunta o mês e as folgas pedidas).
 export default async function EscalaPage({ params }: PageProps<"/academias/[id]/escala">) {
   const { id } = await params;
@@ -40,12 +41,12 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
       .from("escala")
       .select("data, setor, inicio, fim, ordem, funcionario_id")
       .eq("academia_id", id)
-      .in("setor", ["recepcao", "limpeza"])
+      .in("setor", ["recepcao", "limpeza", "professores"])
       .gte("data", dataHoje)
       .order("data")
       .order("setor")
       .order("ordem"),
-    supabase.from("funcionarios").select("id, nome, departamento").eq("academia_id", id).eq("ativo", true).in("departamento", ["recepcao", "limpeza"]).order("nome"),
+    supabase.from("funcionarios").select("id, nome, departamento").eq("academia_id", id).eq("ativo", true).in("departamento", ["recepcao", "limpeza", "professores", "estagiario"]).order("nome"),
     supabase.from("feriados").select("id, data, nome, fechada, academia_id").or(`academia_id.is.null,academia_id.eq.${id}`).gte("data", `${dataHoje.slice(0, 4)}-01-01`).order("data"),
   ]);
   const lista = (turnos ?? []) as Turno[];
@@ -100,6 +101,10 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
             Recepção: sábado 08:00–14:00 e 11:00–16:00 · domingo/feriado 10:00–16:00. Limpeza: sábado 2 pessoas 08:00–16:00
             · domingo/feriado 10:00–16:00.
           </p>
+          <p>
+            Professores (sala e estagiários): sábado 08:00–14:00, 10:00–16:00 e 11:00–16:00 (estagiário) · domingo
+            10:00–16:00 e 11:00–16:00 (estagiário) · feriado 10:00–16:00 só professores.
+          </p>
           <p className="mt-1 text-xs text-slate-500">
             Regras: 11h de descanso entre jornadas, nunca 7 dias seguidos e revezamento de domingos (homens no máximo 2
             seguidos, mulheres 1). Considera que recepção e limpeza trabalham de segunda a sexta no horário do cadastro.
@@ -110,7 +115,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
 
       {(funcionarios ?? []).length === 0 && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Nenhum funcionário de Recepção ou Limpeza cadastrado nesta unidade. Cadastre na aba Funcionários (com horário de
+          Nenhum funcionário de Recepção, Limpeza, Professores ou Estagiário cadastrado nesta unidade. Cadastre na aba Funcionários (com horário de
           entrada, saída e gênero) antes de gerar a escala.
         </p>
       )}
@@ -140,6 +145,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
                       <th className="border border-slate-300 px-2 py-1.5">Dia</th>
                       <th className="border border-slate-300 px-2 py-1.5">{SETORES.recepcao.nome}</th>
                       <th className="border border-slate-300 px-2 py-1.5">{SETORES.limpeza.nome}</th>
+                      <th className="border border-slate-300 px-2 py-1.5">{SETORES.professores.nome}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -151,6 +157,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
                         </td>
                         <td className="border border-slate-300 px-2 py-1.5">{celula(d, "recepcao")}</td>
                         <td className="border border-slate-300 px-2 py-1.5">{celula(d, "limpeza")}</td>
+                        <td className="border border-slate-300 px-2 py-1.5">{celula(d, "professores")}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -175,7 +182,7 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
                   {resumo.map((r) => (
                     <tr key={r.id}>
                       <td className="border border-slate-300 px-2 py-1.5 font-medium">{r.nome}</td>
-                      <td className="border border-slate-300 px-2 py-1.5">{SETORES[r.departamento as Setor].nome}</td>
+                      <td className="border border-slate-300 px-2 py-1.5">{DEPARTAMENTOS[r.departamento as keyof typeof DEPARTAMENTOS] ?? r.departamento}</td>
                       <td className="border border-slate-300 px-2 py-1.5 text-right tabular-nums">{r.total}</td>
                       <td className="border border-slate-300 px-2 py-1.5 tabular-nums">
                         {r.proximo ? `${formatarDia(r.proximo.data)} (${DIAS[diaDaSemana(r.proximo.data)].toLowerCase()}) ${r.proximo.inicio.slice(0, 5)}–${r.proximo.fim.slice(0, 5)}` : "—"}

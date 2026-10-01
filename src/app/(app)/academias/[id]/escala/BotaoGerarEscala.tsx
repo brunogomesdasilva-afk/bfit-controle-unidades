@@ -32,7 +32,8 @@ export function BotaoGerarEscala({
   const [ano, mm] = mes.split("-").map(Number);
   const primeiroDia = `${mes}-01`;
   const ultimoDia = new Date(Date.UTC(ano, mm, 0)).toISOString().slice(0, 10);
-  const nomeSetor = (d: string) => (d === "recepcao" ? "Recepção" : "Limpeza");
+  const nomeSetor = (d: string) =>
+    ({ recepcao: "Recepção", limpeza: "Limpeza", professores: "Professor", estagiario: "Estagiário" })[d] ?? d;
 
   function confirmar() {
     const incompletas = folgas.filter((f) => !f.funcionarioId || !f.data);
