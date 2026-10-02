@@ -366,19 +366,20 @@ export default async function PainelPage({
         </p>
       )}
 
-      {/* Faturamento: dia, mês e ano (só o administrador vê) */}
+      {/* Faturamento: dia, mês e ano (só o administrador vê), com o mês anterior para comparar */}
       {admin && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Cartao
             destaque
             titulo={`Faturamento do dia (${formatarDia(referencia).slice(0, 5)})`}
             valor={moeda(d.dia.faturamento)}
+            detalhe={`Mesmo dia no mês anterior (${formatarDia(d.periodos.diaMesAnterior.inicio).slice(0, 5)}): ${moeda(d.diaMesAnterior.faturamento)}`}
           />
           <Cartao
             destaque
             titulo="Faturamento acumulado no mês"
             valor={moeda(m.faturamento)}
-            detalhe={`${numero(m.dias_lancados)} dias lançados`}
+            detalhe={`Mês anterior até o dia ${Number(d.periodos.mesAnterior.fim.slice(8, 10))}: ${moeda(d.mesAnterior.faturamento)}`}
           />
           <Cartao
             destaque
@@ -388,73 +389,74 @@ export default async function PainelPage({
         </div>
       )}
 
-      {/* Números do mês */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-        <Cartao
-          titulo="Vendas no mês"
-          valor={numero(m.vendas)}
-          detalhe={`ICV ${formatar(div(m.vendas, m.visitas), "percentual")} · ${numero(m.visitas)} visitas`}
-        />
-        <Cartao
-          titulo="Ativos pagantes"
-          valor={numero(ativos)}
-          detalhe={`Adimplentes: ${numero(adimplentes)}`}
-        />
-        <Cartao
-          titulo="Inadimplentes"
-          valor={numero(m.inadimplentes)}
-          detalhe={`${formatar(div(m.inadimplentes, ativos), "percentual")} dos ativos`}
-        />
-        <Cartao
-          titulo="Cancelamentos no mês"
-          valor={`${numero(m.cancelamentos_efetivados)} efet.`}
-          detalhe={`${numero(m.cancelamentos_solicitados)} solicitados · churn ${formatar(div(m.cancelamentos_efetivados, ativos), "percentual")}`}
-        />
-        <Cartao
-          titulo="Alunos por professor na sala (mês)"
-          valor={numero(d.medias.alunosPorProfessor, 1)}
-          detalhe={
-            d.medias.contagensSala
-              ? `média de ${numero(d.medias.contagensSala)} contagens`
-              : "sem quantidade de professores lançada"
-          }
-        />
-        <Cartao
-          titulo="Alunos por professor no pico (mês)"
-          valor={numero(d.medias.alunosPorProfessorPico, 1)}
-          detalhe={
-            d.medias.contagensPico
-              ? `seg a sex, 5h–9h e 18h–21h · ${numero(d.medias.contagensPico)} contagens`
-              : "seg a sex, 5h–9h e 18h–21h · sem contagens com professores"
-          }
-        />
-        <Cartao
-          titulo="Média de alunos por aula coletiva (mês)"
-          valor={numero(d.medias.mediaAlunosColetiva, 1)}
-          detalhe={`${numero(d.medias.aulasColetivas)} aulas`}
-        />
-        <Cartao titulo="NPS médio no mês" valor={numero(m.nps, 1)} />
-        <Cartao titulo="Passagens no mês" valor={numero(m.passagens)} />
-        <Cartao
-          titulo="Gympass no mês"
-          valor={moeda(m.gympass_valor)}
-          detalhe={`${numero(m.gympass)} check-ins · ${numero(d.gympassPessoasMes)} pessoas diferentes`}
-        />
-        <Cartao
-          titulo="Área"
-          valor={area ? `${numero(area)} m²` : "—"}
-          detalhe={`Aluno/m²: ${numero(div(ativos, area), 2)}`}
-        />
-        <Cartao
-          titulo="Custo financeiro"
-          valor={moeda(custo, 0)}
-          detalhe={`Custo por aluno: ${moeda(div(custo, ativos))}`}
-        />
-        <Cartao
-          titulo="Inventário"
-          valor={`${numero(inventario)} máquinas`}
-          detalhe={`Máquinas/aluno: ${numero(div(inventario, ativos), 3)}`}
-        />
+      {/* Dois painéis lado a lado: termômetro de ocupação e termômetro financeiro */}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Termômetro de ocupação · mês</h2>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Cartao
+              titulo="Índice de ocupação"
+              valor={area ? `${numero(div(adimplentes, area), 2)} /m²` : "—"}
+              detalhe={area ? `${numero(adimplentes)} adimplentes ÷ ${numero(area)} m²` : "cadastre a área (m²) da academia"}
+            />
+            <Cartao
+              titulo="Média de alunos por aula coletiva"
+              valor={numero(d.medias.mediaAlunosColetiva, 1)}
+              detalhe={`${numero(d.medias.aulasColetivas)} aulas`}
+            />
+            <Cartao
+              titulo="Alunos por professor na sala"
+              valor={numero(d.medias.alunosPorProfessor, 1)}
+              detalhe={
+                d.medias.contagensSala ? `média de ${numero(d.medias.contagensSala)} contagens` : "sem quantidade de professores lançada"
+              }
+            />
+            <Cartao
+              titulo="Alunos por professor no pico"
+              valor={numero(d.medias.alunosPorProfessorPico, 1)}
+              detalhe="seg a sex, 5h–9h e 18h–21h"
+            />
+            <Cartao titulo="Passagens na catraca" valor={numero(m.passagens)} />
+            <Cartao
+              titulo="Passagens Gympass"
+              valor={numero(m.gympass)}
+              detalhe={`${numero(d.gympassPessoasMes)} pessoas diferentes`}
+            />
+            <Cartao
+              titulo="Inventário"
+              valor={`${numero(inventario)} máquinas`}
+              detalhe={`Máquinas por aluno: ${numero(div(inventario, ativos), 3)}`}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Termômetro financeiro · mês</h2>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Cartao
+              titulo="Vendas"
+              valor={numero(m.vendas)}
+              detalhe={`ICV ${formatar(div(m.vendas, m.visitas), "percentual")} · ${numero(m.visitas)} visitas`}
+            />
+            <Cartao titulo="Ativos pagantes" valor={numero(ativos)} detalhe={`Adimplentes: ${numero(adimplentes)}`} />
+            <Cartao
+              titulo="Inadimplentes"
+              valor={numero(m.inadimplentes)}
+              detalhe={`${formatar(div(m.inadimplentes, ativos), "percentual")} dos ativos`}
+            />
+            <Cartao
+              titulo="Cancelamentos"
+              valor={`${numero(m.cancelamentos_efetivados)} efet.`}
+              detalhe={`${numero(m.cancelamentos_solicitados)} solicitados · churn ${formatar(div(m.cancelamentos_efetivados, ativos), "percentual")}`}
+            />
+            <Cartao titulo="Gympass (faturamento)" valor={moeda(m.gympass_valor)} />
+            <Cartao
+              titulo="Custo financeiro"
+              valor={moeda(custo, 0)}
+              detalhe={`Custo por aluno: ${moeda(div(custo, ativos))}`}
+            />
+          </div>
+        </section>
       </div>
 
       {/* Outras unidades e não conversão (clicar abre o detalhe) */}

@@ -52,6 +52,12 @@ function secoes(d: DadosPainel, comFaturamento: boolean): SecaoPdf[] {
               moeda(m.faturamento),
               moeda(d.ano.faturamento),
             ],
+            // Comparação: o mesmo dia e o mesmo trecho do mês anterior.
+            [
+              `Mês anterior: ${moeda(d.diaMesAnterior.faturamento)}`,
+              `Mês anterior: ${moeda(d.mesAnterior.faturamento)}`,
+              "",
+            ],
           ],
           vazio: "",
         },
@@ -65,6 +71,12 @@ function secoes(d: DadosPainel, comFaturamento: boolean): SecaoPdf[] {
           `${numero(m.vendas)} (ICV ${formatar(div(m.vendas, m.visitas), "percentual")}, ${numero(m.visitas)} visitas)`,
         ],
         ["Ativos pagantes", numero(ativos)],
+        [
+          "Índice de ocupação (adimplentes por m²)",
+          d.estrutura.area && ativos !== null
+            ? `${numero(div(ativos - (m.inadimplentes ?? 0), d.estrutura.area), 2)} /m²`
+            : "-",
+        ],
         [
           "Inadimplentes",
           `${numero(m.inadimplentes)} (${formatar(div(m.inadimplentes, ativos), "percentual")})`,

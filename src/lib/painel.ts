@@ -22,6 +22,11 @@ export function periodos(referencia: string) {
     dia: { inicio: referencia, fim: referencia },
     mes: { inicio: iso(a, m, 1), fim: referencia },
     mesAnterior: { inicio: iso(mesAnt.a, mesAnt.m, 1), fim: iso(mesAnt.a, mesAnt.m, Math.min(d, ultimoDiaDoMes(mesAnt.a, mesAnt.m))) },
+    // O mesmo dia no mês anterior (ou o último dia dele, se o mês anterior for mais curto).
+    diaMesAnterior: {
+      inicio: iso(mesAnt.a, mesAnt.m, Math.min(d, ultimoDiaDoMes(mesAnt.a, mesAnt.m))),
+      fim: iso(mesAnt.a, mesAnt.m, Math.min(d, ultimoDiaDoMes(mesAnt.a, mesAnt.m))),
+    },
     ano: { inicio: iso(a, 1, 1), fim: referencia },
     anoAnterior: { inicio: iso(a - 1, 1, 1), fim: iso(a - 1, m, Math.min(d, ultimoDiaDoMes(a - 1, m))) },
   };

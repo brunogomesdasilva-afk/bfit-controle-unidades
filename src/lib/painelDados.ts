@@ -29,14 +29,7 @@ export const INDICADORES: Indicador[] = [
   { rotulo: "% inadimplência", formato: "percentual", valor: (t) => div(t.inadimplentes, t.ativos_pagantes), sobeEBom: false },
   { rotulo: "Churn", formato: "percentual", valor: (t) => div(t.cancelamentos_efetivados, t.ativos_pagantes), sobeEBom: false },
   { rotulo: "Previsão de churn", formato: "percentual", valor: (t) => div(t.cancelamentos_solicitados, t.ativos_pagantes), sobeEBom: false },
-  { rotulo: "NPS (média)", formato: "decimal", valor: (t) => t.nps, sobeEBom: true },
   { rotulo: "Neoassist", formato: "numero", valor: (t) => t.neoassist, sobeEBom: false },
-  { rotulo: "Passagens na catraca", formato: "numero", valor: (t) => t.passagens, sobeEBom: true },
-  { rotulo: "Check-ins Gympass", formato: "numero", valor: (t) => t.gympass, sobeEBom: true },
-  { rotulo: "Gympass (R$)", formato: "moeda", valor: (t) => t.gympass_valor, sobeEBom: true },
-  { rotulo: "Contagem de sala", formato: "numero", valor: (t) => t.contagem_sala, sobeEBom: true },
-  { rotulo: "Alunos em coletivas", formato: "numero", valor: (t) => t.alunos_coletivas, sobeEBom: true },
-  { rotulo: "Alunos em lutas", formato: "numero", valor: (t) => t.alunos_lutas, sobeEBom: true },
 ];
 
 export const numero = (n: number | null, casas = 0) =>
@@ -136,7 +129,8 @@ export async function montarPainel(
 ) {
   const { unidade, referencia, academias, sistema } = opcoes;
   const p = periodos(referencia);
-  const [dia, mes, mesAnterior, ano, anoAnterior, visDia, visMes, visAno, mediasMes, ncDia, ncMes, ncAno, pendencias, ocup, clientes, gympassPessoasMes] = await Promise.all([
+  const [diaMesAnterior, dia, mes, mesAnterior, ano, anoAnterior, visDia, visMes, visAno, mediasMes, ncDia, ncMes, ncAno, pendencias, ocup, clientes, gympassPessoasMes] = await Promise.all([
+    totaisDoPeriodo(p.diaMesAnterior, unidade, sistema),
     totaisDoPeriodo(p.dia, unidade, sistema),
     totaisDoPeriodo(p.mes, unidade, sistema),
     totaisDoPeriodo(p.mesAnterior, unidade, sistema),
@@ -170,6 +164,7 @@ export async function montarPainel(
     periodos: p,
     unidadeNome: unidade ? (academias.find((a) => a.id === unidade)?.nome ?? "") : "Todas as unidades",
     dia: dia.totais,
+    diaMesAnterior: diaMesAnterior.totais,
     mes: mes.totais,
     mesAnterior: mesAnterior.totais,
     ano: ano.totais,
