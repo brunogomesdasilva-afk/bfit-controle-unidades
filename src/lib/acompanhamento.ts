@@ -266,11 +266,13 @@ export async function enviarAcompanhamento(
   const academias = (todas ?? []) as Academia[];
   const { data: perfis } = await db
     .from("profiles")
-    .select("email, email_relatorios, perfil, academia_id")
+    .select("email, email_relatorios, whatsapp, perfil, academia_id")
     .eq("ativo", true);
   const admins = (perfis ?? [])
     .filter((p) => p.perfil === "admin")
     .map((p) => emailDeRelatorio(p));
+  const { enviarWhatsapp } = await import("@/lib/whatsapp");
+  const adminsWhats = (perfis ?? []).filter((p) => p.perfil === "admin").map((p) => p.whatsapp as string | null);
   const enviados: string[] = [];
   const falhas: string[] = [];
   for (const academia of academias.filter(
@@ -285,12 +287,16 @@ export async function enviarAcompanhamento(
               !admins.includes(emailDeRelatorio(p)),
           )
           .map((p) => emailDeRelatorio(p));
+    // WhatsApp: os mesmos destinatários (gerentes recebem a versão sem faturamento).
+    const gerentesWhats = opcoes.soAdministradores
+      ? []
+      : (perfis ?? []).filter((p) => p.academia_id === academia.id && p.perfil !== "admin").map((p) => p.whatsapp as string | null);
     try {
-      for (const [para, comFaturamento] of [
-        [admins, true],
-        [gerentes, false],
-      ] as [string[], boolean][]) {
-        if (!para.length) continue;
+      for (const [para, whats, comFaturamento] of [
+        [admins, adminsWhats, true],
+        [gerentes, gerentesWhats, false],
+      ] as [string[], (string | null)[], boolean][]) {
+        if (!para.length && !whats.some(Boolean)) continue;
         const { dados, pdf, arquivo } = await acompanhamentoDiario(
           db,
           academia,
@@ -298,6 +304,15 @@ export async function enviarAcompanhamento(
           opcoes.referencia,
           comFaturamento,
         );
+        if (whats.some(Boolean)) {
+          const w = await enviarWhatsapp({
+            para: whats,
+            legenda: `BFIT · Acompanhamento diário · ${academia.nome} · ${formatarDia(opcoes.referencia)}`,
+            pdf: { nome: arquivo, conteudo: pdf },
+          });
+          falhas.push(...w.falhas.map((f) => `${academia.nome}: ${f}`));
+        }
+        if (!para.length) continue;
         await enviarEmail({
           para,
           assunto: `BFIT · Acompanhamento diário · ${academia.nome} · ${formatarDia(opcoes.referencia)}`,

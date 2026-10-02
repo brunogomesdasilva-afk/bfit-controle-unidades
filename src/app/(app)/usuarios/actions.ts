@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { exigirAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { normalizarCelular } from "@/lib/whatsapp";
 
 function voltar(params: Record<string, string>): never {
   redirect(`/usuarios?${new URLSearchParams(params).toString()}`);
@@ -187,4 +188,19 @@ export async function alterarEmailRelatorios(usuarioId: string, formData: FormDa
 
   revalidatePath("/usuarios");
   voltar({ ok: email ? `Os relatórios passam a ir para ${email}.` : "Os relatórios voltam a ir para o e-mail de acesso." });
+}
+
+// Celular (WhatsApp) para receber os relatórios: vazio = não recebe por WhatsApp.
+export async function alterarWhatsappUsuario(usuarioId: string, formData: FormData) {
+  await exigirAdmin();
+  const digitado = String(formData.get("whatsapp") ?? "").trim();
+  const celular = digitado ? normalizarCelular(digitado) : null;
+  if (digitado && !celular) voltar({ erro: "Informe o WhatsApp com DDD, por exemplo (11) 98888-7777 (ou deixe em branco)." });
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ whatsapp: celular }).eq("id", usuarioId);
+  if (error) voltar({ erro: error.message });
+
+  revalidatePath("/usuarios");
+  voltar({ ok: celular ? "WhatsApp salvo: os relatórios também vão por WhatsApp." : "WhatsApp removido." });
 }

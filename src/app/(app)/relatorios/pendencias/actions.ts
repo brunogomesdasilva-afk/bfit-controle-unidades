@@ -2,6 +2,7 @@
 
 import { getPerfilAtual } from "@/lib/auth";
 import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
+import { enviarWhatsapp } from "@/lib/whatsapp";
 import { carregarPendencias, linhasDoPdf } from "@/lib/pendencias";
 import { gerarPdfPendencias } from "@/lib/pdfPendencias";
 import { hoje } from "@/lib/planilha";
@@ -24,7 +25,7 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
   let consultaAcademias = supabase.from("academias").select("id, nome").order("nome");
   if (academiaId) consultaAcademias = consultaAcademias.eq("id", academiaId);
   const { data: academias } = await consultaAcademias;
-  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, perfil, academia_id, ativo").eq("ativo", true);
+  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, whatsapp, perfil, academia_id, ativo").eq("ativo", true);
 
   const dataHoje = hoje();
   const dataTexto = dataHoje.split("-").reverse().join("/");
@@ -57,7 +58,15 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
         ].join("\n"),
         anexos: [{ nome: `Pendencias ${academia.nome} ${dataHoje}.pdf`, conteudo: pdf }],
       });
-      enviados.push(`${academia.nome} (${para.length} ${para.length === 1 ? "destinatário" : "destinatários"})`);
+      const whats = await enviarWhatsapp({
+        para: (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => p.whatsapp as string | null),
+        legenda: `BFIT · Compras e manutenção pendentes · ${academia.nome} · ${dataTexto}`,
+        pdf: { nome: `Pendencias ${academia.nome} ${dataHoje}.pdf`, conteudo: pdf },
+      });
+      falhas.push(...whats.falhas.map((f) => `${academia.nome}: ${f}`));
+      enviados.push(
+        `${academia.nome} (${para.length} ${para.length === 1 ? "destinatário" : "destinatários"}${whats.enviados.length ? `, WhatsApp ${whats.enviados.length}` : ""})`
+      );
     } catch (e) {
       falhas.push(`${academia.nome}: ${e instanceof Error ? e.message : "erro no envio"}`);
     }

@@ -2,6 +2,7 @@
 
 import { getPerfilAtual } from "@/lib/auth";
 import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
+import { enviarWhatsapp } from "@/lib/whatsapp";
 import { mesDeFechamento, montarFechamento, nomeDoMes } from "@/lib/fechamento";
 import { createClient } from "@/lib/supabase/server";
 import type { ResultadoEnvio } from "../pendencias/actions";
@@ -17,7 +18,7 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
   const supabase = await createClient();
   const { data: academia } = await supabase.from("academias").select("id, nome").eq("id", academiaId).maybeSingle();
   if (!academia) return { erro: "Academia não encontrada." };
-  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, perfil, academia_id").eq("ativo", true);
+  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, whatsapp, perfil, academia_id").eq("ativo", true);
   const para = [
     ...new Set(
       (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => emailDeRelatorio(p))
@@ -53,5 +54,13 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
   } catch (e) {
     return { erro: `Não foi possível enviar: ${e instanceof Error ? e.message : "erro no envio"}` };
   }
-  return { ok: `E-mail enviado para ${para.length} ${para.length === 1 ? "destinatário" : "destinatários"}.` };
+  // WhatsApp para os mesmos destinatários que têm o celular no cadastro.
+  const whats = await enviarWhatsapp({
+    para: (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => p.whatsapp as string | null),
+    legenda: `BFIT · Fechamento do mês · ${academia.nome} · ${nomeDoMes(mesPedido)}`,
+    pdf: { nome: arquivo, conteudo: pdf },
+  });
+  const textoWhats = whats.enviados.length ? ` WhatsApp para ${whats.enviados.length}.` : "";
+  if (whats.falhas.length) return { erro: `E-mail enviado, mas o WhatsApp falhou: ${whats.falhas.join("; ")}` };
+  return { ok: `E-mail enviado para ${para.length} ${para.length === 1 ? "destinatário" : "destinatários"}.${textoWhats}` };
 }

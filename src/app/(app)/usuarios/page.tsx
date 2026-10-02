@@ -5,6 +5,7 @@ import type { Academia, Profile } from "@/lib/database.types";
 import {
   alterarAcessoUsuario,
   alterarEmailRelatorios,
+  alterarWhatsappUsuario,
   alterarEmailUsuario,
   alterarNomeUsuario,
   alterarStatusUsuario,
@@ -176,6 +177,7 @@ export default async function UsuariosPage({
                 <th className="px-4 py-2 font-medium">Nome</th>
                 <th className="px-4 py-2 font-medium">E-mail de acesso</th>
                 <th className="px-4 py-2 font-medium">E-mail para relatórios</th>
+                <th className="px-4 py-2 font-medium">WhatsApp</th>
                 <th className="px-4 py-2 font-medium">Acesso</th>
                 <th className="px-4 py-2 font-medium">Status</th>
               </tr>
@@ -206,6 +208,20 @@ export default async function UsuariosPage({
                         defaultValue={u.email_relatorios ?? ""}
                         placeholder="mesmo do acesso"
                         className="w-full min-w-48 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                      />
+                      <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
+                        salvar
+                      </button>
+                    </form>
+                  </td>
+                  <td className="px-4 py-2">
+                    <form action={alterarWhatsappUsuario.bind(null, u.id)} className="flex items-center gap-2">
+                      <input
+                        name="whatsapp"
+                        type="tel"
+                        defaultValue={u.whatsapp ?? ""}
+                        placeholder="(11) 98888-7777"
+                        className="w-full min-w-36 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
                       />
                       <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
                         salvar

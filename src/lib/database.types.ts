@@ -10,6 +10,8 @@ export type Profile = {
   created_at: string;
   // E-mail secundário para os relatórios (vazio = usa o e-mail de acesso).
   email_relatorios: string | null;
+  // Celular (WhatsApp) para receber os relatórios, só dígitos com o DDI (ex.: 5511988887777).
+  whatsapp: string | null;
 };
 
 export type Academia = {
