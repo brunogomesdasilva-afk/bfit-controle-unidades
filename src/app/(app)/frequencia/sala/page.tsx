@@ -33,6 +33,7 @@ export default function ContagemSalaPage({ searchParams }: { searchParams: Promi
       excluir={excluirSala}
       rotuloNovo="+ Nova contagem"
       calcular={calcular}
+      importarSala
     />
   );
 }

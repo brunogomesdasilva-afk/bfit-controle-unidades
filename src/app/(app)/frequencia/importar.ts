@@ -2,7 +2,8 @@
 
 import { refresh, revalidatePath } from "next/cache";
 import { lerRelatorio, type TipoRelatorio } from "@/lib/importacao";
-import { mensagemErro, verificarAcesso } from "@/lib/planilha";
+import { lerContagemSala } from "@/lib/importarSala";
+import { hoje, mensagemErro, verificarAcesso } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 
 export type ResultadoImportacao = { erro?: string; ok?: string };
@@ -110,4 +111,64 @@ export async function desfazerImportacao(id: string): Promise<ResultadoImportaca
   revalidatePath("/frequencia", "layout");
   refresh();
   return { ok: "Importação desfeita." };
+}
+
+// Contagem de sala: importa a aba CONTAGEM da planilha operacional para a academia da aba aberta.
+// Contagens que já estão no sistema (mesmo dia e horário) não são duplicadas.
+export async function importarContagemSala(academiaId: string, arquivo: { caminho: string; nome: string }): Promise<ResultadoImportacao> {
+  const semAcesso = await verificarAcesso();
+  if (semAcesso) return { erro: semAcesso };
+  if (!academiaId) return { erro: "Abra a aba da academia antes de importar." };
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user || !arquivo.caminho.startsWith(`${user.id}/`)) return { erro: "Arquivo inválido. Escolha o Excel de novo." };
+
+  try {
+    const { data: conteudo, error: erroDownload } = await supabase.storage.from(PASTA).download(arquivo.caminho);
+    if (erroDownload || !conteudo) return { erro: "Não foi possível receber o arquivo. Tente importar de novo." };
+    let lido;
+    try {
+      lido = await lerContagemSala(Buffer.from(await conteudo.arrayBuffer()), hoje());
+    } catch (e) {
+      return { erro: e instanceof Error ? e.message : "Não foi possível ler a planilha." };
+    }
+    if (!lido.linhas.length) return { erro: `Nenhuma contagem com data e horário foi encontrada na aba "${lido.aba}".` };
+
+    // Contagens que já existem no período da planilha.
+    const datas = lido.linhas.map((l) => l.data).sort();
+    const existentes = new Set<string>();
+    for (let de = 0; ; de += 1000) {
+      const { data } = await supabase
+        .from("contagem_sala")
+        .select("data, horario")
+        .eq("academia_id", academiaId)
+        .gte("data", datas[0])
+        .lte("data", datas.at(-1)!)
+        .order("data")
+        .range(de, de + 999);
+      for (const r of data ?? []) existentes.add(`${r.data}|${String(r.horario).slice(0, 5)}`);
+      if (!data || data.length < 1000) break;
+    }
+    const novas = lido.linhas.filter((l) => !existentes.has(`${l.data}|${l.horario}`));
+    for (let i = 0; i < novas.length; i += 1000) {
+      const { error } = await supabase
+        .from("contagem_sala")
+        .insert(novas.slice(i, i + 1000).map((l) => ({ ...l, academia_id: academiaId, criado_por: user.id })));
+      if (error) return { erro: `Erro ao gravar (${mensagemErro(error)}). ${i} contagens já tinham sido gravadas; importe de novo para completar.` };
+    }
+
+    revalidatePath("/frequencia", "layout");
+    refresh();
+    const partes = [`${novas.length.toLocaleString("pt-BR")} contagens importadas (${datas[0].split("-").reverse().join("/")} a ${datas.at(-1)!.split("-").reverse().join("/")})`];
+    const jaTinha = lido.linhas.length - novas.length;
+    if (jaTinha) partes.push(`${jaTinha.toLocaleString("pt-BR")} já estavam no sistema`);
+    if (lido.repetidasNaPlanilha) partes.push(`${lido.repetidasNaPlanilha} repetidas na planilha`);
+    if (lido.semData) partes.push(`${lido.semData} sem data/horário válido foram ignoradas`);
+    if (lido.diasEmSequencia) partes.push(`${lido.diasEmSequencia} dia(s) com a coluna de professores em sequência ficaram sem professores`);
+    return { ok: `${arquivo.nome} (aba ${lido.aba}): ${partes.join(", ")}.` };
+  } finally {
+    await supabase.storage.from(PASTA).remove([arquivo.caminho]);
+  }
 }

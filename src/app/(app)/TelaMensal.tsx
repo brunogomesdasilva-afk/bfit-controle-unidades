@@ -8,6 +8,8 @@ import {
   ContagemPorDiaTodas,
   type DiaTodas,
 } from "./frequencia/ContagemPorDia";
+import { ImportarExcel } from "./frequencia/ImportarExcel";
+import { importarContagemSala } from "./frequencia/importar";
 import { salvarDiaDeAulas } from "./lancamentos";
 import { Planilha, type Coluna, type Linha, type Resultado } from "./Planilha";
 
@@ -80,6 +82,7 @@ export async function TelaMensal({
   professores,
   calcular,
   agruparPorDia,
+  importarSala,
 }: {
   searchParams: Promise<{ academia?: string; mes?: string }>;
   titulo: string;
@@ -106,6 +109,8 @@ export async function TelaMensal({
   ) => Record<string, number | null>;
   // Contagem de coletivas/lutas: agrupada por dia, com a grade do dia e as quantidades (na aba da academia).
   agruparPorDia?: "coletivas" | "lutas";
+  // Contagem de sala: botão para importar a aba CONTAGEM da planilha operacional (na aba da academia).
+  importarSala?: boolean;
 }) {
   const params = await searchParams;
   const { supabase, academias, selecionada, admin } = await contextoAcademias(
@@ -238,6 +243,12 @@ export async function TelaMensal({
             avisoCadastro(
               `Nenhum funcionário do departamento “${professores === "professor_lutas" ? "Professor de lutas" : "Professor de coletivas"}” cadastrado`,
             )}
+          {importarSala && selecionada && (
+            <ImportarExcel
+              importar={importarContagemSala.bind(null, selecionada)}
+              rotulo={`Importar contagem para ${nomeSelecionada}`}
+            />
+          )}
           {agruparPorDia && selecionada && (
             <div className="mb-4 space-y-3">
               <SeletorMes caminho={caminho} academia={selecionada} mes={mes} />
