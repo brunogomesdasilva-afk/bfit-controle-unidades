@@ -21,15 +21,15 @@ grant execute on function minhas_academias_manutencao() to authenticated;
 -- Regras a mais (somam com as existentes): o usuário de manutenção vê as academias dele e as manutenções delas.
 drop policy if exists "academias_select_manutencao" on academias;
 create policy "academias_select_manutencao" on academias for select to authenticated
-  using (id = any ((select minhas_academias_manutencao())));
+  using (id = any ((select minhas_academias_manutencao())::uuid[]));
 
 drop policy if exists "manutencoes_select_manutencao" on manutencoes;
 create policy "manutencoes_select_manutencao" on manutencoes for select to authenticated
-  using (academia_id = any ((select minhas_academias_manutencao())));
+  using (academia_id = any ((select minhas_academias_manutencao())::uuid[]));
 drop policy if exists "manutencoes_insert_manutencao" on manutencoes;
 create policy "manutencoes_insert_manutencao" on manutencoes for insert to authenticated
-  with check (academia_id = any ((select minhas_academias_manutencao())));
+  with check (academia_id = any ((select minhas_academias_manutencao())::uuid[]));
 drop policy if exists "manutencoes_update_manutencao" on manutencoes;
 create policy "manutencoes_update_manutencao" on manutencoes for update to authenticated
-  using (academia_id = any ((select minhas_academias_manutencao())))
-  with check (academia_id = any ((select minhas_academias_manutencao())));
+  using (academia_id = any ((select minhas_academias_manutencao())::uuid[]))
+  with check (academia_id = any ((select minhas_academias_manutencao())::uuid[]));
