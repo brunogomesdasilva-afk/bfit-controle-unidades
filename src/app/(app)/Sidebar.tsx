@@ -480,7 +480,7 @@ export function Sidebar({
   submenusIniciais,
 }: {
   nome: string;
-  perfil: "admin" | "usuario";
+  perfil: "admin" | "usuario" | "manutencao";
   academiaNome: string | null;
   academias: { id: string; nome: string }[];
   recolhidoInicial: boolean;
@@ -493,7 +493,13 @@ export function Sidebar({
   const recolhido = recolhidoNoComputador && telaGrande;
   const [aberto, setAberto] = useState(false);
 
-  const itens = ITENS.filter((item) => !item.oculto && (!item.somenteAdmin || perfil === "admin")).map((item) =>
+  const itens = ITENS.filter(
+    (item) =>
+      !item.oculto &&
+      (!item.somenteAdmin || perfil === "admin") &&
+      // Perfil Manutenção: só o menu Manutenção.
+      (perfil !== "manutencao" || item.href === "/manutencao")
+  ).map((item) =>
     item.href === "/academias" ? comSubmenuDeAcademias(item, academias) : item
   );
   // Menu com submenu da página atual (ex.: em Vendas → Diário, o de Vendas).

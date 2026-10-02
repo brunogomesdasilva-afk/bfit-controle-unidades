@@ -18,7 +18,24 @@ const CAMPO = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
 
 // Acesso do usuário: "admin" (todas as academias) ou o id da academia que ele pode ver.
 function valorAcesso(u: Profile) {
-  return u.perfil === "admin" ? "admin" : (u.academia_id ?? "");
+  return u.perfil === "admin" ? "admin" : u.perfil === "manutencao" ? "manutencao" : (u.academia_id ?? "");
+}
+
+// Unidades do perfil Manutenção (marcadas só quando o acesso escolhido é "Manutenção").
+function UnidadesManutencao({ academias, marcadas }: { academias: Academia[]; marcadas: string[] }) {
+  return (
+    <details className="mt-1 text-xs text-slate-600" open={marcadas.length > 0}>
+      <summary className="cursor-pointer">Unidades (perfil Manutenção)</summary>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+        {academias.map((a) => (
+          <label key={a.id} className="flex items-center gap-1">
+            <input type="checkbox" name="unidades_manutencao" value={a.id} defaultChecked={marcadas.includes(a.id)} />
+            {a.nome}
+          </label>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 function OpcoesAcesso({ academias }: { academias: Academia[] }) {
@@ -28,6 +45,7 @@ function OpcoesAcesso({ academias }: { academias: Academia[] }) {
         Selecione o acesso
       </option>
       <option value="admin">Administrador (todas as academias)</option>
+      <option value="manutencao">Manutenção (só a tela de Manutenção)</option>
       {academias.map((a) => (
         <option key={a.id} value={a.id}>
           {a.nome}
@@ -231,22 +249,25 @@ export default async function UsuariosPage({
                   <td className="px-4 py-2">
                     {u.id === atual.id ? (
                       <span className="text-slate-600">
-                        {u.perfil === "admin" ? "Administrador" : (nomeAcademia.get(u.academia_id ?? "") ?? "Sem acesso")}{" "}
+                        {u.perfil === "admin" ? "Administrador" : u.perfil === "manutencao" ? "Manutenção" : (nomeAcademia.get(u.academia_id ?? "") ?? "Sem acesso")}{" "}
                         (você)
                       </span>
                     ) : (
-                      <form action={alterarAcessoUsuario.bind(null, u.id)} className="flex items-center gap-2">
-                        <select
-                          name="acesso"
-                          defaultValue={valorAcesso(u)}
-                          required
-                          className="max-w-56 rounded-md border border-slate-300 px-2 py-1 text-sm"
-                        >
-                          <OpcoesAcesso academias={academias} />
-                        </select>
-                        <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
-                          salvar
-                        </button>
+                      <form action={alterarAcessoUsuario.bind(null, u.id)}>
+                        <div className="flex items-center gap-2">
+                          <select
+                            name="acesso"
+                            defaultValue={valorAcesso(u)}
+                            required
+                            className="max-w-56 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                          >
+                            <OpcoesAcesso academias={academias} />
+                          </select>
+                          <button type="submit" className="text-xs text-slate-500 underline hover:text-slate-900">
+                            salvar
+                          </button>
+                        </div>
+                        <UnidadesManutencao academias={academias} marcadas={u.academias_manutencao ?? []} />
                       </form>
                     )}
                   </td>
@@ -354,8 +375,14 @@ export default async function UsuariosPage({
               <OpcoesAcesso academias={academias} />
             </select>
             <p className="mt-1 text-xs text-slate-500">
-              Escolhendo uma academia, o usuário só vê as compras e manutenções dela.
+              Escolhendo uma academia, o usuário vê só os dados dela. Manutenção: só a tela de Manutenção das unidades
+              marcadas abaixo, e recebe por WhatsApp/e-mail só as manutenções pendentes delas.
             </p>
+            <UnidadesManutencao academias={academias} marcadas={[]} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700">WhatsApp (opcional)</label>
+            <input name="whatsapp" type="tel" placeholder="(11) 98888-7777" className={CAMPO} />
           </div>
           <button
             type="submit"

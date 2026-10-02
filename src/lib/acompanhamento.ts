@@ -266,7 +266,7 @@ export async function enviarAcompanhamento(
   const academias = (todas ?? []) as Academia[];
   const { data: perfis } = await db
     .from("profiles")
-    .select("email, email_relatorios, whatsapp, perfil, academia_id")
+    .select("email, email_relatorios, whatsapp, perfil, academia_id, academias_manutencao")
     .eq("ativo", true);
   const admins = (perfis ?? [])
     .filter((p) => p.perfil === "admin")
@@ -339,6 +339,14 @@ export async function enviarAcompanhamento(
       falhas.push(
         `${academia.nome}: ${e instanceof Error ? e.message : "erro"}`,
       );
+    }
+  }
+  // Pessoal de manutenção: só as manutenções pendentes das unidades que atende (fora do período de teste).
+  if (!opcoes.soAdministradores) {
+    const { avisarManutencao } = await import("@/lib/avisoManutencao");
+    for (const academia of academias.filter((a) => !opcoes.academiaId || a.id === opcoes.academiaId)) {
+      const r = await avisarManutencao(db, academia, perfis ?? []);
+      falhas.push(...r.falhas);
     }
   }
   return { enviados, falhas };

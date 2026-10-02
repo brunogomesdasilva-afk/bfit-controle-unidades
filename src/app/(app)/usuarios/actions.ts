@@ -11,17 +11,25 @@ function voltar(params: Record<string, string>): never {
   redirect(`/usuarios?${new URLSearchParams(params).toString()}`);
 }
 
-// O campo "acesso" da tela vale "admin" (todas as academias) ou o id de uma academia.
+// O campo "acesso" da tela vale "admin" (todas as academias), "manutencao" (com as unidades marcadas) ou o id
+// de uma academia.
 async function lerAcesso(formData: FormData) {
   const acesso = String(formData.get("acesso") ?? "");
-  if (acesso === "admin") return { perfil: "admin", academia_id: null };
+  if (acesso === "admin") return { perfil: "admin", academia_id: null, academias_manutencao: [] as string[] };
+  if (acesso === "manutencao") {
+    const unidades = formData.getAll("unidades_manutencao").map(String).filter(Boolean);
+    if (!unidades.length) voltar({ erro: "Para o perfil Manutenção, marque as unidades que a pessoa atende." });
+    const supabase = await createClient();
+    const { data: validas } = await supabase.from("academias").select("id").in("id", unidades);
+    return { perfil: "manutencao", academia_id: null, academias_manutencao: (validas ?? []).map((a) => a.id as string) };
+  }
 
   const supabase = await createClient();
   const { data: academia } = acesso
     ? await supabase.from("academias").select("id").eq("id", acesso).maybeSingle()
     : { data: null };
   if (!academia) voltar({ erro: "Escolha o acesso do usuário: administrador ou uma academia." });
-  return { perfil: "usuario", academia_id: academia.id as string };
+  return { perfil: "usuario", academia_id: academia.id as string, academias_manutencao: [] as string[] };
 }
 
 export async function criarUsuario(formData: FormData) {
@@ -31,6 +39,7 @@ export async function criarUsuario(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const senha = String(formData.get("senha") ?? "");
   const emailRelatorios = String(formData.get("email_relatorios") ?? "").trim().toLowerCase();
+  const whatsapp = normalizarCelular(String(formData.get("whatsapp") ?? ""));
 
   if (!nome || !email) voltar({ erro: "Informe o nome e o e-mail." });
   if (senha.length < 6) voltar({ erro: "A senha precisa ter pelo menos 6 caracteres." });
@@ -55,7 +64,7 @@ export async function criarUsuario(formData: FormData) {
   // O perfil (linha em profiles) é criado por um gatilho do banco, ainda sem acesso; aqui ele recebe o acesso.
   const { error: erroPerfil } = await admin
     .from("profiles")
-    .update({ ...acesso, email_relatorios: emailRelatorios || null })
+    .update({ ...acesso, email_relatorios: emailRelatorios || null, whatsapp })
     .eq("id", data.user.id);
   if (erroPerfil) voltar({ erro: erroPerfil.message });
 

@@ -2,7 +2,7 @@ export type Profile = {
   id: string;
   nome: string;
   email: string;
-  perfil: "admin" | "usuario";
+  perfil: "admin" | "usuario" | "manutencao";
   academia_id: string | null;
   ativo: boolean;
   ativo_alterado_em: string | null;
@@ -12,6 +12,8 @@ export type Profile = {
   email_relatorios: string | null;
   // Celular (WhatsApp) para receber os relatórios, só dígitos com o DDI (ex.: 5511988887777).
   whatsapp: string | null;
+  // Perfil Manutenção: unidades que a pessoa atende.
+  academias_manutencao: string[];
 };
 
 export type Academia = {

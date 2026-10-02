@@ -4,7 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 export type PerfilAtual = {
   id: string;
   nome: string;
-  perfil: "admin" | "usuario";
+  // "manutencao": só vê a tela de Manutenção das unidades escolhidas para ele.
+  perfil: "admin" | "usuario" | "manutencao";
   // Academia que o usuário pode acessar (administrador acessa todas e fica sem academia).
   academiaId: string | null;
   academiaNome: string | null;
@@ -34,14 +35,15 @@ export async function getPerfilAtual(): Promise<PerfilAtual | null> {
   if (data?.ativo === false) return null;
 
   const admin = data?.perfil === "admin";
+  const manutencao = data?.perfil === "manutencao";
   // A relação vem como objeto (um perfil tem uma academia), mas os tipos do supabase-js não sabem disso.
   const academia = data?.academia as unknown as { nome: string } | null;
   return {
     id: user.id,
     nome: data?.nome ?? user.email ?? "",
-    perfil: admin ? "admin" : "usuario",
-    academiaId: admin ? null : (data?.academia_id ?? null),
-    academiaNome: admin ? null : (academia?.nome ?? null),
+    perfil: admin ? "admin" : manutencao ? "manutencao" : "usuario",
+    academiaId: admin || manutencao ? null : (data?.academia_id ?? null),
+    academiaNome: admin ? null : manutencao ? "Manutenção" : (academia?.nome ?? null),
   };
 }
 

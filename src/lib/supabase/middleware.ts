@@ -35,7 +35,21 @@ export async function updateSession(request: NextRequest) {
 
   // Usuário inativo: encerra a sessão e volta para o login com um aviso.
   if (user) {
-    const { data: perfil } = await supabase.from("profiles").select("ativo").eq("id", user.id).single();
+    const { data: perfil } = await supabase.from("profiles").select("ativo, perfil").eq("id", user.id).single();
+    // Perfil Manutenção: só a tela de Manutenção e Minha conta.
+    const caminho = request.nextUrl.pathname;
+    if (
+      perfil?.perfil === "manutencao" &&
+      perfil.ativo !== false &&
+      !["/manutencao", "/minha-conta", "/login", "/auth/"].some((p) => caminho.startsWith(p))
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/manutencao";
+      url.search = "";
+      const redirecionamento = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((c) => redirecionamento.cookies.set(c));
+      return redirecionamento;
+    }
     if (perfil?.ativo === false) {
       await supabase.auth.signOut();
       const url = request.nextUrl.clone();

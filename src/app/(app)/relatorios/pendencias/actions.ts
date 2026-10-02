@@ -3,6 +3,7 @@
 import { getPerfilAtual } from "@/lib/auth";
 import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
 import { enviarWhatsapp } from "@/lib/whatsapp";
+import { avisarManutencao } from "@/lib/avisoManutencao";
 import { carregarPendencias, linhasDoPdf } from "@/lib/pendencias";
 import { gerarPdfPendencias } from "@/lib/pdfPendencias";
 import { hoje } from "@/lib/planilha";
@@ -25,7 +26,7 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
   let consultaAcademias = supabase.from("academias").select("id, nome").order("nome");
   if (academiaId) consultaAcademias = consultaAcademias.eq("id", academiaId);
   const { data: academias } = await consultaAcademias;
-  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, whatsapp, perfil, academia_id, ativo").eq("ativo", true);
+  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, whatsapp, perfil, academia_id, academias_manutencao, ativo").eq("ativo", true);
 
   const dataHoje = hoje();
   const dataTexto = dataHoje.split("-").reverse().join("/");
@@ -64,6 +65,9 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
         pdf: { nome: `Pendencias ${academia.nome} ${dataHoje}.pdf`, conteudo: pdf },
       });
       falhas.push(...whats.falhas.map((f) => `${academia.nome}: ${f}`));
+      // Pessoal de manutenção da unidade: só as manutenções pendentes.
+      const equipe = await avisarManutencao(supabase, academia, perfis ?? []);
+      falhas.push(...equipe.falhas);
       enviados.push(
         `${academia.nome} (${para.length} ${para.length === 1 ? "destinatário" : "destinatários"}${whats.enviados.length ? `, WhatsApp ${whats.enviados.length}` : ""})`
       );
