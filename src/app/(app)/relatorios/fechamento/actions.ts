@@ -1,7 +1,7 @@
 "use server";
 
 import { getPerfilAtual } from "@/lib/auth";
-import { emailConfigurado, enviarEmail } from "@/lib/email";
+import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
 import { mesDeFechamento, montarFechamento, nomeDoMes } from "@/lib/fechamento";
 import { createClient } from "@/lib/supabase/server";
 import type { ResultadoEnvio } from "../pendencias/actions";
@@ -17,10 +17,10 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
   const supabase = await createClient();
   const { data: academia } = await supabase.from("academias").select("id, nome").eq("id", academiaId).maybeSingle();
   if (!academia) return { erro: "Academia não encontrada." };
-  const { data: perfis } = await supabase.from("profiles").select("email, perfil, academia_id").eq("ativo", true);
+  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, perfil, academia_id").eq("ativo", true);
   const para = [
     ...new Set(
-      (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => p.email as string)
+      (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => emailDeRelatorio(p))
     ),
   ];
 

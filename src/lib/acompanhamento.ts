@@ -256,7 +256,7 @@ export async function enviarAcompanhamento(
     academiaId?: string | null;
   },
 ) {
-  const { enviarEmail, emailConfigurado } = await import("@/lib/email");
+  const { enviarEmail, emailConfigurado, emailDeRelatorio } = await import("@/lib/email");
   if (!emailConfigurado())
     return {
       enviados: [] as string[],
@@ -266,11 +266,11 @@ export async function enviarAcompanhamento(
   const academias = (todas ?? []) as Academia[];
   const { data: perfis } = await db
     .from("profiles")
-    .select("email, perfil, academia_id")
+    .select("email, email_relatorios, perfil, academia_id")
     .eq("ativo", true);
   const admins = (perfis ?? [])
     .filter((p) => p.perfil === "admin")
-    .map((p) => p.email as string);
+    .map((p) => emailDeRelatorio(p));
   const enviados: string[] = [];
   const falhas: string[] = [];
   for (const academia of academias.filter(
@@ -282,9 +282,9 @@ export async function enviarAcompanhamento(
           .filter(
             (p) =>
               p.academia_id === academia.id &&
-              !admins.includes(p.email as string),
+              !admins.includes(emailDeRelatorio(p)),
           )
-          .map((p) => p.email as string);
+          .map((p) => emailDeRelatorio(p));
     try {
       for (const [para, comFaturamento] of [
         [admins, true],

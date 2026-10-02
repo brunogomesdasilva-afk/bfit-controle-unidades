@@ -29,6 +29,7 @@ export async function criarUsuario(formData: FormData) {
   const nome = String(formData.get("nome") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const senha = String(formData.get("senha") ?? "");
+  const emailRelatorios = String(formData.get("email_relatorios") ?? "").trim().toLowerCase();
 
   if (!nome || !email) voltar({ erro: "Informe o nome e o e-mail." });
   if (senha.length < 6) voltar({ erro: "A senha precisa ter pelo menos 6 caracteres." });
@@ -51,7 +52,10 @@ export async function criarUsuario(formData: FormData) {
   }
 
   // O perfil (linha em profiles) é criado por um gatilho do banco, ainda sem acesso; aqui ele recebe o acesso.
-  const { error: erroPerfil } = await admin.from("profiles").update(acesso).eq("id", data.user.id);
+  const { error: erroPerfil } = await admin
+    .from("profiles")
+    .update({ ...acesso, email_relatorios: emailRelatorios || null })
+    .eq("id", data.user.id);
   if (erroPerfil) voltar({ erro: erroPerfil.message });
 
   revalidatePath("/usuarios");
@@ -169,4 +173,18 @@ export async function alterarStatusUsuario(usuarioId: string, formData: FormData
 
   revalidatePath("/", "layout");
   voltar({ ok: ativar ? `${alvo.nome} foi reativado.` : `${alvo.nome} foi inativado.` });
+}
+
+// E-mail para relatórios (secundário): vazio = os relatórios vão para o e-mail de acesso.
+export async function alterarEmailRelatorios(usuarioId: string, formData: FormData) {
+  await exigirAdmin();
+  const email = String(formData.get("email_relatorios") ?? "").trim().toLowerCase();
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) voltar({ erro: "Informe um e-mail válido para os relatórios (ou deixe em branco)." });
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("profiles").update({ email_relatorios: email || null }).eq("id", usuarioId);
+  if (error) voltar({ erro: error.message });
+
+  revalidatePath("/usuarios");
+  voltar({ ok: email ? `Os relatórios passam a ir para ${email}.` : "Os relatórios voltam a ir para o e-mail de acesso." });
 }

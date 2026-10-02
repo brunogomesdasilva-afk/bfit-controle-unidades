@@ -1,7 +1,7 @@
 "use server";
 
 import { getPerfilAtual } from "@/lib/auth";
-import { emailConfigurado, enviarEmail } from "@/lib/email";
+import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
 import { carregarPendencias, linhasDoPdf } from "@/lib/pendencias";
 import { gerarPdfPendencias } from "@/lib/pdfPendencias";
 import { hoje } from "@/lib/planilha";
@@ -24,11 +24,11 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
   let consultaAcademias = supabase.from("academias").select("id, nome").order("nome");
   if (academiaId) consultaAcademias = consultaAcademias.eq("id", academiaId);
   const { data: academias } = await consultaAcademias;
-  const { data: perfis } = await supabase.from("profiles").select("email, perfil, academia_id, ativo").eq("ativo", true);
+  const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, perfil, academia_id, ativo").eq("ativo", true);
 
   const dataHoje = hoje();
   const dataTexto = dataHoje.split("-").reverse().join("/");
-  const administradores = (perfis ?? []).filter((p) => p.perfil === "admin").map((p) => p.email as string);
+  const administradores = (perfis ?? []).filter((p) => p.perfil === "admin").map((p) => emailDeRelatorio(p));
   const enviados: string[] = [];
   const falhas: string[] = [];
 
@@ -36,7 +36,7 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
     const para = [
       ...new Set([
         ...administradores,
-        ...(perfis ?? []).filter((p) => p.academia_id === academia.id).map((p) => p.email as string),
+        ...(perfis ?? []).filter((p) => p.academia_id === academia.id).map((p) => emailDeRelatorio(p)),
       ]),
     ];
     const { compras, manutencoes } = await carregarPendencias(supabase, academia.id);

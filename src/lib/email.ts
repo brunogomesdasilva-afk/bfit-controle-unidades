@@ -27,3 +27,8 @@ export async function enviarEmail(opcoes: {
     attachments: opcoes.anexos?.map((a) => ({ filename: a.nome, content: a.conteudo })),
   });
 }
+
+// Para onde vão os relatórios de um usuário: o e-mail secundário ("E-mail para relatórios"), se preenchido; senão
+// o e-mail de acesso.
+export const emailDeRelatorio = (p: { email: string | null; email_relatorios?: string | null }) =>
+  (p.email_relatorios ?? "").trim() || (p.email ?? "");

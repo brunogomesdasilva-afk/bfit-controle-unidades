@@ -8,6 +8,8 @@ export type Profile = {
   ativo_alterado_em: string | null;
   ativo_alterado_por: string | null;
   created_at: string;
+  // E-mail secundário para os relatórios (vazio = usa o e-mail de acesso).
+  email_relatorios: string | null;
 };
 
 export type Academia = {
