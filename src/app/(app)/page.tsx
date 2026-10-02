@@ -150,28 +150,30 @@ function TabelaOrigens({
           Nenhuma passagem de outras unidades.
         </p>
       ) : (
-        <table className="w-full text-xs">
-          <thead className="text-slate-500">
-            <tr>
-              <th className="py-1 text-left font-medium">Unidade de origem</th>
-              <th className="py-1 text-right font-medium">Passagens</th>
-              <th className="py-1 text-right font-medium">Alunos</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {linhas.map((l) => (
-              <tr key={l.unidade_origem}>
-                <td className="py-1">{l.unidade_origem}</td>
-                <td className="py-1 text-right tabular-nums">
-                  {numero(l.passagens)}
-                </td>
-                <td className="py-1 text-right tabular-nums">
-                  {numero(l.alunos)}
-                </td>
+        <div className="overflow-auto">
+          <table className="w-full min-w-72 text-xs">
+            <thead className="text-slate-500">
+              <tr>
+                <th className="py-1 text-left font-medium">Unidade de origem</th>
+                <th className="py-1 text-right font-medium">Passagens</th>
+                <th className="py-1 text-right font-medium">Alunos</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {linhas.map((l) => (
+                <tr key={l.unidade_origem}>
+                  <td className="py-1">{l.unidade_origem}</td>
+                  <td className="py-1 text-right tabular-nums">
+                    {numero(l.passagens)}
+                  </td>
+                  <td className="py-1 text-right tabular-nums">
+                    {numero(l.alunos)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -236,44 +238,46 @@ function TabelaOcupacao({ professores }: { professores: OcupacaoProfessor[] }) {
     );
   const periodos = Object.keys(PERIODOS) as Periodo[];
   return (
-    <table className="w-full text-xs">
-      <thead className="text-slate-500">
-        <tr>
-          <th className="py-1 text-left font-medium">Professor</th>
-          {periodos.map((p) => (
-            <th key={p} className="py-1 text-right font-medium">
-              {PERIODOS[p]}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-100">
-        {nomes.map((n) => (
-          <tr key={n}>
-            <td className="py-1">{n}</td>
-            {periodos.map((p) => {
-              const x = professores.find(
-                (o) => o.professor === n && o.periodo === p,
-              );
-              return (
-                <td key={p} className="py-1 text-right tabular-nums">
-                  {x ? (
-                    <>
-                      <strong className="text-slate-900">
-                        {pctOcupacao(x.media)}
-                      </strong>{" "}
-                      <span className="text-slate-400">({x.aulas})</span>
-                    </>
-                  ) : (
-                    <span className="text-slate-300">—</span>
-                  )}
-                </td>
-              );
-            })}
+    <div className="overflow-auto">
+      <table className="w-full min-w-72 text-xs">
+        <thead className="text-slate-500">
+          <tr>
+            <th className="py-1 text-left font-medium">Professor</th>
+            {periodos.map((p) => (
+              <th key={p} className="py-1 text-right font-medium">
+                {PERIODOS[p]}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {nomes.map((n) => (
+            <tr key={n}>
+              <td className="py-1">{n}</td>
+              {periodos.map((p) => {
+                const x = professores.find(
+                  (o) => o.professor === n && o.periodo === p,
+                );
+                return (
+                  <td key={p} className="py-1 text-right tabular-nums">
+                    {x ? (
+                      <>
+                        <strong className="text-slate-900">
+                          {pctOcupacao(x.media)}
+                        </strong>{" "}
+                        <span className="text-slate-400">({x.aulas})</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
