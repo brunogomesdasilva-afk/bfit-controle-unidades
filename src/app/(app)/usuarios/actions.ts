@@ -13,12 +13,12 @@ function voltar(params: Record<string, string>): never {
 
 // O campo "acesso" da tela vale "admin" (todas as academias), "manutencao" (com as unidades marcadas) ou o id
 // de uma academia.
-async function lerAcesso(formData: FormData) {
+async function lerAcesso(formData: FormData, extra: Record<string, string> = {}) {
   const acesso = String(formData.get("acesso") ?? "");
   if (acesso === "admin") return { perfil: "admin", academia_id: null, academias_manutencao: [] as string[] };
   if (acesso === "manutencao") {
     const unidades = formData.getAll("unidades_manutencao").map(String).filter(Boolean);
-    if (!unidades.length) voltar({ erro: "Para o perfil Manutenção, marque as unidades que a pessoa atende." });
+    if (!unidades.length) voltar({ erro: "Para o perfil Manutenção, marque as unidades que a pessoa atende.", ...extra });
     const supabase = await createClient();
     const { data: validas } = await supabase.from("academias").select("id").in("id", unidades);
     return { perfil: "manutencao", academia_id: null, academias_manutencao: (validas ?? []).map((a) => a.id as string) };
@@ -28,7 +28,7 @@ async function lerAcesso(formData: FormData) {
   const { data: academia } = acesso
     ? await supabase.from("academias").select("id").eq("id", acesso).maybeSingle()
     : { data: null };
-  if (!academia) voltar({ erro: "Escolha o acesso do usuário: administrador ou uma academia." });
+  if (!academia) voltar({ erro: "Escolha o acesso do usuário: administrador ou uma academia.", ...extra });
   return { perfil: "usuario", academia_id: academia.id as string, academias_manutencao: [] as string[] };
 }
 
@@ -41,9 +41,9 @@ export async function criarUsuario(formData: FormData) {
   const emailRelatorios = String(formData.get("email_relatorios") ?? "").trim().toLowerCase();
   const whatsapp = normalizarCelular(String(formData.get("whatsapp") ?? ""));
 
-  if (!nome || !email) voltar({ erro: "Informe o nome e o e-mail." });
-  if (senha.length < 6) voltar({ erro: "A senha precisa ter pelo menos 6 caracteres." });
-  const acesso = await lerAcesso(formData);
+  if (!nome || !email) voltar({ erro: "Informe o nome e o e-mail.", novo: "1" });
+  if (senha.length < 6) voltar({ erro: "A senha precisa ter pelo menos 6 caracteres.", novo: "1" });
+  const acesso = await lerAcesso(formData, { novo: "1" });
 
   const admin = createAdminClient();
   if (!admin) {
@@ -58,7 +58,7 @@ export async function criarUsuario(formData: FormData) {
   });
   if (error || !data.user) {
     const jaExiste = error?.message.toLowerCase().includes("already");
-    voltar({ erro: jaExiste ? "Já existe um usuário com esse e-mail." : (error?.message ?? "Erro ao criar o usuário.") });
+    voltar({ erro: jaExiste ? "Já existe um usuário com esse e-mail." : (error?.message ?? "Erro ao criar o usuário."), novo: "1" });
   }
 
   // O perfil (linha em profiles) é criado por um gatilho do banco, ainda sem acesso; aqui ele recebe o acesso.
