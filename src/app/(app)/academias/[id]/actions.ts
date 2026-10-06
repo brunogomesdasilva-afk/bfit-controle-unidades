@@ -3,7 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { COM_CREF, DEPARTAMENTOS, GENEROS } from "@/lib/database.types";
+import { COM_CREF, DEPARTAMENTOS, GENEROS, PROFESSORES } from "@/lib/database.types";
 import { gradePelasContagens, somarDias } from "@/lib/fechamentoColetivas";
 import { hoje, mensagemErro, validar, verificarAcesso } from "@/lib/planilha";
 import type { Resultado } from "../../Planilha";
@@ -41,11 +41,14 @@ export async function salvarFuncionario(
       { campo: "ferias_limite", rotulo: "Limite para tirar férias", tipo: "data" },
       { campo: "cref", rotulo: "CREF", tipo: "texto" },
       { campo: "cref_vencimento", rotulo: "Vencimento do CREF", tipo: "data" },
+      { campo: "pj", rotulo: "PJ", tipo: "texto" },
     ],
     dados
   );
   if (erro || !registro) return { erro };
   (registro as Record<string, unknown>).ativo = registro.ativo !== "nao";
+  // PJ só vale para professores; nos outros departamentos fica sempre desmarcado.
+  (registro as Record<string, unknown>).pj = registro.pj === "sim" && PROFESSORES.includes(String(registro.departamento));
   // CREF só vale para professores de sala e de coletivas.
   if (!COM_CREF.includes(String(registro.departamento)) && (registro.cref || registro.cref_vencimento))
     return { erro: "CREF e vencimento do CREF são só para Professores e Professor de coletivas." };

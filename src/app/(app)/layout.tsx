@@ -129,6 +129,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         academias={academias}
         recolhidoInicial={recolhido}
         submenusIniciais={submenusAbertos}
+        modulos={atual?.modulos ?? []}
       />
       <main className="min-w-0 flex-1 px-3 py-4 md:px-6 md:py-6 print:p-0">
         {manutencao && (
@@ -136,8 +137,9 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             Sistema em manutenção (backup): só você está acessando. Se nenhum backup estiver rodando, libere em Backup.
           </p>
         )}
-        {atual && <AvisoContagens sessao={sessao} />}
-        {atual && <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />}
+        {/* Avisos das academias: só para quem usa o módulo Academia. */}
+        {atual?.modulos.includes("academia") && <AvisoContagens sessao={sessao} />}
+        {atual?.modulos.includes("academia") && <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />}
         <LembreteAniversario dia={dataHoje} lembretes={lembretes} />
         {children}
       </main>

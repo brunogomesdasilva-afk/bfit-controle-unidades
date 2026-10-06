@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { logout } from "@/app/login/actions";
+import { moduloDaRota, type Modulo } from "@/lib/modulos";
 
 function Icone({ children }: { children: ReactNode }) {
   return (
@@ -256,6 +257,45 @@ const ITENS: ItemMenu[] = [
     ],
   },
   {
+    href: "/rh",
+    rotulo: "RH",
+    ativo: (p: string) => p === "/rh",
+    icone: (
+      <Icone>
+        {/* crachá */}
+        <rect x="4" y="3" width="16" height="18" rx="2" />
+        <circle cx="12" cy="10" r="3" />
+        <path d="M8 17c0-2 2-3 4-3s4 1 4 3" />
+      </Icone>
+    ),
+    filhos: [
+      {
+        href: "/rh/folha",
+        rotulo: "Conferência da folha",
+        ativo: (p: string) => p === "/rh/folha",
+        icone: (
+          <Icone>
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <polyline points="9 15 11 17 15 13" />
+          </Icone>
+        ),
+      },
+    ],
+  },
+  {
+    href: "/financeiro",
+    rotulo: "Financeiro",
+    ativo: (p: string) => p === "/financeiro",
+    icone: (
+      <Icone>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <circle cx="12" cy="12" r="2.5" />
+        <path d="M6 9v.01M18 15v.01" />
+      </Icone>
+    ),
+  },
+  {
     href: "/thais",
     rotulo: "Thais",
     somenteAdmin: true,
@@ -478,9 +518,11 @@ export function Sidebar({
   academias,
   recolhidoInicial,
   submenusIniciais,
+  modulos,
 }: {
   nome: string;
   perfil: "admin" | "usuario" | "manutencao";
+  modulos: Modulo[];
   academiaNome: string | null;
   academias: { id: string; nome: string }[];
   recolhidoInicial: boolean;
@@ -497,6 +539,8 @@ export function Sidebar({
     (item) =>
       !item.oculto &&
       (!item.somenteAdmin || perfil === "admin") &&
+      // Só os menus dos módulos que o usuário tem.
+      modulos.includes(moduloDaRota(item.href) ?? "academia") &&
       // Perfil Manutenção: só o menu Manutenção.
       (perfil !== "manutencao" || item.href === "/manutencao")
   ).map((item) =>

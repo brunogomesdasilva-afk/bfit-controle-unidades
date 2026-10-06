@@ -14,6 +14,8 @@ export type Profile = {
   whatsapp: string | null;
   // Perfil Manutenção: unidades que a pessoa atende.
   academias_manutencao: string[];
+  // Módulos que o usuário pode usar (academia, rh, financeiro, adm). Ausente se o banco ainda não tiver a coluna.
+  modulos?: string[];
 };
 
 export type Academia = {
@@ -87,10 +89,14 @@ export type Funcionario = {
   cref_vencimento: string | null;
   data_contratacao: string | null;
   ferias_limite: string | null;
+  pj: boolean;
 };
 
 // Departamentos que precisam de CREF (professores de sala e de coletivas).
 export const COM_CREF = ["professores", "professor_coletivas"];
+
+// Departamentos de professores: só eles têm a marcação de PJ.
+export const PROFESSORES = ["professores", "professor_coletivas", "professor_lutas"];
 
 export type Modalidade = {
   id: string;

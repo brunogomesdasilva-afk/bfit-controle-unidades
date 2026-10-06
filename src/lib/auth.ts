@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { inicioDoUsuario, modulosDoPerfil, type Modulo } from "@/lib/modulos";
 import { createClient } from "@/lib/supabase/server";
 
 export type PerfilAtual = {
@@ -9,6 +10,8 @@ export type PerfilAtual = {
   // Academia que o usuário pode acessar (administrador acessa todas e fica sem academia).
   academiaId: string | null;
   academiaNome: string | null;
+  // Módulos que o usuário pode usar (Academia, RH, Financeiro, ADM).
+  modulos: Modulo[];
 };
 
 export async function getPerfilAtual(): Promise<PerfilAtual | null> {
@@ -18,9 +21,10 @@ export async function getPerfilAtual(): Promise<PerfilAtual | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  // "*": se o banco ainda não tiver a coluna "modulos", a consulta não falha (modulosDoPerfil supre).
   const completo = await supabase
     .from("profiles")
-    .select("nome, perfil, ativo, academia_id, academia:academias(nome)")
+    .select("*, academia:academias(nome)")
     .eq("id", user.id)
     .single();
   let data = completo.data;
@@ -44,12 +48,29 @@ export async function getPerfilAtual(): Promise<PerfilAtual | null> {
     perfil: admin ? "admin" : manutencao ? "manutencao" : "usuario",
     academiaId: admin || manutencao ? null : (data?.academia_id ?? null),
     academiaNome: admin ? null : manutencao ? "Manutenção" : (academia?.nome ?? null),
+    modulos: modulosDoPerfil(data as { perfil?: string; modulos?: string[] } | null),
   };
 }
 
+// Acesso a todas as academias (perfil administrador), para as telas e ações de dados de todas as unidades.
 export async function exigirAdmin(): Promise<PerfilAtual> {
   const atual = await getPerfilAtual();
   if (!atual) redirect("/login");
-  if (atual.perfil !== "admin") redirect("/");
+  if (atual.perfil !== "admin") redirect(inicioDoUsuario(atual.modulos));
+  return atual;
+}
+
+// O módulo ADM (Usuários e Backup) só vale para quem também acessa todas as academias.
+export function temModulo(atual: PerfilAtual | null, modulo: Modulo) {
+  if (!atual || !atual.modulos.includes(modulo)) return false;
+  return modulo !== "adm" || atual.perfil === "admin";
+}
+
+// Telas de um módulo: quem não tem o módulo vai para a tela inicial dele (o proxy já barra antes; aqui é a
+// segunda trava, no servidor).
+export async function exigirModulo(modulo: Modulo): Promise<PerfilAtual> {
+  const atual = await getPerfilAtual();
+  if (!atual) redirect("/login");
+  if (!temModulo(atual, modulo)) redirect(inicioDoUsuario(atual.modulos));
   return atual;
 }

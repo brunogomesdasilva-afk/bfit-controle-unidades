@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { exigirAdmin } from "@/lib/auth";
+import { exigirModulo } from "@/lib/auth";
+import { MODULOS, type Modulo } from "@/lib/modulos";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { normalizarCelular } from "@/lib/whatsapp";
@@ -11,9 +12,24 @@ function voltar(params: Record<string, string>): never {
   redirect(`/usuarios?${new URLSearchParams(params).toString()}`);
 }
 
+// Acesso (quais academias) + módulos marcados (o que a pessoa pode usar).
+async function lerAcesso(formData: FormData, extra: Record<string, string> = {}) {
+  const acesso = await lerAcademias(formData, extra);
+  // Perfil Manutenção só usa a tela de Manutenção, que é do módulo Academia.
+  if (acesso.perfil === "manutencao") return { ...acesso, modulos: ["academia"] as Modulo[] };
+  const modulos = formData
+    .getAll("modulos")
+    .map(String)
+    .filter((m): m is Modulo => m in MODULOS);
+  if (!modulos.length) voltar({ erro: "Marque pelo menos um módulo para o usuário.", ...extra });
+  if (modulos.includes("adm") && acesso.perfil !== "admin")
+    voltar({ erro: "O módulo ADM (Usuários e Backup) só pode ser dado a quem acessa todas as academias.", ...extra });
+  return { ...acesso, modulos };
+}
+
 // O campo "acesso" da tela vale "admin" (todas as academias), "manutencao" (com as unidades marcadas) ou o id
 // de uma academia.
-async function lerAcesso(formData: FormData, extra: Record<string, string> = {}) {
+async function lerAcademias(formData: FormData, extra: Record<string, string> = {}) {
   const acesso = String(formData.get("acesso") ?? "");
   if (acesso === "admin") return { perfil: "admin", academia_id: null, academias_manutencao: [] as string[] };
   if (acesso === "manutencao") {
@@ -33,7 +49,7 @@ async function lerAcesso(formData: FormData, extra: Record<string, string> = {})
 }
 
 export async function criarUsuario(formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
 
   const nome = String(formData.get("nome") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -74,7 +90,7 @@ export async function criarUsuario(formData: FormData) {
 
 // O nome é o que aparece no sistema no lugar do e-mail.
 export async function alterarNomeUsuario(usuarioId: string, formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const nome = String(formData.get("nome") ?? "").trim().slice(0, 80);
   if (!nome) voltar({ erro: "Informe o nome." });
 
@@ -87,7 +103,7 @@ export async function alterarNomeUsuario(usuarioId: string, formData: FormData) 
 }
 
 export async function alterarAcessoUsuario(usuarioId: string, formData: FormData) {
-  const atual = await exigirAdmin();
+  const atual = await exigirModulo("adm");
   if (usuarioId === atual.id) voltar({ erro: "Você não pode alterar o seu próprio acesso." });
   const acesso = await lerAcesso(formData);
 
@@ -101,7 +117,7 @@ export async function alterarAcessoUsuario(usuarioId: string, formData: FormData
 
 // O e-mail é o login do usuário: troca no Supabase Auth (precisa da chave de serviço) e no perfil.
 export async function alterarEmailUsuario(usuarioId: string, formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email || !email.includes("@")) voltar({ erro: "Informe um e-mail válido.", editarEmail: usuarioId });
 
@@ -133,7 +149,7 @@ export async function alterarEmailUsuario(usuarioId: string, formData: FormData)
 // esqueceu a senha inicial e não tem acesso ao e-mail no momento). O usuário passa a entrar com essa
 // senha; vale a pena avisá-lo por fora do sistema (telefone, presencialmente etc.), nunca por aqui.
 export async function redefinirSenhaUsuario(usuarioId: string, formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const senha = String(formData.get("senha") ?? "");
   const confirmacao = String(formData.get("confirmacao") ?? "");
 
@@ -160,7 +176,7 @@ export async function redefinirSenhaUsuario(usuarioId: string, formData: FormDat
 
 // Ativa ou inativa um usuário (nunca exclui, para preservar o histórico).
 export async function alterarStatusUsuario(usuarioId: string, formData: FormData) {
-  const atual = await exigirAdmin();
+  const atual = await exigirModulo("adm");
   const ativar = String(formData.get("ativo") ?? "") === "true";
 
   if (usuarioId === atual.id) voltar({ erro: "Você não pode inativar o seu próprio usuário." });
@@ -187,7 +203,7 @@ export async function alterarStatusUsuario(usuarioId: string, formData: FormData
 
 // E-mail para relatórios (secundário): vazio = os relatórios vão para o e-mail de acesso.
 export async function alterarEmailRelatorios(usuarioId: string, formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const email = String(formData.get("email_relatorios") ?? "").trim().toLowerCase();
   if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) voltar({ erro: "Informe um e-mail válido para os relatórios (ou deixe em branco)." });
 
@@ -201,7 +217,7 @@ export async function alterarEmailRelatorios(usuarioId: string, formData: FormDa
 
 // Celular (WhatsApp) para receber os relatórios: vazio = não recebe por WhatsApp.
 export async function alterarWhatsappUsuario(usuarioId: string, formData: FormData) {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const digitado = String(formData.get("whatsapp") ?? "").trim();
   const celular = digitado ? normalizarCelular(digitado) : null;
   if (digitado && !celular) voltar({ erro: "Informe o WhatsApp com DDD, por exemplo (11) 98888-7777 (ou deixe em branco)." });

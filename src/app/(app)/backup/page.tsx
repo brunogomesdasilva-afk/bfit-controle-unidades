@@ -1,4 +1,4 @@
-import { exigirAdmin } from "@/lib/auth";
+import { exigirModulo } from "@/lib/auth";
 import { MANTER, PASTA_BACKUPS } from "@/lib/backup";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fazerBackup, liberarSistema } from "./actions";
@@ -10,7 +10,7 @@ export const maxDuration = 300;
 // Backup do sistema (só administrador): um .zip com o código-fonte, os dados em Excel e o banco
 // (schema + CSV). Enquanto roda, o sistema fica em manutenção e só o administrador acessa.
 export default async function BackupPage() {
-  await exigirAdmin();
+  await exigirModulo("adm");
   const db = createAdminClient();
   const [{ data: estado }, { data: guardados }] = await Promise.all([
     db ? db.from("sistema_estado").select("*").eq("id", 1).maybeSingle() : Promise.resolve({ data: null }),

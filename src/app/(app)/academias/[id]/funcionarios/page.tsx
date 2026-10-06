@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { COM_CREF, DEPARTAMENTOS, GENEROS, type Funcionario } from "@/lib/database.types";
+import { COM_CREF, DEPARTAMENTOS, GENEROS, PROFESSORES, type Funcionario } from "@/lib/database.types";
 import { Planilha, type Coluna, type Linha } from "../../../Planilha";
 import { excluirFuncionario, salvarFuncionario } from "../actions";
 
 const lista = (opcoes: Record<string, string>) => Object.entries(opcoes).map(([valor, rotulo]) => ({ valor, rotulo }));
+const SIM_NAO = lista({ sim: "Sim", nao: "Não" });
 
-// Colunas de cada departamento: CREF só nos professores de sala e de coletivas. O departamento continua
+// Colunas de cada departamento: CREF só nos professores de sala e de coletivas; PJ em todos os professores. O departamento continua
 // editável (para mudar a pessoa de departamento), mas já vem preenchido no bloco em que ela é incluída.
 function colunas(departamento: string): Coluna[] {
   return [
@@ -24,16 +25,16 @@ function colunas(departamento: string): Coluna[] {
           { campo: "cref_vencimento", rotulo: "Vencimento do CREF", tipo: "data", largura: "w-44" },
         ] as Coluna[])
       : []),
+    ...(PROFESSORES.includes(departamento)
+      ? ([{ campo: "pj", rotulo: "PJ", tipo: "opcoes", obrigatorio: true, largura: "w-28", opcoes: SIM_NAO }] as Coluna[])
+      : []),
     {
       campo: "ativo",
       rotulo: "Ativo",
       tipo: "opcoes",
       obrigatorio: true,
       largura: "w-28",
-      opcoes: [
-        { valor: "sim", rotulo: "Sim" },
-        { valor: "nao", rotulo: "Não" },
-      ],
+      opcoes: SIM_NAO,
     },
   ];
 }
@@ -61,6 +62,7 @@ export default async function FuncionariosPage({ params, searchParams }: PagePro
     ferias_limite: f.ferias_limite,
     cref: f.cref,
     cref_vencimento: f.cref_vencimento,
+    pj: f.pj ? "sim" : "nao",
   });
   const filtro = (ativo: boolean, rotulo: string, href: string) => (
     <Link
@@ -104,7 +106,7 @@ export default async function FuncionariosPage({ params, searchParams }: PagePro
                 salvar={salvarFuncionario.bind(null, id)}
                 excluir={excluirFuncionario}
                 rotuloNovo={`+ Novo em ${nome}`}
-                padroesNovo={{ ativo: "sim", departamento }}
+                padroesNovo={{ ativo: "sim", pj: "nao", departamento }}
                 vazio={`Nenhum funcionário em ${nome}.`}
               />
             </div>

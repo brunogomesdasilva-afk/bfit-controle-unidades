@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { exigirAdmin } from "@/lib/auth";
+import { exigirModulo } from "@/lib/auth";
 import type { Academia, Profile } from "@/lib/database.types";
+import { DESCRICAO_MODULOS, MODULOS, modulosDoPerfil, type Modulo } from "@/lib/modulos";
 import {
   alterarAcessoUsuario,
   alterarEmailRelatorios,
@@ -54,6 +55,28 @@ function UnidadesManutencao({
   );
 }
 
+// Módulos que o usuário pode usar: uma caixa para cada (Academia, RH, Financeiro, ADM).
+function CaixasModulos({ marcados }: { marcados: Modulo[] }) {
+  return (
+    <fieldset className="mt-2">
+      <legend className="text-xs font-medium text-slate-700">Módulos</legend>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {(Object.keys(MODULOS) as Modulo[]).map((m) => (
+          <label key={m} className="flex items-center gap-1.5 text-sm text-slate-700" title={DESCRICAO_MODULOS[m]}>
+            <input type="checkbox" name="modulos" value={m} defaultChecked={marcados.includes(m)} className="h-4 w-4 accent-marca" />
+            {MODULOS[m]}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+const nomesDosModulos = (u: Profile) => {
+  const modulos = modulosDoPerfil(u);
+  return modulos.length ? modulos.map((m) => MODULOS[m]).join(", ") : "nenhum módulo";
+};
+
 function OpcoesAcesso({ academias }: { academias: Academia[] }) {
   return (
     <>
@@ -83,7 +106,7 @@ export default async function UsuariosPage({
     novo?: string;
   }>;
 }) {
-  const atual = await exigirAdmin();
+  const atual = await exigirModulo("adm");
   const {
     erro,
     ok,
@@ -132,9 +155,14 @@ export default async function UsuariosPage({
           )}
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          O administrador vê todas as academias e gerencia o sistema. Os demais
-          usuários só veem e lançam compras e manutenções da academia do seu
-          acesso.
+          O acesso define quais academias o usuário vê (todas ou só uma). Os
+          módulos definem o que ele pode usar: {(Object.keys(MODULOS) as Modulo[]).map((m, i) => (
+            <span key={m}>
+              {i > 0 && "; "}
+              <strong className="font-medium text-slate-700">{MODULOS[m]}</strong> ({DESCRICAO_MODULOS[m]})
+            </span>
+          ))}
+          .
         </p>
 
         {erro && (
@@ -221,9 +249,10 @@ export default async function UsuariosPage({
                   Escolhendo uma academia, o usuário vê só os dados dela.
                   Manutenção: só a tela de Manutenção das unidades marcadas
                   abaixo, e recebe por WhatsApp/e-mail só as manutenções
-                  pendentes delas.
+                  pendentes delas (os módulos não se aplicam).
                 </p>
                 <UnidadesManutencao academias={academias} marcadas={[]} />
+                <CaixasModulos marcados={["academia"]} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700">
@@ -469,6 +498,7 @@ export default async function UsuariosPage({
                             : (nomeAcademia.get(u.academia_id ?? "") ??
                               "Sem acesso")}{" "}
                         (você)
+                        <span className="mt-1 block text-xs text-slate-500">Módulos: {nomesDosModulos(u)}</span>
                       </span>
                     ) : (
                       <form action={alterarAcessoUsuario.bind(null, u.id)}>
@@ -492,6 +522,7 @@ export default async function UsuariosPage({
                           academias={academias}
                           marcadas={u.academias_manutencao ?? []}
                         />
+                        <CaixasModulos marcados={modulosDoPerfil(u)} />
                       </form>
                     )}
                   </td>

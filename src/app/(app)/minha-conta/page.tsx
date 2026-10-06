@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getPerfilAtual } from "@/lib/auth";
+import { MODULOS } from "@/lib/modulos";
 import { alterarMinhaSenha } from "./actions";
 
 const CAMPO = "mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm";
@@ -17,7 +18,8 @@ export default async function MinhaContaPage({
     <div className="mx-auto max-w-md">
       <h1 className="text-lg font-semibold text-slate-900">Minha conta</h1>
       <p className="mt-1 text-sm text-slate-500">
-        {atual.nome} · {atual.perfil === "admin" ? "Administrador (todas as academias)" : (atual.academiaNome ?? "Sem acesso a academia")}
+        {atual.nome} · {atual.perfil === "admin" ? "Administrador (todas as academias)" : (atual.academiaNome ?? "Sem acesso a academia")} · Módulos:{" "}
+        {atual.modulos.length ? atual.modulos.map((m) => MODULOS[m]).join(", ") : "nenhum"}
       </p>
 
       <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6">

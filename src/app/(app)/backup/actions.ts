@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { getPerfilAtual } from "@/lib/auth";
+import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { MANTER, montarBackup, PASTA_BACKUPS } from "@/lib/backup";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -11,7 +11,7 @@ export type ResultadoBackup = { erro?: string; ok?: string; url?: string; aviso?
 // guarda no armazenamento (ficam só os 2 últimos), libera o sistema e devolve o link para baixar.
 export async function fazerBackup(): Promise<ResultadoBackup> {
   const atual = await getPerfilAtual();
-  if (atual?.perfil !== "admin") return { erro: "Só o administrador pode fazer o backup." };
+  if (!atual || !temModulo(atual, "adm")) return { erro: "Só quem tem o módulo ADM pode fazer o backup." };
   const db = createAdminClient();
   if (!db) return { erro: "Chave de serviço do Supabase não configurada no servidor." };
 
@@ -56,7 +56,7 @@ export async function fazerBackup(): Promise<ResultadoBackup> {
 // Libera o sistema se ele ficou em manutenção (ex.: o backup foi interrompido no meio).
 export async function liberarSistema(): Promise<ResultadoBackup> {
   const atual = await getPerfilAtual();
-  if (atual?.perfil !== "admin") return { erro: "Só o administrador pode liberar o sistema." };
+  if (!atual || !temModulo(atual, "adm")) return { erro: "Só quem tem o módulo ADM pode liberar o sistema." };
   const db = createAdminClient();
   if (!db) return { erro: "Chave de serviço do Supabase não configurada no servidor." };
   const { error } = await db.from("sistema_estado").update({ manutencao: false, motivo: null }).eq("id", 1);

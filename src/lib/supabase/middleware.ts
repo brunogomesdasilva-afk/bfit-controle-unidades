@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { inicioDoUsuario, moduloDaRota, modulosDoPerfil } from "@/lib/modulos";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -35,20 +36,31 @@ export async function updateSession(request: NextRequest) {
 
   // Usuário inativo: encerra a sessão e volta para o login com um aviso.
   if (user) {
-    const { data: perfil } = await supabase.from("profiles").select("ativo, perfil").eq("id", user.id).single();
-    // Perfil Manutenção: só a tela de Manutenção e Minha conta.
+    // "*": se o banco ainda não tiver a coluna "modulos", a consulta não falha (modulosDoPerfil supre).
+    const { data: perfil } = await supabase.from("profiles").select("*").eq("id", user.id).single();
     const caminho = request.nextUrl.pathname;
+    const irPara = (pathname: string) => {
+      const url = request.nextUrl.clone();
+      url.pathname = pathname;
+      url.search = "";
+      const redirecionamento = NextResponse.redirect(url);
+      supabaseResponse.cookies.getAll().forEach((c) => redirecionamento.cookies.set(c));
+      return redirecionamento;
+    };
+    // Perfil Manutenção: só a tela de Manutenção e Minha conta.
     if (
       perfil?.perfil === "manutencao" &&
       perfil.ativo !== false &&
       !["/manutencao", "/minha-conta", "/login", "/auth/"].some((p) => caminho.startsWith(p))
     ) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/manutencao";
-      url.search = "";
-      const redirecionamento = NextResponse.redirect(url);
-      supabaseResponse.cookies.getAll().forEach((c) => redirecionamento.cookies.set(c));
-      return redirecionamento;
+      return irPara("/manutencao");
+    }
+    // Módulos: tela (ou ação de tela) de um módulo que o usuário não tem vai para a tela inicial dele.
+    // A tela inicial é sempre de um módulo que ele tem (ou Minha conta), então não entra em laço.
+    if (perfil && perfil.ativo !== false) {
+      const modulo = moduloDaRota(caminho);
+      const modulos = modulosDoPerfil(perfil);
+      if (modulo && !modulos.includes(modulo)) return irPara(inicioDoUsuario(modulos));
     }
     if (perfil?.ativo === false) {
       await supabase.auth.signOut();
