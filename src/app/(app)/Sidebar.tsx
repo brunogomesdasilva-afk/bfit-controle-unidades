@@ -35,9 +35,11 @@ type ItemMenu = {
   ativo: (pathname: string) => boolean;
   icone: ReactNode;
   filhos?: ItemMenu[];
+  // Só agrupa menus (não tem tela própria): clicar abre e fecha o submenu.
+  grupo?: boolean;
 };
 
-const ITENS: ItemMenu[] = [
+const TODOS: ItemMenu[] = [
   {
     href: "/",
     rotulo: "Painel",
@@ -364,6 +366,31 @@ const ITENS: ItemMenu[] = [
   },
 ];
 
+// Menus do dia a dia das academias, agrupados em "Operação" (na ordem em que aparecem acima).
+const DA_OPERACAO = ["/", "/academias", "/vendas", "/frequencia", "/compras", "/manutencao", "/avaliacao/adb", "/relatorios", "/clientes"];
+
+const ITENS: ItemMenu[] = [
+  {
+    href: "/operacao",
+    rotulo: "Operação",
+    grupo: true,
+    ativo: () => false,
+    icone: (
+      <Icone>
+        <polygon points="12 2 2 7 12 12 22 7 12 2" />
+        <polyline points="2 17 12 22 22 17" />
+        <polyline points="2 12 12 17 22 12" />
+      </Icone>
+    ),
+    filhos: TODOS.filter((i) => DA_OPERACAO.includes(i.href)),
+  },
+  ...TODOS.filter((i) => !DA_OPERACAO.includes(i.href)),
+];
+
+// A página atual é este item ou está em algum submenu dele?
+const contem = (item: ItemMenu, caminho: string): boolean =>
+  item.ativo(caminho) || (item.filhos?.some((f) => contem(f, caminho)) ?? false);
+
 // "Academias" ganha um submenu por academia cadastrada e, dentro de cada uma, os cadastros dela.
 const CADASTROS_DA_ACADEMIA = [
   {
@@ -470,32 +497,64 @@ function LinkMenu({
   recolhido,
   filho,
   forcarAtivo,
+  aoClicarGrupo,
 }: {
   item: ItemMenu;
   pathname: string;
   recolhido: boolean;
   filho?: boolean;
   forcarAtivo?: boolean;
+  // Item de grupo (sem tela): vira um botão que abre e fecha o submenu.
+  aoClicarGrupo?: () => void;
 }) {
   const ativo = forcarAtivo || item.ativo(pathname);
-  return (
-    <Link
-      href={item.href}
-      title={recolhido ? item.rotulo : undefined}
-      aria-label={item.rotulo}
-      aria-current={ativo ? "page" : undefined}
-      className={`flex items-center gap-3 rounded-md px-3 py-2 ${filho && !recolhido ? "text-[13px]" : "text-sm"} ${
-        recolhido ? "justify-center" : ""
-      } ${
-        ativo
-          ? "bg-white/10 font-medium text-white shadow-[inset_3px_0_0_var(--color-marca-claro)]"
-          : "text-slate-300 hover:bg-white/5 hover:text-white"
-      }`}
-    >
+  const classe = `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${filho && !recolhido ? "text-[13px]" : "text-sm"} ${
+    recolhido ? "justify-center" : ""
+  } ${
+    ativo
+      ? "bg-white/10 font-medium text-white shadow-[inset_3px_0_0_var(--color-marca-claro)]"
+      : "text-slate-300 hover:bg-white/5 hover:text-white"
+  }`;
+  const conteudo = (
+    <>
       {item.icone}
       {!recolhido && <span className={filho ? "leading-tight" : "truncate"}>{item.rotulo}</span>}
+    </>
+  );
+  if (item.grupo)
+    return (
+      <button type="button" onClick={aoClicarGrupo} title={recolhido ? item.rotulo : undefined} aria-label={item.rotulo} className={classe}>
+        {conteudo}
+      </button>
+    );
+  return (
+    <Link href={item.href} title={recolhido ? item.rotulo : undefined} aria-label={item.rotulo} aria-current={ativo ? "page" : undefined} className={classe}>
+      {conteudo}
     </Link>
   );
+}
+
+// Seta que abre e fecha um submenu.
+function BotaoSeta({ aberto, rotulo, onClick }: { aberto: boolean; rotulo: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-expanded={aberto}
+      aria-label={aberto ? `Recolher ${rotulo}` : `Expandir ${rotulo}`}
+      title={aberto ? "Recolher submenu" : "Expandir submenu"}
+      className="ml-1 shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        {aberto ? <polyline points="6 9 12 15 18 9" /> : <polyline points="9 6 15 12 9 18" />}
+      </svg>
+    </button>
+  );
+}
+
+// Preferências do menu guardadas por um ano (lidas pelo layout no servidor).
+function gravarCookie(nome: string, valor: string) {
+  document.cookie = `${nome}=${valor}; path=/; max-age=31536000; samesite=lax`;
 }
 
 // Tela de computador (md ou maior). No servidor considera computador; no celular o menu vira uma gaveta.
@@ -535,40 +594,63 @@ export function Sidebar({
   const recolhido = recolhidoNoComputador && telaGrande;
   const [aberto, setAberto] = useState(false);
 
-  const itens = ITENS.filter(
-    (item) =>
-      !item.oculto &&
-      (!item.somenteAdmin || perfil === "admin") &&
-      // Só os menus dos módulos que o usuário tem.
-      modulos.includes(moduloDaRota(item.href) ?? "academia") &&
-      // Perfil Manutenção: só o menu Manutenção.
-      (perfil !== "manutencao" || item.href === "/manutencao")
-  ).map((item) =>
-    item.href === "/academias" ? comSubmenuDeAcademias(item, academias) : item
-  );
-  // Menu com submenu da página atual (ex.: em Vendas → Diário, o de Vendas).
-  const menuDaPagina = (caminho: string) => itens.find((i) => i.filhos?.some((f) => f.ativo(caminho)))?.href ?? null;
+  // Filtra em todos os níveis; grupo que fica sem nenhum menu some.
+  const filtrar = (lista: ItemMenu[]): ItemMenu[] =>
+    lista
+      .filter(
+        (item) =>
+          !item.oculto &&
+          (!item.somenteAdmin || perfil === "admin") &&
+          // Só os menus dos módulos que o usuário tem.
+          modulos.includes(moduloDaRota(item.href) ?? "academia") &&
+          // Perfil Manutenção: só o menu Manutenção (e o grupo em que ele está).
+          (perfil !== "manutencao" || item.href === "/manutencao" || Boolean(item.grupo))
+      )
+      .map((item) =>
+        item.href === "/academias"
+          ? comSubmenuDeAcademias(item, academias)
+          : item.filhos
+            ? { ...item, filhos: filtrar(item.filhos) }
+            : item
+      )
+      .filter((item) => !item.grupo || (item.filhos?.length ?? 0) > 0);
+  const itens = filtrar(ITENS);
+  // Menu (e, dentro dele, o submenu) da página atual: ex.: em Vendas → Diário, Operação e Vendas.
+  const menuDaPagina = (caminho: string) => itens.find((i) => i.filhos?.some((f) => contem(f, caminho)))?.href ?? null;
+  const submenuDaPagina = (caminho: string) =>
+    itens.flatMap((i) => i.filhos ?? []).find((f) => f.filhos?.some((n) => contem(n, caminho)))?.href ?? null;
 
-  // Só um submenu aberto por vez: abrir um fecha os outros. Ao navegar para a página de outro menu, ele abre
-  // sozinho e os demais fecham; o botão da seta abre e fecha livremente (inclusive o da página atual).
+  // Só um submenu aberto por vez em cada nível: abrir um fecha os outros. Ao navegar para a página de outro
+  // menu, ele abre sozinho e os demais fecham; a seta abre e fecha livremente (inclusive o da página atual).
   const [submenuAberto, setSubmenuAberto] = useState<string | null>(() => menuDaPagina(pathname) ?? submenusIniciais[0] ?? null);
+  const [segundoNivelAberto, setSegundoNivelAberto] = useState<string | null>(() => submenuDaPagina(pathname));
   const [paginaAnterior, setPaginaAnterior] = useState(pathname);
   if (pathname !== paginaAnterior) {
     setPaginaAnterior(pathname);
     const daPagina = menuDaPagina(pathname);
     if (daPagina && daPagina !== submenuAberto) setSubmenuAberto(daPagina);
+    const subDaPagina = submenuDaPagina(pathname);
+    if (subDaPagina && subDaPagina !== segundoNivelAberto) setSegundoNivelAberto(subDaPagina);
   }
 
   function alternarSubmenu(href: string) {
     const proximo = submenuAberto === href ? null : href;
     setSubmenuAberto(proximo);
-    document.cookie = `submenus_abertos=${encodeURIComponent(proximo ?? "")}; path=/; max-age=31536000; samesite=lax`;
+    gravarCookie("submenus_abertos", encodeURIComponent(proximo ?? ""));
   }
 
   function alternar() {
     const proximo = !recolhidoNoComputador;
     setRecolhido(proximo);
-    document.cookie = `sidebar_recolhido=${proximo ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+    gravarCookie("sidebar_recolhido", proximo ? "1" : "0");
+  }
+
+  // Grupo clicado com o menu recolhido: expande o menu já com o grupo aberto.
+  function abrirGrupo(href: string) {
+    if (recolhido) {
+      alternar();
+      if (submenuAberto !== href) alternarSubmenu(href);
+    } else alternarSubmenu(href);
   }
 
   return (
@@ -639,9 +721,9 @@ export function Sidebar({
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-2">
         {itens.map((item) => {
-          // Com o submenu recolhido, o item pai fica destacado se a página atual for de um dos filhos.
-          const filhoAtivo = item.filhos?.some((f) => f.ativo(pathname)) ?? false;
+          // Com o submenu fechado, o item pai fica destacado se a página atual estiver dentro dele.
           const estaAberto = submenuAberto === item.href;
+          const destacar = (item.filhos?.some((f) => contem(f, pathname)) ?? false) && (!estaAberto || recolhido);
           return (
             <div key={item.href} className="space-y-1">
               <div className="flex items-center">
@@ -650,49 +732,59 @@ export function Sidebar({
                     item={item}
                     pathname={pathname}
                     recolhido={recolhido}
-                    forcarAtivo={filhoAtivo && !estaAberto}
+                    forcarAtivo={destacar}
+                    aoClicarGrupo={() => abrirGrupo(item.href)}
                   />
                 </div>
                 {item.filhos && !recolhido && (
-                  <button
-                    type="button"
-                    onClick={() => alternarSubmenu(item.href)}
-                    aria-expanded={estaAberto}
-                    aria-label={estaAberto ? `Recolher ${item.rotulo}` : `Expandir ${item.rotulo}`}
-                    title={estaAberto ? "Recolher submenu" : "Expandir submenu"}
-                    className="ml-1 shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      aria-hidden="true"
-                    >
-                      {estaAberto ? <polyline points="6 9 12 15 18 9" /> : <polyline points="9 6 15 12 9 18" />}
-                    </svg>
-                  </button>
+                  <BotaoSeta aberto={estaAberto} rotulo={item.rotulo} onClick={() => alternarSubmenu(item.href)} />
                 )}
               </div>
               {item.filhos && !recolhido && estaAberto && (
                 <div className="ml-5 space-y-1 border-l border-white/15 pl-2">
-                  {item.filhos.filter((filho) => !filho.somenteAdmin || perfil === "admin").map((filho) => (
-                    <div key={filho.href} className="space-y-1">
-                      <LinkMenu item={filho} pathname={pathname} recolhido={recolhido} filho />
-                      {/* Terceiro nível (ex.: cadastros de uma academia): aparece quando se está dentro dela. */}
-                      {filho.filhos && filho.ativo(pathname) && (
-                        <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
-                          {filho.filhos.map((neto) => (
-                            <LinkMenu key={neto.href} item={neto} pathname={pathname} recolhido={recolhido} filho />
-                          ))}
+                  {item.filhos.map((filho) => {
+                    const filhoAberto = segundoNivelAberto === filho.href;
+                    return (
+                      <div key={filho.href} className="space-y-1">
+                        <div className="flex items-center">
+                          <div className="min-w-0 flex-1">
+                            <LinkMenu
+                              item={filho}
+                              pathname={pathname}
+                              recolhido={recolhido}
+                              filho
+                              forcarAtivo={!filhoAberto && (filho.filhos?.some((n) => contem(n, pathname)) ?? false)}
+                            />
+                          </div>
+                          {/* Submenu dentro de um grupo (ex.: Operação → Vendas): tem a própria seta. */}
+                          {filho.filhos && item.grupo && (
+                            <BotaoSeta
+                              aberto={filhoAberto}
+                              rotulo={filho.rotulo}
+                              onClick={() => setSegundoNivelAberto(filhoAberto ? null : filho.href)}
+                            />
+                          )}
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        {filho.filhos && (item.grupo ? filhoAberto : filho.ativo(pathname)) && (
+                          <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                            {filho.filhos.map((neto) => (
+                              <div key={neto.href} className="space-y-1">
+                                <LinkMenu item={neto} pathname={pathname} recolhido={recolhido} filho />
+                                {/* Último nível (ex.: cadastros de uma academia): aparece quando se está dentro dela. */}
+                                {neto.filhos && neto.ativo(pathname) && (
+                                  <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                                    {neto.filhos.map((bisneto) => (
+                                      <LinkMenu key={bisneto.href} item={bisneto} pathname={pathname} recolhido={recolhido} filho />
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
