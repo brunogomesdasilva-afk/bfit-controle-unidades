@@ -160,8 +160,9 @@ function secao(d: Documento, titulo: string, tamanho = 11) {
 
 // ---------------------------------------------------------------- Relatório da conferência (markdown)
 
-export async function gerarPdfRelatorio(dados: { academia: string; mesTexto: string; markdown: string; rodape: string }) {
-  const d = await novoDocumento(`Conferência da folha - ${dados.academia}`, `Competência ${dados.mesTexto} · ${dados.rodape}`, false);
+// titulo: por padrão "Conferência da folha" (a conferência de pagamentos usa outro).
+export async function gerarPdfRelatorio(dados: { academia: string; mesTexto: string; markdown: string; rodape: string; titulo?: string }) {
+  const d = await novoDocumento(`${dados.titulo ?? "Conferência da folha"} - ${dados.academia}`, `Competência ${dados.mesTexto} · ${dados.rodape}`, false);
   const util = d.largura - 2 * MARGEM;
   for (const b of lerMarkdown(dados.markdown)) {
     if (b.tipo === "titulo") {

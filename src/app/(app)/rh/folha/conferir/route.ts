@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
-import ExcelJS from "exceljs";
 import { aulasDoMes } from "@/lib/aulasDoMes";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
+import { excelParaTexto } from "@/lib/excelTexto";
 import { PROMPT_MESTRE, REGRAS_DO_SISTEMA } from "@/lib/promptConferencia";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
 import { createClient } from "@/lib/supabase/server";
@@ -20,29 +20,6 @@ type TipoArquivo = keyof typeof TIPOS_ARQUIVO;
 type Arquivo = { tipo: TipoArquivo; nome: string; caminho: string };
 
 const erro = (mensagem: string, status = 400) => new Response(mensagem, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
-
-// Excel vira texto (uma linha por linha da planilha, colunas separadas por ";"), aba por aba.
-async function excelParaTexto(dados: ArrayBuffer) {
-  const livro = new ExcelJS.Workbook();
-  await livro.xlsx.load(dados);
-  const partes: string[] = [];
-  livro.eachSheet((aba) => {
-    partes.push(`=== Aba: ${aba.name}${aba.state !== "visible" ? " (oculta)" : ""} ===`);
-    aba.eachRow({ includeEmpty: false }, (linha, n) => {
-      const valores = (linha.values as unknown[]).slice(1).map((v) => {
-        if (v && typeof v === "object" && !(v instanceof Date)) {
-          const o = v as { result?: unknown; formula?: string; richText?: { text: string }[]; text?: string };
-          if (o.formula !== undefined) return `${String(o.result ?? "")} [fórmula: =${o.formula}]`;
-          if (o.richText) return o.richText.map((t) => t.text).join("");
-          if (o.text !== undefined) return o.text;
-        }
-        return v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? "");
-      });
-      partes.push(`${n}${linha.hidden ? " (oculta)" : ""}: ${valores.join(" ; ")}`);
-    });
-  });
-  return partes.join("\n");
-}
 
 async function blocoDoArquivo(a: Arquivo, dados: ArrayBuffer): Promise<Anthropic.Beta.BetaContentBlockParam[]> {
   const titulo = `${TIPOS_ARQUIVO[a.tipo]} (arquivo "${a.nome}")`;
