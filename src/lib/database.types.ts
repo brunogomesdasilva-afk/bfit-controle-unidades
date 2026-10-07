@@ -90,6 +90,10 @@ export type Funcionario = {
   data_contratacao: string | null;
   ferias_limite: string | null;
   pj: boolean;
+  // Valor da hora do professor (PJ: base do pagamento por fora da folha).
+  valor_hora: number | null;
+  // Dispensado de marcar ponto: a conferência da folha não cobra o ponto dele.
+  isento_ponto: boolean;
 };
 
 // Departamentos que precisam de CREF (professores de sala e de coletivas).

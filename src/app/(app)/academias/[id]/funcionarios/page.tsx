@@ -26,8 +26,12 @@ function colunas(departamento: string): Coluna[] {
         ] as Coluna[])
       : []),
     ...(PROFESSORES.includes(departamento)
-      ? ([{ campo: "pj", rotulo: "PJ", tipo: "opcoes", obrigatorio: true, largura: "w-28", opcoes: SIM_NAO }] as Coluna[])
+      ? ([
+          { campo: "pj", rotulo: "PJ", tipo: "opcoes", obrigatorio: true, largura: "w-28", opcoes: SIM_NAO },
+          { campo: "valor_hora", rotulo: "Valor hora", tipo: "moeda", largura: "w-32" },
+        ] as Coluna[])
       : []),
+    { campo: "isento_ponto", rotulo: "Isento de ponto", tipo: "opcoes", obrigatorio: true, largura: "w-32", opcoes: SIM_NAO },
     {
       campo: "ativo",
       rotulo: "Ativo",
@@ -63,6 +67,8 @@ export default async function FuncionariosPage({ params, searchParams }: PagePro
     cref: f.cref,
     cref_vencimento: f.cref_vencimento,
     pj: f.pj ? "sim" : "nao",
+    valor_hora: f.valor_hora === null || f.valor_hora === undefined ? null : String(f.valor_hora),
+    isento_ponto: f.isento_ponto ? "sim" : "nao",
   });
   const filtro = (ativo: boolean, rotulo: string, href: string) => (
     <Link
@@ -106,7 +112,7 @@ export default async function FuncionariosPage({ params, searchParams }: PagePro
                 salvar={salvarFuncionario.bind(null, id)}
                 excluir={excluirFuncionario}
                 rotuloNovo={`+ Novo em ${nome}`}
-                padroesNovo={{ ativo: "sim", pj: "nao", departamento }}
+                padroesNovo={{ ativo: "sim", pj: "nao", isento_ponto: "nao", departamento }}
                 vazio={`Nenhum funcionário em ${nome}.`}
               />
             </div>

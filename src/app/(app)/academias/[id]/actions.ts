@@ -42,13 +42,18 @@ export async function salvarFuncionario(
       { campo: "cref", rotulo: "CREF", tipo: "texto" },
       { campo: "cref_vencimento", rotulo: "Vencimento do CREF", tipo: "data" },
       { campo: "pj", rotulo: "PJ", tipo: "texto" },
+      { campo: "valor_hora", rotulo: "Valor hora", tipo: "decimal" },
+      { campo: "isento_ponto", rotulo: "Isento de ponto", tipo: "texto" },
     ],
     dados
   );
   if (erro || !registro) return { erro };
   (registro as Record<string, unknown>).ativo = registro.ativo !== "nao";
-  // PJ só vale para professores; nos outros departamentos fica sempre desmarcado.
-  (registro as Record<string, unknown>).pj = registro.pj === "sim" && PROFESSORES.includes(String(registro.departamento));
+  (registro as Record<string, unknown>).isento_ponto = registro.isento_ponto === "sim";
+  // PJ e valor da hora só valem para professores; nos outros departamentos ficam vazios.
+  const professor = PROFESSORES.includes(String(registro.departamento));
+  (registro as Record<string, unknown>).pj = registro.pj === "sim" && professor;
+  if (!professor) registro.valor_hora = null;
   // CREF só vale para professores de sala e de coletivas.
   if (!COM_CREF.includes(String(registro.departamento)) && (registro.cref || registro.cref_vencimento))
     return { erro: "CREF e vencimento do CREF são só para Professores e Professor de coletivas." };
