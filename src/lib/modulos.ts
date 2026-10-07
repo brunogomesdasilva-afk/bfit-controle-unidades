@@ -14,7 +14,7 @@ export const DESCRICAO_MODULOS: Record<Modulo, string> = {
   academia: "Painel, academias, vendas, frequência, compras, manutenção, A.D.B, relatórios e clientes",
   rh: "Menu RH (conferência da folha)",
   financeiro: "Menu Financeiro",
-  adm: "Usuários e Backup (só com acesso a todas as academias)",
+  adm: "Usuários, Tarefas e Backup (só com acesso a todas as academias)",
 };
 
 // Primeira tela de cada módulo (para onde o usuário vai ao entrar ou ao abrir uma tela que não pode usar).
@@ -28,6 +28,7 @@ const PREFIXOS: [string, Modulo][] = [
   ["/financeiro", "financeiro"],
   ["/usuarios", "adm"],
   ["/backup", "adm"],
+  ["/tarefas", "adm"],
 ];
 
 const comecaCom = (caminho: string, prefixo: string) =>

@@ -338,6 +338,46 @@ const TODOS: ItemMenu[] = [
     ),
   },
   {
+    href: "/tarefas",
+    rotulo: "Tarefas",
+    somenteAdmin: true,
+    ativo: (p: string) => p === "/tarefas",
+    icone: (
+      <Icone>
+        <path d="M9 11l3 3L22 4" />
+        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+      </Icone>
+    ),
+    filhos: [
+      {
+        href: "/tarefas",
+        rotulo: "Cadastro de tarefas",
+        ativo: (p: string) => p === "/tarefas",
+        icone: (
+          <Icone>
+            <line x1="8" y1="6" x2="21" y2="6" />
+            <line x1="8" y1="12" x2="21" y2="12" />
+            <line x1="8" y1="18" x2="21" y2="18" />
+            <polyline points="3 6 4 7 6 5" />
+            <polyline points="3 12 4 13 6 11" />
+            <polyline points="3 18 4 19 6 17" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/tarefas/log",
+        rotulo: "Log de tarefas",
+        ativo: (p: string) => p === "/tarefas/log",
+        icone: (
+          <Icone>
+            <circle cx="12" cy="12" r="9" />
+            <polyline points="12 7 12 12 15 14" />
+          </Icone>
+        ),
+      },
+    ],
+  },
+  {
     href: "/usuarios",
     rotulo: "Usuários",
     somenteAdmin: true,

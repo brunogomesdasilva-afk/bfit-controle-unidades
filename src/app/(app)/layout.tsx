@@ -5,7 +5,9 @@ import { getPerfilAtual } from "@/lib/auth";
 import { COM_CREF } from "@/lib/database.types";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
+import { pendentesDe, type Pendente, type Tarefa } from "@/lib/tarefas";
 import { AvisoContagens } from "./AvisoContagens";
+import { ChecklistTarefas } from "./ChecklistTarefas";
 import { AvisoVencimentos, type Vencimento } from "./AvisoVencimentos";
 import { LembreteAniversario, type Lembrete } from "./LembreteAniversario";
 import { Sidebar } from "./Sidebar";
@@ -23,6 +25,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   let academias: { id: string; nome: string }[] = [];
   let lembretes: Lembrete[] = [];
   let vencimentos: Vencimento[] = [];
+  let pendentes: Pendente[] = [];
   // Identifica o login atual: o aviso de contagens faltando volta a cada novo login.
   let sessao = "";
   // Backup em andamento: só o administrador usa o sistema (o banco também bloqueia os demais).
@@ -93,6 +96,12 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         link: `/academias/${f.academia_id}/funcionarios`,
       });
     vencimentos.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    // Checklist de tarefas do usuário: as do tipo de acesso dele ainda não marcadas no dia (ou no mês).
+    const [{ data: tarefas }, { data: feitas }] = await Promise.all([
+      supabase.from("tarefas").select("*").eq("ativo", true).order("created_at"),
+      supabase.from("tarefas_feitas").select("tarefa_id, periodo").eq("usuario_id", atual.id).in("periodo", [dataHoje, dataHoje.slice(0, 7)]),
+    ]);
+    pendentes = pendentesDe((tarefas ?? []) as Tarefa[], feitas ?? [], atual, dataHoje);
     // Aniversários de hoje (e do fim de semana/feriado seguinte, avisados no último dia útil).
     lembretes = (await lembretesDeAniversario(supabase, academias.map((a) => a.id))).map((a) => ({
       chave: `${a.academiaId}-${a.nome}-${a.dia}`,
@@ -137,6 +146,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             Sistema em manutenção (backup): só você está acessando. Se nenhum backup estiver rodando, libere em Backup.
           </p>
         )}
+        {atual && <ChecklistTarefas sessao={sessao} pendentes={pendentes} />}
         {/* Avisos das academias: só para quem usa o módulo Academia. */}
         {atual?.modulos.includes("academia") && <AvisoContagens sessao={sessao} />}
         {atual?.modulos.includes("academia") && <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />}
