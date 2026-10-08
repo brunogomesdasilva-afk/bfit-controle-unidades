@@ -74,9 +74,9 @@ function linhasDre(p: Pacote[]): LinhaDemo[] {
     { rotulo: "Despesas operacionais", tipo: "secao", valores: [] },
     ...despesas,
     total("Total das despesas operacionais", (d) => d.despesasOperacionais),
-    total("EBITDA (resultado operacional antes da depreciação)", (d) => d.ebitda, "resultado"),
-    linhaGrupo("(-) Depreciação e amortização", g("depreciacao")),
-    total("Resultado operacional (EBIT)", (d) => d.ebit),
+    total("Resultado operacional (EBITDA)", (d) => d.ebitda, "resultado"),
+    // Sem depreciação (decisão do Bruno: não se faz), as linhas de depreciação e EBIT só aparecem se a contabilidade lançar.
+    ...(temValor(linhaGrupo("", g("depreciacao"))) ? [linhaGrupo("(-) Depreciação e amortização", g("depreciacao")), total("Resultado operacional depois da depreciação (EBIT)", (d) => d.ebit)] : []),
     { rotulo: "Resultado financeiro e outros", tipo: "secao", valores: [] },
     ...[linhaGrupo("Receitas financeiras", g("receitas_financeiras")), linhaGrupo("Despesas financeiras (juros, tarifas, IOF, multas)", g("despesas_financeiras")), linhaGrupo("Outras receitas e despesas", g("outras"))].filter(temValor),
     total("Resultado antes do IR e da CS", (d) => d.lair),
@@ -263,7 +263,6 @@ export default async function FechamentoPage({ searchParams }: PageProps<"/finan
     return `/financeiro/fechamento?${q.toString()}`;
   };
   const colunasDemo: ColunaDemo[] = colunas.map((c) => ({ rotulo: c.rotulo, detalhe: c.detalhe }));
-  const semDepreciacao = colunas.length > 0 && colunas.every((c) => Math.abs(c.dre.grupos.depreciacao.valor) < 0.005);
   const listaImportados = balancetes.filter((b) => b.ano === ano).sort((x, y) => nomeAcademia(x.academia_id).localeCompare(nomeAcademia(y.academia_id)) || x.mes_inicio - y.mes_inicio);
 
   return (
@@ -319,7 +318,6 @@ export default async function FechamentoPage({ searchParams }: PageProps<"/finan
           <p className="text-xs text-slate-500">
             Clique numa linha para ver as contas da contabilidade. % sobre a receita bruta. As contas são classificadas pelo nome
             (o mesmo código tem nomes diferentes em cada academia).
-            {semDepreciacao && " A contabilidade não lança depreciação dos equipamentos e benfeitorias: o EBITDA é igual ao resultado operacional e o lucro contábil fica maior que o econômico."}
             {!selecionada && " O consolidado soma as academias sem eliminar os repasses entre elas."}
           </p>
         </section>
