@@ -43,3 +43,8 @@ export async function salvarTarefa(id: string | null, dados: Record<string, stri
   refresh();
   return {};
 }
+
+// Bloco "Pontuais pendentes" do cadastro: a planilha não tem a coluna "Repete", então a tarefa é sempre pontual.
+export async function salvarTarefaPontual(id: string | null, dados: Record<string, string>): Promise<Resultado> {
+  return salvarTarefa(id, { ...dados, recorrencia: "pontual" });
+}
