@@ -158,7 +158,7 @@ function indicadores() {
     {
       grupo: "Caixa",
       itens: [
-        { rotulo: "Caixa gerado pela operação", explicacao: "Lucro + depreciação ± capital de giro (DFC)", valor: (q) => r(q.dfc.operacional) },
+        { rotulo: "Caixa gerado pela operação", explicacao: "Lucro ± variação do capital de giro (DFC)", valor: (q) => r(q.dfc.operacional) },
         { rotulo: "Investimentos (equipamentos e benfeitorias)", explicacao: "Compras de imobilizado e intangível", valor: (q) => r(q.dfc.investimento) },
         { rotulo: "Caixa livre", explicacao: "Operação − investimentos: o que sobra para sócios e dívidas", valor: (q) => r(q.dfc.operacional + q.dfc.investimento) },
         { rotulo: "Conversão do EBITDA em caixa", explicacao: "Caixa da operação ÷ EBITDA", valor: (q) => pc(div(q.dfc.operacional, q.dre.ebitda)) },
