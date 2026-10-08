@@ -2,20 +2,22 @@ import Link from "next/link";
 import { exigirModulo } from "@/lib/auth";
 import { contextoAcademias } from "@/lib/contexto";
 import { hoje, lerMes } from "@/lib/planilha";
+import { decisaoDoRelatorio, periodoDoFluxo, resumoDaDecisao } from "@/lib/resumoConferencia";
 import { AbasAcademias } from "../AbasAcademias";
 import { SemAcademias } from "../SemAcademias";
 import { CabecalhoRelatorio, nomeDoMes, TabelaRelatorio } from "../relatorios/comum";
-import { ConferenciaPagamentos, type ConferenciaExibida } from "./ConferenciaPagamentos";
+import { ConferenciaPagamentos, type LoteConferido } from "./ConferenciaPagamentos";
 
-// Módulo Financeiro: conferência dos pagamentos por academia e mês dos vencimentos. O financeiro envia o lote
-// (pasta compactada em .zip) e o Claude confere pelo Prompt Mestre (LIBERAR / SEGURAR / CORRIGIR).
-// Na aba "Todas", a situação de cada academia no mês.
+// Módulo Financeiro: conferência dos pagamentos por academia e mês dos vencimentos. Os pagamentos são semanais: o
+// financeiro envia o lote de cada semana (pasta compactada em .zip) e o Claude confere pelo Prompt Mestre
+// (LIBERAR / SEGURAR / CORRIGIR). No mês, cada lote aparece fechado com o período do fluxo e a decisão; ao clicar,
+// abre o relatório completo. Na aba "Todas", os lotes do mês de cada academia.
 
 type Linha = {
   id: string;
   academia_id: string;
   mes: string;
-  status: ConferenciaExibida["status"];
+  status: LoteConferido["status"];
   relatorio: string | null;
   arquivo_nome: string;
   inventario: { nome: string; lido: boolean }[];
@@ -27,29 +29,24 @@ type Linha = {
 const INTERROMPIDA_MS = 15 * 60 * 1000;
 const interrompida = (l: Linha) => l.status === "processando" && Date.now() - Date.parse(l.criado_em) > INTERROMPIDA_MS;
 const quando = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
+const periodoTexto = (l: Linha) => {
+  const p = periodoDoFluxo(l.relatorio);
+  return p ? `${p.inicio} a ${p.fim}` : null;
+};
+// Ordem dos lotes: o fluxo mais recente primeiro (pela data final do fluxo; sem período, pela data da conferência).
+const chaveOrdem = (l: Linha) => {
+  const p = periodoDoFluxo(l.relatorio);
+  return p ? `${l.mes}|${p.fim.slice(3, 5)}${p.fim.slice(0, 2)}|${l.criado_em}` : `${l.mes}|9999|${l.criado_em}`;
+};
 
 const SITUACAO = {
   conferida: { rotulo: "Conferida", cor: "bg-emerald-100 text-emerald-800" },
   processando: { rotulo: "Conferindo", cor: "bg-amber-100 text-amber-900" },
   erro: { rotulo: "Incompleta", cor: "bg-red-100 text-red-800" },
-  pendente: { rotulo: "Nenhum lote", cor: "bg-slate-100 text-slate-600" },
 } as const;
-function Situacao({ linha }: { linha: Linha | null }) {
-  const s = SITUACAO[!linha ? "pendente" : interrompida(linha) ? "erro" : linha.status];
+function Situacao({ linha }: { linha: Linha }) {
+  const s = SITUACAO[interrompida(linha) ? "erro" : linha.status];
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${s.cor}`}>{s.rotulo}</span>;
-}
-
-// A decisão executiva em uma linha: os valores de LIBERAR / SEGURAR achados na tabela do relatório.
-function resumo(relatorio: string | null) {
-  if (!relatorio) return "—";
-  const valor = (rotulo: string) => {
-    const linha = relatorio.split("\n").find((l) => l.startsWith("|") && l.toUpperCase().includes(rotulo));
-    // O total é o último valor da linha (com ou sem "R$"), ex.: "| **LIBERAR** | itens | **25.774,41** |".
-    const total = linha?.match(/\d{1,3}(?:\.\d{3})*,\d{2}/g)?.pop();
-    return total ? `R$ ${total}` : null;
-  };
-  const partes = [["Liberar", valor("LIBERAR")], ["Segurar", valor("SEGURAR")]].filter(([, v]) => v).map(([r, v]) => `${r} ${v}`);
-  return partes.length ? partes.join(" · ") : "—";
 }
 
 export default async function FinanceiroPage({ searchParams }: PageProps<"/financeiro">) {
@@ -73,24 +70,33 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
     .from("pagamentos_conferencias")
     .select("id, academia_id, mes, status, relatorio, arquivo_nome, inventario, criado_em, criado_por")
     .order("criado_em", { ascending: false });
-  consulta = selecionada ? consulta.eq("academia_id", selecionada).limit(60) : consulta.eq("mes", mes);
+  consulta = selecionada ? consulta.eq("academia_id", selecionada).limit(120) : consulta.eq("mes", mes);
   const { data } = await consulta;
-  const linhas = (data ?? []) as Linha[];
+  const linhas = ((data ?? []) as Linha[]).sort((a, b) => chaveOrdem(b).localeCompare(chaveOrdem(a)));
   const ids = [...new Set(linhas.map((l) => l.criado_por).filter((x): x is string => Boolean(x)))];
   const { data: perfis } = ids.length ? await supabase.from("profiles").select("id, nome").in("id", ids) : { data: [] };
   const nome = (id: string | null) => (perfis ?? []).find((p) => p.id === id)?.nome ?? "";
+  const nomeAcademia = (id: string) => academias.find((a) => a.id === id)?.nome ?? "";
 
-  // Na tela: a conferência escolhida no histórico ou a mais recente do mês.
-  const exibidaLinha = (ver && linhas.find((l) => l.id === ver)) || linhas.find((l) => l.mes === mes) || null;
-  const exibida: ConferenciaExibida | null = exibidaLinha && {
-    id: exibidaLinha.id,
-    status: exibidaLinha.status,
-    relatorio: exibidaLinha.relatorio,
-    arquivoNome: exibidaLinha.arquivo_nome,
-    criadoEm: exibidaLinha.criado_em,
-    criadoPor: nome(exibidaLinha.criado_por),
-    interrompida: interrompida(exibidaLinha),
-  };
+  const doMes = linhas.filter((l) => l.mes === mes);
+  const lotes: LoteConferido[] = doMes.map((l) => {
+    const d = decisaoDoRelatorio(l.relatorio);
+    return {
+      id: l.id,
+      status: l.status,
+      relatorio: l.relatorio,
+      arquivoNome: l.arquivo_nome,
+      criadoEm: l.criado_em,
+      criadoPor: nome(l.criado_por),
+      interrompida: interrompida(l),
+      periodo: periodoTexto(l),
+      liberar: d.liberar,
+      segurar: d.segurar,
+      arquivos: l.inventario?.length ?? 0,
+    };
+  });
+  // Meses anteriores desta academia: um resumo por mês, com o link para abrir os lotes daquele mês.
+  const outrosMeses = [...new Set(linhas.filter((l) => l.mes !== mes).map((l) => l.mes))].map((m) => ({ mes: m, lotes: linhas.filter((l) => l.mes === m) }));
 
   return (
     <div className="space-y-6">
@@ -104,66 +110,68 @@ export default async function FinanceiroPage({ searchParams }: PageProps<"/finan
             colunas={[
               {
                 rotulo: "Academia",
-                valor: (u) => (
-                  <Link href={`${caminho}?academia=${u.id}&mes=${mes}`} className="font-medium text-marca underline">
-                    {u.nome}
+                valor: (l) => (
+                  <Link href={`${caminho}?academia=${l.academia_id}&mes=${mes}&ver=${l.id}`} className="font-medium text-marca underline">
+                    {nomeAcademia(l.academia_id)}
                   </Link>
                 ),
                 alinhar: "esquerda",
               },
-              { rotulo: "Situação", valor: (u) => <Situacao linha={linhas.find((l) => l.academia_id === u.id) ?? null} />, alinhar: "esquerda" },
-              { rotulo: "Lotes no mês", valor: (u) => linhas.filter((l) => l.academia_id === u.id).length || "—" },
-              { rotulo: "Último lote", valor: (u) => resumo(linhas.find((l) => l.academia_id === u.id)?.relatorio ?? null), alinhar: "esquerda" },
+              { rotulo: "Fluxo", valor: (l) => (periodoTexto(l) ? `${periodoTexto(l)}` : l.arquivo_nome), alinhar: "esquerda" },
+              { rotulo: "Situação", valor: (l) => <Situacao linha={l} />, alinhar: "esquerda" },
+              { rotulo: "Decisão", valor: (l) => resumoDaDecisao(l.relatorio), alinhar: "esquerda" },
+              { rotulo: "Conferido em", valor: (l) => quando(l.criado_em), alinhar: "esquerda" },
             ]}
-            linhas={academias}
-            chave={(u) => u.id}
-            vazio="Nenhuma academia."
+            linhas={[...doMes].sort((a, b) => nomeAcademia(a.academia_id).localeCompare(nomeAcademia(b.academia_id)) || chaveOrdem(b).localeCompare(chaveOrdem(a)))}
+            chave={(l) => l.id}
+            vazio="Nenhum lote conferido neste mês."
           />
-          <p className="mt-2 text-xs text-slate-500">Abra a aba da academia para enviar um lote e conferir.</p>
+          <p className="mt-2 text-xs text-slate-500">Clique na academia para abrir o relatório do lote. Para enviar um lote novo, abra a aba da academia.</p>
         </section>
       ) : (
         <>
           <ConferenciaPagamentos
-            key={`${selecionada}-${mes}-${exibida?.id ?? ""}`}
+            key={`${selecionada}-${mes}`}
             academiaId={selecionada}
             mes={mes}
             mesTexto={nomeDoMes(mes)}
-            exibida={exibida}
+            lotes={lotes}
+            aberto={ver}
             chaveConfigurada={Boolean(process.env.ANTHROPIC_API_KEY)}
           />
 
-          <section>
-            <h2 className="mb-2 text-sm font-semibold text-slate-900">Histórico desta academia</h2>
-            <TabelaRelatorio
-              colunas={[
-                { rotulo: "Mês", valor: (l) => <span className="capitalize">{nomeDoMes(l.mes)}</span>, alinhar: "esquerda" },
-                { rotulo: "Lote", valor: (l) => `${l.arquivo_nome} (${l.inventario?.length ?? 0} arquivos)`, alinhar: "esquerda" },
-                { rotulo: "Situação", valor: (l) => <Situacao linha={l} />, alinhar: "esquerda" },
-                { rotulo: "Decisão", valor: (l) => resumo(l.relatorio), alinhar: "esquerda" },
-                { rotulo: "Conferida em", valor: (l) => `${quando(l.criado_em)}${nome(l.criado_por) ? ` · ${nome(l.criado_por)}` : ""}`, alinhar: "esquerda" },
-                {
-                  rotulo: "Relatório",
-                  valor: (l) =>
-                    l.relatorio ? (
-                      <span className="flex gap-3">
-                        <Link href={`${caminho}?academia=${selecionada}&mes=${l.mes}&ver=${l.id}`} className="text-marca underline">
-                          Ver
-                        </Link>
-                        <a href={`${caminho}/relatorio?id=${l.id}`} target="_blank" rel="noreferrer" className="text-marca underline">
-                          PDF
-                        </a>
-                      </span>
-                    ) : (
-                      "—"
+          {outrosMeses.length > 0 && (
+            <section>
+              <h2 className="mb-2 text-sm font-semibold text-slate-900">Outros meses desta academia</h2>
+              <TabelaRelatorio
+                colunas={[
+                  {
+                    rotulo: "Mês",
+                    valor: (m) => (
+                      <Link href={`${caminho}?academia=${selecionada}&mes=${m.mes}`} className="font-medium capitalize text-marca underline">
+                        {nomeDoMes(m.mes)}
+                      </Link>
                     ),
-                  alinhar: "esquerda",
-                },
-              ]}
-              linhas={linhas}
-              chave={(l) => l.id}
-              vazio="Nenhuma conferência ainda."
-            />
-          </section>
+                    alinhar: "esquerda",
+                  },
+                  { rotulo: "Lotes", valor: (m) => m.lotes.length },
+                  {
+                    rotulo: "Fluxos",
+                    valor: (m) =>
+                      m.lotes
+                        .map((l) => periodoTexto(l))
+                        .filter(Boolean)
+                        .reverse()
+                        .join(" · ") || "—",
+                    alinhar: "esquerda",
+                  },
+                ]}
+                linhas={outrosMeses}
+                chave={(m) => m.mes}
+                vazio=""
+              />
+            </section>
+          )}
         </>
       )}
     </div>

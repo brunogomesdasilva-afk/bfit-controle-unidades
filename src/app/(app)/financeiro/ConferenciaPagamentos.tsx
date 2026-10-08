@@ -5,10 +5,11 @@ import { useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Relatorio } from "../rh/folha/Relatorio";
 
-// Conferência de pagamentos de uma academia: envia o .zip do lote, mostra o relatório enquanto o Claude escreve
-// e, no fim, o PDF. Pode haver vários lotes no mês (um por fluxo).
+// Conferência de pagamentos de uma academia no mês. Os pagamentos são semanais: cada lote (.zip) conferido vira
+// um item da lista, fechado, com o período do fluxo e a decisão; ao clicar, abre o relatório completo.
+// Enquanto o Claude confere um lote novo, ele aparece aberto no topo, sendo escrito.
 
-export type ConferenciaExibida = {
+export type LoteConferido = {
   id: string;
   status: "processando" | "conferida" | "erro";
   relatorio: string | null;
@@ -16,23 +17,39 @@ export type ConferenciaExibida = {
   criadoEm: string;
   criadoPor: string;
   interrompida: boolean;
+  periodo: string | null; // "09/10 a 17/10"
+  liberar: string | null;
+  segurar: string | null;
+  arquivos: number;
 };
 
 const LIMITE_MB = 50;
 const quando = (d: string) => new Date(d).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 const BOTAO = "rounded-md px-3 py-2 text-sm font-medium disabled:opacity-50";
 
+function Situacao({ lote }: { lote: LoteConferido }) {
+  const [rotulo, cor] =
+    lote.status === "erro" || lote.interrompida
+      ? ["Incompleta", "bg-red-100 text-red-800"]
+      : lote.status === "processando"
+        ? ["Conferindo", "bg-amber-100 text-amber-900"]
+        : ["Conferida", "bg-emerald-100 text-emerald-800"];
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cor}`}>{rotulo}</span>;
+}
+
 export function ConferenciaPagamentos({
   academiaId,
   mes,
   mesTexto,
-  exibida,
+  lotes,
+  aberto,
   chaveConfigurada,
 }: {
   academiaId: string;
   mes: string;
   mesTexto: string;
-  exibida: ConferenciaExibida | null;
+  lotes: LoteConferido[];
+  aberto: string | null;
   chaveConfigurada: boolean;
 }) {
   const router = useRouter();
@@ -58,6 +75,7 @@ export function ConferenciaPagamentos({
     setMensagem(null);
     setTexto("");
     setFase("enviando");
+    let novoId: string | null = null;
     try {
       // O .zip vai direto para a pasta da academia no armazenamento (só o módulo Financeiro lê).
       const caminho = `${academiaId}/${mes}/${Date.now()}.zip`;
@@ -71,6 +89,7 @@ export function ConferenciaPagamentos({
         body: JSON.stringify({ academia: academiaId, mes, nome: zip.name, caminho }),
       });
       if (!resposta.ok || !resposta.body) throw new Error((await resposta.text()) || "A conferência não começou.");
+      novoId = resposta.headers.get("X-Conferencia-Id");
       // O relatório chega aos poucos e aparece na tela enquanto é escrito.
       const leitor = resposta.body.getReader();
       const decodificador = new TextDecoder();
@@ -88,17 +107,14 @@ export function ConferenciaPagamentos({
       setMensagem({ erro: e instanceof Error ? e.message : String(e) });
     } finally {
       setFase("parado");
-      // Recarrega a conferência gravada; o texto recebido some só quando ela chega (sem piscar a tela).
+      // Recarrega a lista com o lote novo já aberto; o texto recebido some só quando ela chega.
       iniciar(() => {
-        router.push(`/financeiro?academia=${academiaId}&mes=${mes}`);
+        router.push(`/financeiro?academia=${academiaId}&mes=${mes}${novoId ? `&ver=${novoId}` : ""}`);
         router.refresh();
         setTexto(null);
       });
     }
   }
-
-  const relatorio = texto ?? exibida?.relatorio ?? null;
-  const pronto = texto === null && exibida && (exibida.status !== "processando" || exibida.interrompida);
 
   return (
     <div className="space-y-4">
@@ -110,8 +126,8 @@ export function ConferenciaPagamentos({
 
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <p className="mb-3 text-sm text-slate-600">
-          Compacte a pasta do lote de {mesTexto} em .zip e envie: fluxo de pagamentos (Excel), notas, boletos, guias, fatura
-          do cartão com os comprovantes e o que mais houver. O que faltar aparece como pendência no relatório.
+          Novo lote da semana: compacte a pasta em .zip e envie (fluxo de pagamentos em Excel, notas, boletos, guias, fatura do
+          cartão com os comprovantes). O que faltar aparece como pendência no relatório.
         </p>
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -132,27 +148,50 @@ export function ConferenciaPagamentos({
       {mensagem?.erro && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{mensagem.erro}</p>}
       {mensagem?.ok && <p className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{mensagem.ok}</p>}
 
-      {relatorio !== null && (
-        <div className="rounded-lg border border-slate-200 bg-white p-4 md:p-6">
-          {exibida && texto === null && (
-            <p className="mb-4 text-xs text-slate-500">
-              {exibida.status === "erro" || exibida.interrompida ? "Conferência incompleta" : exibida.status === "processando" ? "Conferindo" : "Conferência"} do lote{" "}
-              {exibida.arquivoNome} em {quando(exibida.criadoEm)}
-              {exibida.criadoPor ? ` por ${exibida.criadoPor}` : ""}
-            </p>
-          )}
-          {relatorio ? <Relatorio markdown={relatorio} /> : <p className="text-sm text-slate-500">Abrindo o .zip e lendo os arquivos…</p>}
+      {texto !== null && (
+        <div className="rounded-lg border border-marca/30 bg-white p-4 md:p-6">
+          <p className="mb-3 text-xs font-medium text-marca">Lote novo · conferindo</p>
+          {texto ? <Relatorio markdown={texto} /> : <p className="text-sm text-slate-500">Abrindo o .zip e lendo os arquivos…</p>}
           {fase === "conferindo" && <p className="mt-4 animate-pulse text-sm text-slate-500">Escrevendo o relatório…</p>}
-
-          {pronto && exibida && exibida.relatorio && (
-            <div className="mt-6 border-t border-slate-200 pt-4">
-              <a href={`/financeiro/relatorio?id=${exibida.id}`} target="_blank" rel="noreferrer" className={`${BOTAO} inline-block border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>
-                Gerar relatório (PDF)
-              </a>
-            </div>
-          )}
         </div>
       )}
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-900">
+          Lotes conferidos em <span className="capitalize">{mesTexto}</span>
+          {lotes.length > 0 && <span className="font-normal text-slate-500"> · {lotes.length} {lotes.length === 1 ? "lote" : "lotes"} · clique para abrir o relatório</span>}
+        </h2>
+        {lotes.length === 0 && <p className="rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-500">Nenhum lote conferido neste mês.</p>}
+        {lotes.map((l) => (
+          <details key={l.id} open={l.id === aberto} className="group rounded-lg border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-slate-50">
+              <span className="text-slate-400 transition group-open:rotate-90">›</span>
+              <span className="min-w-40 font-semibold text-slate-900">{l.periodo ? `Fluxo de ${l.periodo}` : `Lote ${l.arquivoNome}`}</span>
+              <Situacao lote={l} />
+              <span className="text-sm">
+                {l.liberar && <span className="text-emerald-700">Liberar {l.liberar}</span>}
+                {l.liberar && l.segurar && <span className="text-slate-400"> · </span>}
+                {l.segurar && <span className="text-amber-800">Segurar {l.segurar}</span>}
+              </span>
+              <span className="ml-auto text-xs text-slate-500">
+                Conferido em {quando(l.criadoEm)}
+                {l.criadoPor ? ` por ${l.criadoPor}` : ""} · {l.arquivos} arquivos
+              </span>
+            </summary>
+            <div className="border-t border-slate-100 p-4 md:p-6">
+              {l.relatorio ? <Relatorio markdown={l.relatorio} /> : <p className="text-sm text-slate-500">Relatório ainda sendo escrito…</p>}
+              {l.relatorio && l.status !== "processando" && (
+                <div className="mt-6 border-t border-slate-200 pt-4">
+                  <a href={`/financeiro/relatorio?id=${l.id}`} target="_blank" rel="noreferrer" className={`${BOTAO} inline-block border border-slate-300 bg-white text-slate-700 hover:bg-slate-50`}>
+                    Gerar relatório (PDF)
+                  </a>
+                  <span className="ml-3 text-xs text-slate-500">Lote: {l.arquivoNome}</span>
+                </div>
+              )}
+            </div>
+          </details>
+        ))}
+      </section>
     </div>
   );
 }
