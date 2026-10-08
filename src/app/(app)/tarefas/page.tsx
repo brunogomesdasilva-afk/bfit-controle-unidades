@@ -43,8 +43,8 @@ const colunasPontuais = (usuarios: Opcao[]): Coluna[] => [
   ATIVA,
 ];
 
-// Cadastro das tarefas do checklist que aparece ao entrar no sistema (módulo ADM), em dois blocos: as recorrentes
-// (todo dia, todo mês) e as pontuais ainda pendentes. Pontual concluída sai daqui e fica só no log.
+// Cadastro das tarefas do checklist que aparece ao entrar no sistema (módulo ADM), em dois blocos: primeiro as pontuais
+// ainda pendentes, depois as recorrentes (todo dia, todo mês). Pontual concluída sai daqui e fica só no log.
 export default async function TarefasPage() {
   await exigirModulo("adm");
   const supabase = await createClient();
@@ -97,18 +97,6 @@ export default async function TarefasPage() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-sm font-semibold text-slate-900">Tarefas recorrentes</h2>
-        <Planilha
-          colunas={colunasRecorrentes(usuarios)}
-          linhas={recorrentes}
-          salvar={salvarTarefa}
-          rotuloNovo="+ Nova tarefa recorrente"
-          padroesNovo={{ recorrencia: "diaria", ativo: "sim" }}
-          vazio="Nenhuma tarefa recorrente."
-        />
-      </section>
-
-      <section className="space-y-2">
         <h2 className="text-sm font-semibold text-slate-900">Tarefas pontuais pendentes de solução</h2>
         <Planilha
           colunas={colunasPontuais(usuarios)}
@@ -117,6 +105,18 @@ export default async function TarefasPage() {
           rotuloNovo="+ Nova tarefa pontual"
           padroesNovo={{ ativo: "sim", data_inicio: dataHoje }}
           vazio="Nenhuma tarefa pontual pendente. As concluídas ficam no log de tarefas."
+        />
+      </section>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-slate-900">Tarefas recorrentes</h2>
+        <Planilha
+          colunas={colunasRecorrentes(usuarios)}
+          linhas={recorrentes}
+          salvar={salvarTarefa}
+          rotuloNovo="+ Nova tarefa recorrente"
+          padroesNovo={{ recorrencia: "diaria", ativo: "sim" }}
+          vazio="Nenhuma tarefa recorrente."
         />
       </section>
     </div>
