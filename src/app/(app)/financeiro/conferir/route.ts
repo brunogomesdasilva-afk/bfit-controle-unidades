@@ -3,6 +3,7 @@ import { unzipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
+import { conferirPlanilha } from "@/lib/conferirPlanilha";
 import { consultarCnpj } from "@/lib/consultaCnpj";
 import { excelParaTexto } from "@/lib/excelTexto";
 import { PROMPT_MESTRE } from "@/lib/promptConferencia";
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
         // Cada arquivo do lote vira um bloco da mensagem. PDF e imagem sobem para a API de arquivos (o lote inteiro
         // passaria do limite de tamanho de uma mensagem); o resto vai como texto.
         const conteudo: Anthropic.Beta.BetaContentBlockParam[] = [];
+        const verificacoes: string[] = [];
         for (const item of inventario) {
           const dados = arquivos[item.nome];
           const titulo = `Arquivo "${item.nome}"`;
@@ -156,7 +158,12 @@ export async function POST(request: Request) {
             } else if (["xlsx", "xlsm", "docx", "csv", "txt", "md", "xml", "html", "htm"].includes(item.tipo)) {
               const texto =
                 item.tipo === "xlsx" || item.tipo === "xlsm"
-                  ? await excelParaTexto(dados.slice().buffer)
+                  ? await excelParaTexto(dados.slice().buffer).then(async (texto) => {
+                      // Somas, fórmulas e totais refeitos pelo sistema (vão para o Claude como verificação automática).
+                      const achados = await conferirPlanilha(dados.slice().buffer, item.nome).catch(() => [`Não foi possível verificar as fórmulas de "${item.nome}".`]);
+                      verificacoes.push(...achados);
+                      return texto;
+                    })
                   : item.tipo === "docx"
                     ? docxParaTexto(dados)
                     : new TextDecoder("utf-8").decode(dados);
@@ -181,6 +188,9 @@ export async function POST(request: Request) {
             `Faça a conferência de pagamentos da academia ${academia.nome}, mês dos vencimentos ${nomeDoMes(mes)} (${mes}). Lote: "${nomeZip}".`,
             `Data de hoje: ${new Date().toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}.`,
             `INVENTÁRIO DO LOTE (${inventario.length} arquivos):\n${listaInventario}`,
+            verificacoes.length
+              ? `VERIFICAÇÃO AUTOMÁTICA DAS PLANILHAS (feita pelo sistema: somas refeitas célula a célula, intervalo das fórmulas, Dbto Auto, Banco e contas auxiliares):\n${verificacoes.map((v) => `- ${v}`).join("\n")}`
+              : "Nenhuma planilha Excel no lote para a verificação automática dos totais.",
             anteriores?.length
               ? `RELATÓRIOS ANTERIORES DESTA ACADEMIA (mais recente primeiro):\n\n${anteriores
                   .map((a) => `=== Conferência de ${new Date(a.criado_em).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })} · lote "${a.arquivo_nome}" (${a.mes}) ===\n${String(a.relatorio ?? "").slice(0, 40000)}`)

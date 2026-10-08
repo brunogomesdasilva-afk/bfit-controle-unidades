@@ -17,6 +17,12 @@ I. Pesquisa. Pode pesquisar na internet tabelas e normas oficiais do período (r
 
 N. NFS-e, contrato e retenções dos prestadores (inclusive professores PJ) SÃO validados aqui (seção 17 do prompt mestre).
 
+TOTAIS DA PLANILHA E PLANILHA × DOCUMENTOS (obrigatório)
+- Confira o total destacado embaixo da planilha do fluxo: refaça a soma linha a linha, verifique se a fórmula pega da primeira à última linha (nenhuma linha fora do intervalo, nenhum valor digitado como texto) e confira "Dbto Auto" (soma dos débitos automáticos) e "Banco" (Total − Dbto Auto). No botão do sistema, use a VERIFICAÇÃO AUTOMÁTICA DAS PLANILHAS que vem junto (ela já refez as contas); no Claude Code, faça as contas com exceljs.
+- Contas auxiliares da planilha (ex.: ISS = receita × alíquota) que não batem com o valor lançado: o valor certo é o da guia/livro; registre a diferença e qual prevalece.
+- Para CADA linha do fluxo, compare o valor da planilha com o valor do documento (NF, boleto, fatura, guia) e com o líquido devido; qualquer diferença vai para a tabela.
+- Inclua no relatório a seção "## Totais da planilha e planilha × documentos": (1) tabela Conferência | Valor na planilha | Valor refeito | Diferença | Situação (Total, Dbto Auto, Banco, contas auxiliares); (2) tabela só com as linhas em que planilha e documento diferem: Linha | Favorecido | Valor na planilha | Valor no documento | Diferença | Documento | Providência (se não houver, escreva "Todos os valores da planilha conferem com os documentos").
+
 CADASTRO NA RECEITA E RETENÇÕES (obrigatório)
 - Antes de escrever qualquer parte do relatório, consulte o CNPJ de TODOS os prestadores e fornecedores com nota fiscal, recibo ou boleto no lote (no botão do sistema, com a ferramenta consultar_cnpj; no Claude Code, pela BrasilAPI https://brasilapi.com.br/api/cnpj/v1/<CNPJ> ou CNPJ.ws https://publica.cnpj.ws/cnpj/<CNPJ>). Peça todos os CNPJs de uma vez (várias consultas na mesma rodada) e não escreva texto antes de terminar as consultas. Consulte também o CNPJ da academia tomadora.
 - No resultado da consulta, "optante": null ou false no Simples/MEI significa que a base pública não registra a opção (tratar como não optante); se a nota disser que o prestador é optante, aponte a divergência e peça o comprovante da Consulta Optantes do Simples Nacional (www8.receita.fazenda.gov.br/SimplesNacional).
