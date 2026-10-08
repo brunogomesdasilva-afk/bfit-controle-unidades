@@ -163,6 +163,19 @@ export default async function ConferenciaFolhaPage({ searchParams }: PageProps<"
       ) : (
         <>
           <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-slate-900">Conferência da folha</h2>
+            <ConferenciaFolha
+              key={`${selecionada}-${mes}`}
+              academiaId={selecionada}
+              mes={mes}
+              mesTexto={nomeDoMes(mes)}
+              atual={atual}
+              podeReabrir={temModulo(perfil, "adm")}
+              chaveConfigurada={Boolean(process.env.ANTHROPIC_API_KEY)}
+            />
+          </section>
+
+          <section className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-sm font-semibold text-slate-900">Aulas dos professores no mês</h2>
               <a
@@ -210,19 +223,6 @@ export default async function ConferenciaFolhaPage({ searchParams }: PageProps<"
                 aparecem só para conferir as horas: recebem na folha.
               </p>
             )}
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-sm font-semibold text-slate-900">Conferência da folha</h2>
-            <ConferenciaFolha
-              key={`${selecionada}-${mes}`}
-              academiaId={selecionada}
-              mes={mes}
-              mesTexto={nomeDoMes(mes)}
-              atual={atual}
-              podeReabrir={temModulo(perfil, "adm")}
-              chaveConfigurada={Boolean(process.env.ANTHROPIC_API_KEY)}
-            />
           </section>
 
           <section>

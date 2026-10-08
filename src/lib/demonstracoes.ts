@@ -21,14 +21,14 @@ export function analiticas(linhas: LinhaBalancete[]) {
 export const GRUPOS_DRE = [
   { chave: "receita", rotulo: "Receita bruta de serviços" },
   { chave: "deducoes", rotulo: "(-) Tributos e cancelamentos sobre a receita" },
-  { chave: "pessoal", rotulo: "Pessoal e encargos" },
-  { chave: "ocupacao", rotulo: "Ocupação (aluguel, condomínio, IPTU, energia, água, gás)" },
+  { chave: "pessoal", rotulo: "Custo com pessoal" },
+  { chave: "ocupacao", rotulo: "Custo ocupação (CTO)" },
   { chave: "servicos", rotulo: "Serviços de terceiros e manutenção" },
-  { chave: "franquia", rotulo: "Franquia (royalties)" },
-  { chave: "marketing", rotulo: "Vendas e marketing" },
-  { chave: "taxas", rotulo: "Taxas de cartão e meios de pagamento" },
+  { chave: "franquia", rotulo: "Custo com franquia" },
+  { chave: "marketing", rotulo: "Despesas de vendas e marketing" },
+  { chave: "taxas", rotulo: "Taxas de cartão" },
   { chave: "administrativas", rotulo: "Despesas administrativas" },
-  { chave: "preoperacionais", rotulo: "Despesas pré-operacionais (não recorrentes)" },
+  { chave: "preoperacionais", rotulo: "Despesas pré-operacionais" },
   { chave: "depreciacao", rotulo: "Depreciação e amortização" },
   { chave: "receitas_financeiras", rotulo: "Receitas financeiras" },
   { chave: "despesas_financeiras", rotulo: "Despesas financeiras (juros, tarifas, IOF, multas)" },
@@ -36,7 +36,8 @@ export const GRUPOS_DRE = [
   { chave: "ir_cs", rotulo: "Imposto de renda e contribuição social" },
 ] as const;
 export type ChaveDre = (typeof GRUPOS_DRE)[number]["chave"];
-export const DESPESAS_OPERACIONAIS: ChaveDre[] = ["pessoal", "ocupacao", "servicos", "franquia", "marketing", "taxas", "administrativas", "preoperacionais"];
+// Na ordem do relatório gerencial: ocupação, serviços, franquia, pessoal, administrativas, cartão, marketing.
+export const DESPESAS_OPERACIONAIS: ChaveDre[] = ["ocupacao", "servicos", "franquia", "pessoal", "administrativas", "taxas", "marketing", "preoperacionais"];
 
 export function grupoDre(conta: string, descricao: string): ChaveDre | null {
   const d = semAcento(descricao);
@@ -105,24 +106,24 @@ export function totaisDre(grupos: Record<ChaveDre, Grupo>): Dre {
 // ------------------------------------------------------------------------------------------------ Balanço
 
 export const GRUPOS_BALANCO = [
-  { chave: "disponivel", rotulo: "Caixa, bancos e aplicações", lado: "ativo", bloco: "Ativo circulante" },
-  { chave: "receber", rotulo: "Contas a receber (cartões e clientes)", lado: "ativo", bloco: "Ativo circulante" },
-  { chave: "creditos", rotulo: "Adiantamentos e impostos a recuperar", lado: "ativo", bloco: "Ativo circulante" },
-  { chave: "socios_ativo", rotulo: "Adiantamentos a sócios e empresas do grupo", lado: "ativo", bloco: "Ativo circulante" },
+  { chave: "disponivel", rotulo: "Caixa e aplicações", lado: "ativo", bloco: "Ativo circulante" },
+  { chave: "receber", rotulo: "Contas a receber", lado: "ativo", bloco: "Ativo circulante" },
+  { chave: "creditos", rotulo: "Adiantamentos e impostos", lado: "ativo", bloco: "Ativo circulante" },
+  { chave: "socios_ativo", rotulo: "Sócios e empresas do grupo", lado: "ativo", bloco: "Ativo circulante" },
   { chave: "investimentos", rotulo: "Investimentos", lado: "ativo", bloco: "Ativo não circulante" },
-  { chave: "imobilizado", rotulo: "Imobilizado (equipamentos, benfeitorias, móveis)", lado: "ativo", bloco: "Ativo não circulante" },
+  { chave: "imobilizado", rotulo: "Imobilizado", lado: "ativo", bloco: "Ativo não circulante" },
   { chave: "intangivel", rotulo: "Intangível (franquia)", lado: "ativo", bloco: "Ativo não circulante" },
-  { chave: "emprestimos_cp", rotulo: "Empréstimos, financiamentos e saldo negativo em banco", lado: "passivo", bloco: "Passivo circulante" },
-  { chave: "fornecedores", rotulo: "Fornecedores e contas a pagar", lado: "passivo", bloco: "Passivo circulante" },
-  { chave: "pessoal", rotulo: "Salários, encargos e provisões trabalhistas", lado: "passivo", bloco: "Passivo circulante" },
-  { chave: "impostos", rotulo: "Impostos e contribuições a recolher", lado: "passivo", bloco: "Passivo circulante" },
-  { chave: "adiantamentos_clientes", rotulo: "Receitas antecipadas (Gympass e clientes)", lado: "passivo", bloco: "Passivo circulante" },
+  { chave: "emprestimos_cp", rotulo: "Empréstimos e financiamentos", lado: "passivo", bloco: "Passivo circulante" },
+  { chave: "fornecedores", rotulo: "Fornecedores e outros", lado: "passivo", bloco: "Passivo circulante" },
+  { chave: "pessoal", rotulo: "Salários e obrigações sociais", lado: "passivo", bloco: "Passivo circulante" },
+  { chave: "impostos", rotulo: "Impostos, taxas e contribuições", lado: "passivo", bloco: "Passivo circulante" },
+  { chave: "adiantamentos_clientes", rotulo: "Receitas antecipadas (Gympass)", lado: "passivo", bloco: "Passivo circulante" },
   { chave: "socios_passivo", rotulo: "Sócios e empresas do grupo", lado: "passivo", bloco: "Passivo circulante" },
-  { chave: "emprestimos_lp", rotulo: "Empréstimos e financiamentos de longo prazo", lado: "passivo", bloco: "Passivo não circulante" },
+  { chave: "emprestimos_lp", rotulo: "Empréstimos e financiamentos", lado: "passivo", bloco: "Passivo não circulante" },
   { chave: "lucros_distribuir", rotulo: "Lucros a distribuir aos sócios", lado: "passivo", bloco: "Passivo não circulante" },
-  { chave: "capital", rotulo: "Capital social (menos o a integralizar)", lado: "passivo", bloco: "Patrimônio líquido" },
-  { chave: "reservas", rotulo: "Lucros acumulados, reservas e distribuições", lado: "passivo", bloco: "Patrimônio líquido" },
-  { chave: "resultado", rotulo: "Resultado do ano (ainda não encerrado)", lado: "passivo", bloco: "Patrimônio líquido" },
+  { chave: "capital", rotulo: "Capital social", lado: "passivo", bloco: "Patrimônio líquido" },
+  { chave: "reservas", rotulo: "Reservas e lucros acumulados", lado: "passivo", bloco: "Patrimônio líquido" },
+  { chave: "resultado", rotulo: "Resultado do ano", lado: "passivo", bloco: "Patrimônio líquido" },
 ] as const;
 export type ChaveBalanco = (typeof GRUPOS_BALANCO)[number]["chave"];
 
