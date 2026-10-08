@@ -44,7 +44,9 @@ function resumo(relatorio: string | null) {
   if (!relatorio) return "—";
   const valor = (rotulo: string) => {
     const linha = relatorio.split("\n").find((l) => l.startsWith("|") && l.toUpperCase().includes(rotulo));
-    return linha?.match(/R\$\s*[\d.]+,\d{2}/)?.[0] ?? null;
+    // O total é o último valor da linha (com ou sem "R$"), ex.: "| **LIBERAR** | itens | **25.774,41** |".
+    const total = linha?.match(/\d{1,3}(?:\.\d{3})*,\d{2}/g)?.pop();
+    return total ? `R$ ${total}` : null;
   };
   const partes = [["Liberar", valor("LIBERAR")], ["Segurar", valor("SEGURAR")]].filter(([, v]) => v).map(([r, v]) => `${r} ${v}`);
   return partes.length ? partes.join(" · ") : "—";
