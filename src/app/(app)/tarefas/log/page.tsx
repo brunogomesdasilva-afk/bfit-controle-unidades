@@ -40,7 +40,7 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
       .lt("feita_em", `${proximoMes(mes)}-01T00:00:00-03:00`)
       .order("feita_em", { ascending: false }),
     // Marcadas no período atual (para as pendências de agora) e no mês escolhido (situação das mensais).
-    supabase.from("tarefas_feitas").select("id, tarefa_id, usuario_id, periodo, feita_em").in("periodo", [dataHoje, dataHoje.slice(0, 7), mes]),
+    supabase.from("tarefas_feitas").select("id, tarefa_id, usuario_id, periodo, feita_em").in("periodo", [dataHoje, dataHoje.slice(0, 7), mes, "unica"]),
   ]);
   const tarefas = (tarefasData ?? []) as Tarefa[];
   const usuarios: Usuario[] = (perfis ?? []).map((p) => ({ id: p.id, nome: p.nome, perfil: p.perfil, modulos: modulosDoPerfil(p) }));
@@ -65,6 +65,13 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
       linhas: usuarios.filter((u) => seAplica({ ...t, ativo: true }, u)).map((u) => ({ usuario: u, feita: feita(feitasAtuais as Feita[], t.id, u.id, mes) })),
     }))
     .filter((m) => m.linhas.length);
+
+  // Tarefas pontuais: de quem é, desde quando e se já foi feita.
+  const pontuais = tarefas
+    .filter((t) => t.recorrencia === "pontual" && (t.ativo || feita(feitasAtuais as Feita[], t.id, t.usuario_id ?? "", "unica")))
+    .map((t) => ({ tarefa: t, feita: feita(feitasAtuais as Feita[], t.id, t.usuario_id ?? "", "unica") }))
+    .sort((a, b) => Number(Boolean(a.feita)) - Number(Boolean(b.feita)));
+  const diasDesde = (d: string | null) => (d ? Math.max(0, Math.round((Date.parse(dataHoje) - Date.parse(d)) / 86400000)) : null);
 
   // Histórico do mês agrupado por dia.
   const porDia = new Map<string, Feita[]>();
@@ -101,6 +108,42 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
           vazio="Nenhuma tarefa pendente agora."
         />
       </section>
+
+      {pontuais.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Tarefas pontuais</h2>
+          <TabelaRelatorio
+            colunas={[
+              { rotulo: "Tarefa", valor: (p) => p.tarefa.titulo, alinhar: "esquerda", destaque: true },
+              { rotulo: "Usuário", valor: (p) => (p.tarefa.usuario_id ? nomeUsuario(p.tarefa.usuario_id) : "—"), alinhar: "esquerda" },
+              { rotulo: "A partir de", valor: (p) => (p.tarefa.data_inicio ? p.tarefa.data_inicio.split("-").reverse().join("/") : "—"), alinhar: "esquerda" },
+              {
+                rotulo: "Situação",
+                valor: (p) => {
+                  if (p.feita)
+                    return (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                        Feita em {quando(p.feita.feita_em, { dateStyle: "short", timeStyle: "short" })}
+                      </span>
+                    );
+                  const dias = diasDesde(p.tarefa.data_inicio);
+                  if (p.tarefa.data_inicio && p.tarefa.data_inicio > dataHoje)
+                    return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Ainda não começou</span>;
+                  return (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">
+                      Pendente{dias !== null ? ` há ${dias} ${dias === 1 ? "dia" : "dias"}` : ""}
+                    </span>
+                  );
+                },
+                alinhar: "esquerda",
+              },
+            ]}
+            linhas={pontuais}
+            chave={(p) => p.tarefa.id}
+            vazio=""
+          />
+        </section>
+      )}
 
       {mensais.map((m) => (
         <section key={m.tarefa.id}>

@@ -99,7 +99,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
     // Checklist de tarefas do usuário: as do tipo de acesso dele ainda não marcadas no dia (ou no mês).
     const [{ data: tarefas }, { data: feitas }] = await Promise.all([
       supabase.from("tarefas").select("*").eq("ativo", true).order("created_at"),
-      supabase.from("tarefas_feitas").select("tarefa_id, periodo").eq("usuario_id", atual.id).in("periodo", [dataHoje, dataHoje.slice(0, 7)]),
+      supabase.from("tarefas_feitas").select("tarefa_id, periodo").eq("usuario_id", atual.id).in("periodo", [dataHoje, dataHoje.slice(0, 7), "unica"]),
     ]);
     pendentes = pendentesDe((tarefas ?? []) as Tarefa[], feitas ?? [], atual, dataHoje);
     // Aniversários de hoje (e do fim de semana/feriado seguinte, avisados no último dia útil).
