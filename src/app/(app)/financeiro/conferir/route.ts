@@ -3,6 +3,7 @@ import { unzipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
+import { consultarCnpj } from "@/lib/consultaCnpj";
 import { excelParaTexto } from "@/lib/excelTexto";
 import { PROMPT_MESTRE } from "@/lib/promptConferencia";
 import { REGRAS_PAGAMENTOS } from "@/lib/regrasPagamentos";
@@ -24,6 +25,14 @@ const IMAGENS: Record<string, "image/png" | "image/jpeg" | "image/webp" | "image
   jpeg: "image/jpeg",
   webp: "image/webp",
   gif: "image/gif",
+};
+
+// Ferramenta que o Claude chama para ver o cadastro de cada prestador/fornecedor na Receita (regime, CNAE, situação).
+const FERRAMENTA_CNPJ: Anthropic.Beta.BetaTool = {
+  name: "consultar_cnpj",
+  description:
+    "Consulta o cadastro de um CNPJ na base pública da Receita Federal: razão social, situação cadastral, CNAE principal e secundários, natureza jurídica, porte, opção pelo Simples Nacional e pelo MEI (com datas de opção e exclusão), município e sócios. Use para todo prestador ou fornecedor com nota fiscal no lote, antes de validar as retenções.",
+  input_schema: { type: "object", properties: { cnpj: { type: "string", description: "CNPJ com ou sem pontuação" } }, required: ["cnpj"] },
 };
 
 type ItemInventario = { nome: string; tipo: string; tamanho: number; paginas?: number; lido: boolean; motivo?: string };
@@ -180,16 +189,20 @@ export async function POST(request: Request) {
           ].join("\n\n"),
         });
 
+        // O lote vai em cache: nas rodadas seguintes (consultas de CNPJ, pesquisa) ele não é cobrado inteiro de novo.
+        const ultimo = conteudo[conteudo.length - 1];
+        if (ultimo.type === "text") ultimo.cache_control = { type: "ephemeral" };
         const mensagens: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: conteudo }];
-        // A pesquisa na internet roda no servidor da Anthropic; se ela pausar o turno, continua de onde parou.
-        for (let rodada = 0; rodada < 5; rodada++) {
+        const consultas = new Map<string, Promise<unknown>>();
+        // Rodadas: a pesquisa na internet roda na Anthropic (pode pausar o turno); a consulta de CNPJ roda aqui.
+        for (let rodada = 0; rodada < 25; rodada++) {
           const stream = client.beta.messages.stream({
             model: MODELO,
             max_tokens: 64000,
             thinking: { type: "adaptive" },
             output_config: { effort: "high" },
             system: [{ type: "text", text: `${PROMPT_MESTRE}\n\n${REGRAS_PAGAMENTOS}`, cache_control: { type: "ephemeral" } }],
-            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
+            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }, FERRAMENTA_CNPJ],
             betas: ["server-side-fallback-2026-07-01", BETA_ARQUIVOS],
             fallbacks: "default",
             messages: mensagens,
@@ -199,6 +212,19 @@ export async function POST(request: Request) {
           modelo = final.model;
           if (final.stop_reason === "pause_turn") {
             mensagens.push({ role: "assistant", content: final.content });
+            continue;
+          }
+          if (final.stop_reason === "tool_use") {
+            mensagens.push({ role: "assistant", content: final.content });
+            const pedidos = final.content.filter((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === "tool_use");
+            const resultados = await Promise.all(
+              pedidos.map(async (p) => {
+                const cnpj = String((p.input as { cnpj?: string })?.cnpj ?? "").replace(/D/g, "");
+                if (!consultas.has(cnpj)) consultas.set(cnpj, consultarCnpj(cnpj));
+                return { type: "tool_result" as const, tool_use_id: p.id, content: JSON.stringify(await consultas.get(cnpj)) };
+              })
+            );
+            mensagens.push({ role: "user", content: resultados });
             continue;
           }
           if (final.stop_reason === "refusal") escrever("\n\n> A conferência foi interrompida pelo filtro de segurança do modelo. Tente de novo.");

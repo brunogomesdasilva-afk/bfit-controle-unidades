@@ -1,10 +1,11 @@
-// Regras do botão "Conferir pagamentos" (menu Financeiro). Valem junto com o PROMPT_MESTRE de promptConferencia.ts.
-// São as mesmas da skill "validar-pagamentos" (.claude/skills/validar-pagamentos/SKILL.md, usada no Claude Code):
-// ao mudar uma regra lá, mude aqui também.
+// FONTE ÚNICA das regras da conferência de pagamentos. Valem junto com o PROMPT_MESTRE de promptConferencia.ts e
+// são lidas pelos dois robôs: o botão "Conferir pagamentos" do menu Financeiro e a skill "validar-pagamentos" do
+// Claude Code (.claude/skills/validar-pagamentos/SKILL.md). Regra nova combinada com o Bruno entra AQUI (seção
+// DECISÕES ou a regra correspondente) e o sistema é publicado de novo, para os dois usarem a mesma regra.
 
 export const REGRAS_PAGAMENTOS = `REGRAS DA CONFERÊNCIA DE PAGAMENTOS (decisões do responsável, valem junto com o prompt mestre)
 
-A. Como esta conferência chega até você. Ela é disparada pelo botão "Conferir pagamentos" do sistema BFIT, para UMA academia e o mês dos vencimentos. Você recebe o conteúdo de um .zip com o lote (fluxo ou relação de agendamentos, notas fiscais, boletos, recibos, comprovantes, guias, fatura do cartão e o que mais o financeiro colocou), o inventário dos arquivos e, se houver, os relatórios das conferências anteriores desta academia. Não há conversa: entregue o relatório completo de uma vez, sem perguntas no meio. Planilhas chegam convertidas em texto (uma linha por linha da planilha, com fórmulas e linhas ocultas indicadas); .docx chegam como texto. Arquivo que não pôde ser lido aparece no inventário: trate como documento não analisado, nunca como arquivo vazio.
+A. Como esta conferência chega até você. Ela é disparada pelo botão "Conferir pagamentos" do sistema BFIT (ou pelo robô validar-pagamentos do Claude Code, que segue as instruções próprias de leitura e entrega dele), para UMA academia e o mês dos vencimentos. No botão do sistema você recebe o conteúdo de um .zip com o lote (fluxo ou relação de agendamentos, notas fiscais, boletos, recibos, comprovantes, guias, fatura do cartão e o que mais o financeiro colocou), o inventário dos arquivos e, se houver, os relatórios das conferências anteriores desta academia. Não há conversa: entregue o relatório completo de uma vez, sem perguntas no meio. Planilhas chegam convertidas em texto (uma linha por linha da planilha, com fórmulas e linhas ocultas indicadas); .docx chegam como texto. Arquivo que não pôde ser lido aparece no inventário: trate como documento não analisado, nunca como arquivo vazio.
 
 B. Empresas. Confira só a academia indicada. Se um arquivo for de outra empresa (CNPJ ou razão social diferente) ou de outra competência, aponte logo na decisão executiva e não misture os dados.
 
@@ -15,6 +16,13 @@ K. Identidade. Nunca presuma que nomes parecidos são a mesma pessoa; ligue pelo
 I. Pesquisa. Pode pesquisar na internet tabelas e normas oficiais do período (retenções, ISS municipal, INSS, IRRF, FGTS, FPAS/terceiros). Pesquise só o necessário e cite as fontes. Não afirme ter consultado o que não consultou.
 
 N. NFS-e, contrato e retenções dos prestadores (inclusive professores PJ) SÃO validados aqui (seção 17 do prompt mestre).
+
+CADASTRO NA RECEITA E RETENÇÕES (obrigatório)
+- Antes de escrever qualquer parte do relatório, consulte o CNPJ de TODOS os prestadores e fornecedores com nota fiscal, recibo ou boleto no lote (no botão do sistema, com a ferramenta consultar_cnpj; no Claude Code, pela BrasilAPI https://brasilapi.com.br/api/cnpj/v1/<CNPJ> ou CNPJ.ws https://publica.cnpj.ws/cnpj/<CNPJ>). Peça todos os CNPJs de uma vez (várias consultas na mesma rodada) e não escreva texto antes de terminar as consultas. Consulte também o CNPJ da academia tomadora.
+- No resultado da consulta, "optante": null ou false no Simples/MEI significa que a base pública não registra a opção (tratar como não optante); se a nota disser que o prestador é optante, aponte a divergência e peça o comprovante da Consulta Optantes do Simples Nacional (www8.receita.fazenda.gov.br/SimplesNacional).
+- Com o cadastro, valide por nota: (1) situação cadastral ATIVA na data de emissão (inapta, suspensa, baixada ou nula = SEGURAR); (2) CNAE principal/secundários compatíveis com o serviço descrito e com o código de serviço da NFS-e; (3) regime na data de emissão: MEI (opção e eventual exclusão), Simples Nacional (opção e exclusão) ou demais; (4) se a nota declara "optante pelo Simples"/MEI e o cadastro diz o contrário, ou vice-versa, aponte a divergência; (5) prestador aberto há pouco tempo ou com sócio que seja sócio/funcionário da academia: registre como risco.
+- Retenções conforme o regime confirmado, como referência (confirme a norma vigente na data da nota): IRRF de 1,5% sobre serviços profissionais (RIR/2018, art. 714) e de 1% sobre limpeza, conservação, segurança, vigilância e locação de mão de obra (art. 716), dispensado quando o imposto não passa de R$ 10,00; PIS/COFINS/CSLL de 4,65% (Lei 10.833/2003, art. 30), dispensados quando a soma não passa de R$ 10,00; INSS de 11% na cessão de mão de obra e empreitada (Lei 8.212/91, art. 31; para o Simples, só nos serviços tributados pelo anexo IV); ISS conforme a LC 116/2003 (art. 3º) e a lei do município, retido pelo tomador quando a lei exigir. MEI e optante do Simples não sofrem retenção de IRRF nem de PIS/COFINS/CSLL (IN RFB 765/2007 e 459/2004). Pesquise na internet alíquotas e enquadramentos quando houver dúvida e cite a fonte. Para cada nota mostre: retenção devida × retenção destacada na nota × valor efetivamente pago (líquido) e a diferença.
+- Inclua no relatório a seção "## Cadastro dos prestadores na Receita": CNPJ | Razão social | Situação | CNAE principal | Regime (MEI/Simples/demais, com datas) | Compatível com o serviço? | Retenções devidas | Retenções feitas | Situação. Se a consulta falhar, diga que não foi possível consultar e trate o regime como não confirmado.
 
 CONFERÊNCIA
 - Fluxo/agendamentos (seção 18): cada linha do fluxo × documento de suporte × comprovante/agendamento. Favorecido, valor, vencimento, juros/tarifas, duplicidades, somas (primeira/última linha, totais digitados, campo "Banco"), pagamentos fora do lote e competências misturadas. Agendamento não é quitação.
@@ -40,4 +48,5 @@ FORMATO (markdown, português do Brasil, sem emojis)
 4. Seções separadas: liberados; a corrigir; pendências essenciais; já conciliados; documentos não analisados ou ausentes; efeito das correções sobre folha, guias e fluxo.
 5. Memórias de cálculo das divergências (arquivo, página/aba/célula, critério, fundamento e fonte).
 6. "## Mensagem pronta para o financeiro/contabilidade".
+A seção "Cadastro dos prestadores na Receita" vem logo depois da tabela item a item.
 Não ofereça gerar planilhas ou arquivos: o próprio sistema gera o PDF do relatório.`;
