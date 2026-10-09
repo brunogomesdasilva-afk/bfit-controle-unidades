@@ -284,6 +284,32 @@ function gerarUmaVez(
     }
   }
 
+  // No mesmo dia e setor, quem entra mais cedo na semana fica com o turno mais cedo (ex.: no sábado, o da manhã
+  // abre às 08:00 e o do fechamento pega o das 11:00), se a troca respeitar as regras para os dois.
+  const entradaDe = (id: string) => {
+    const e = pessoas.find((p) => p.id === id)?.entrada;
+    return e ? minutos(e) : 12 * 60;
+  };
+  for (const a of atribuicoes) {
+    for (const b of atribuicoes) {
+      if (a === b || a.data !== b.data || a.setor !== b.setor || !a.funcionarioId || !b.funcionarioId) continue;
+      if (minutos(a.inicio) >= minutos(b.inicio) || entradaDe(a.funcionarioId) <= entradaDe(b.funcionarioId)) continue;
+      const pa = pessoas.find((p) => p.id === a.funcionarioId)!;
+      const pb = pessoas.find((p) => p.id === b.funcionarioId)!;
+      if (!servePara(pa, b) || !servePara(pb, a)) continue;
+      const [ia, ib] = [a.funcionarioId, b.funcionarioId];
+      atribuir(a, null);
+      atribuir(b, null);
+      if (pode(pb, a.data, { inicio: a.inicio, fim: a.fim }) && pode(pa, b.data, { inicio: b.inicio, fim: b.fim })) {
+        atribuir(a, ib);
+        atribuir(b, ia);
+      } else {
+        atribuir(a, ia);
+        atribuir(b, ib);
+      }
+    }
+  }
+
   // O que ainda ficou vazio: aviso com o motivo de cada pessoa do setor não poder pegar.
   for (const a of atribuicoes.filter((x) => !x.funcionarioId)) {
     const turno = turnosDoDia(a.data, a.setor, feriados)[a.ordem - 1] ?? { inicio: a.inicio, fim: a.fim };
