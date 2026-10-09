@@ -286,9 +286,11 @@ const TODOS: ItemMenu[] = [
     ],
   },
   {
-    href: "/financeiro",
+    // Grupo (sem tela própria): conferências, cadastros, contas a pagar e a receber, conciliação e relatórios.
+    href: "/financeiro/menu",
     rotulo: "Financeiro",
-    ativo: (p: string) => p === "/financeiro",
+    grupo: true,
+    ativo: () => false,
     icone: (
       <Icone>
         <rect x="2" y="5" width="20" height="14" rx="2" />
@@ -296,12 +298,11 @@ const TODOS: ItemMenu[] = [
         <path d="M6 9v.01M18 15v.01" />
       </Icone>
     ),
-
     filhos: [
       {
         href: "/financeiro",
-        rotulo: "Conferência de pagamentos",
-        ativo: (p: string) => p === "/financeiro",
+        rotulo: "Conferências",
+        ativo: (p: string) => p === "/financeiro" || p === "/financeiro/fechamento",
         icone: (
           <Icone>
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -309,17 +310,123 @@ const TODOS: ItemMenu[] = [
             <polyline points="9 15 11 17 15 13" />
           </Icone>
         ),
+        filhos: [
+          {
+            href: "/financeiro",
+            rotulo: "Conferência de pagamentos",
+            ativo: (p: string) => p === "/financeiro",
+            icone: (
+              <Icone>
+                <polyline points="9 15 11 17 15 13" />
+                <rect x="4" y="3" width="16" height="18" rx="2" />
+              </Icone>
+            ),
+          },
+          {
+            href: "/financeiro/fechamento",
+            rotulo: "Fechamento mensal",
+            ativo: (p: string) => p === "/financeiro/fechamento",
+            icone: (
+              <Icone>
+                <line x1="4" y1="20" x2="4" y2="10" />
+                <line x1="10" y1="20" x2="10" y2="4" />
+                <line x1="16" y1="20" x2="16" y2="13" />
+                <line x1="2" y1="20" x2="22" y2="20" />
+              </Icone>
+            ),
+          },
+        ],
       },
       {
-        href: "/financeiro/fechamento",
-        rotulo: "Fechamento mensal",
-        ativo: (p: string) => p === "/financeiro/fechamento",
+        href: "/financeiro/cadastros/pessoas",
+        rotulo: "Cadastros",
+        ativo: (p: string) => p.startsWith("/financeiro/cadastros"),
         icone: (
           <Icone>
-            <line x1="4" y1="20" x2="4" y2="10" />
-            <line x1="10" y1="20" x2="10" y2="4" />
-            <line x1="16" y1="20" x2="16" y2="13" />
-            <line x1="2" y1="20" x2="22" y2="20" />
+            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+          </Icone>
+        ),
+        filhos: [
+          {
+            href: "/financeiro/cadastros/pessoas",
+            rotulo: "Clientes e fornecedores",
+            ativo: (p: string) => p === "/financeiro/cadastros/pessoas",
+            icone: (
+              <Icone>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+              </Icone>
+            ),
+          },
+          {
+            href: "/financeiro/cadastros/contas",
+            rotulo: "Contas bancárias",
+            ativo: (p: string) => p === "/financeiro/cadastros/contas",
+            icone: (
+              <Icone>
+                <path d="M3 21h18M3 10h18M5 6l7-3 7 3" />
+                <path d="M6 10v11M10 10v11M14 10v11M18 10v11" />
+              </Icone>
+            ),
+          },
+          {
+            href: "/financeiro/cadastros/categorias",
+            rotulo: "Categorias",
+            ativo: (p: string) => p === "/financeiro/cadastros/categorias",
+            icone: (
+              <Icone>
+                <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                <line x1="7" y1="7" x2="7.01" y2="7" />
+              </Icone>
+            ),
+          },
+        ],
+      },
+      {
+        href: "/financeiro/pagar",
+        rotulo: "Contas a pagar",
+        ativo: (p: string) => p === "/financeiro/pagar",
+        icone: (
+          <Icone>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="19 12 12 19 5 12" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/financeiro/receber",
+        rotulo: "Contas a receber",
+        ativo: (p: string) => p === "/financeiro/receber",
+        icone: (
+          <Icone>
+            <line x1="12" y1="19" x2="12" y2="5" />
+            <polyline points="5 12 12 5 19 12" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/financeiro/conciliacao",
+        rotulo: "Conciliação",
+        ativo: (p: string) => p === "/financeiro/conciliacao",
+        icone: (
+          <Icone>
+            <polyline points="17 1 21 5 17 9" />
+            <path d="M3 11V9a4 4 0 0 1 4-4h14" />
+            <polyline points="7 23 3 19 7 15" />
+            <path d="M21 13v2a4 4 0 0 1-4 4H3" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/financeiro/relatorios",
+        rotulo: "Relatórios",
+        ativo: (p: string) => p === "/financeiro/relatorios",
+        icone: (
+          <Icone>
+            <line x1="18" y1="20" x2="18" y2="10" />
+            <line x1="12" y1="20" x2="12" y2="4" />
+            <line x1="6" y1="20" x2="6" y2="14" />
           </Icone>
         ),
       },
