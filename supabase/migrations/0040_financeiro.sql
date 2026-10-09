@@ -162,16 +162,17 @@ left join (
 ) b on b.titulo_id = t.id;
 
 -- ------------------------------------------------------------------ Acesso
-create or replace function pode_financeiro_conta(conta uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from fin_contas c where c.id = conta and pode_financeiro(c.academia_id));
+-- Parâmetros com prefixo p_: "conta" é também nome de coluna de fin_contas e o banco confundiria os dois.
+create or replace function pode_financeiro_conta(p_conta uuid)
+returns boolean language sql stable security definer set search_path = public as $
+  select exists (select 1 from fin_contas c where c.id = p_conta and pode_financeiro(c.academia_id));
 $$;
 revoke execute on function pode_financeiro_conta(uuid) from public;
 grant execute on function pode_financeiro_conta(uuid) to authenticated;
 
-create or replace function pode_financeiro_titulo(titulo uuid)
-returns boolean language sql stable security definer set search_path = public as $$
-  select exists (select 1 from fin_titulos t where t.id = titulo and pode_financeiro(t.academia_id));
+create or replace function pode_financeiro_titulo(p_titulo uuid)
+returns boolean language sql stable security definer set search_path = public as $
+  select exists (select 1 from fin_titulos t where t.id = p_titulo and pode_financeiro(t.academia_id));
 $$;
 revoke execute on function pode_financeiro_titulo(uuid) from public;
 grant execute on function pode_financeiro_titulo(uuid) to authenticated;
