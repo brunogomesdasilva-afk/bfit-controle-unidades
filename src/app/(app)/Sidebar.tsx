@@ -723,7 +723,7 @@ function LinkMenu({
   aoClicarGrupo?: () => void;
 }) {
   const ativo = forcarAtivo || item.ativo(pathname);
-  const classe = `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left ${filho && !recolhido ? "text-[13px]" : "text-sm"} ${
+  const classe = `flex w-full min-w-0 items-center rounded-md py-2 text-left ${filho && !recolhido ? "gap-2 px-2 text-[13px]" : "gap-3 px-3 text-sm"} ${
     recolhido ? "justify-center" : ""
   } ${
     ativo
@@ -733,7 +733,7 @@ function LinkMenu({
   const conteudo = (
     <>
       {item.icone}
-      {!recolhido && <span className={filho ? "leading-tight" : "truncate"}>{item.rotulo}</span>}
+      {!recolhido && <span className={filho ? "min-w-0 break-words leading-tight" : "truncate"}>{item.rotulo}</span>}
     </>
   );
   if (item.grupo)
@@ -897,7 +897,7 @@ export function Sidebar({
       }}
       className={`fixed inset-y-0 left-0 z-50 flex h-screen w-64 shrink-0 flex-col border-r border-grafite-escuro bg-grafite transition-transform duration-200 md:sticky md:top-0 md:z-auto md:translate-x-0 md:transition-[width] print:hidden ${
         aberto ? "translate-x-0" : "-translate-x-full"
-      } ${recolhido ? "md:w-16" : "md:w-56"}`}
+      } ${recolhido ? "md:w-16" : "md:w-64"}`}
     >
       <div
         className={`flex items-center border-b border-white/10 ${
@@ -934,7 +934,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-2">
         {itens.map((item) => {
           // Com o submenu fechado, o item pai fica destacado se a página atual estiver dentro dele.
           const estaAberto = submenuAberto === item.href;
@@ -956,7 +956,7 @@ export function Sidebar({
                 )}
               </div>
               {item.filhos && !recolhido && estaAberto && (
-                <div className="ml-5 space-y-1 border-l border-white/15 pl-2">
+                <div className="ml-3 space-y-1 border-l border-white/15 pl-1.5">
                   {item.filhos.map((filho) => {
                     const filhoAberto = segundoNivelAberto === filho.href;
                     return (
@@ -981,13 +981,13 @@ export function Sidebar({
                           )}
                         </div>
                         {filho.filhos && (item.grupo ? filhoAberto : filho.ativo(pathname)) && (
-                          <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                          <div className="ml-2.5 space-y-1 border-l border-white/15 pl-1.5">
                             {filho.filhos.map((neto) => (
                               <div key={neto.href} className="space-y-1">
                                 <LinkMenu item={neto} pathname={pathname} recolhido={recolhido} filho />
                                 {/* Último nível (ex.: cadastros de uma academia): aparece quando se está dentro dela. */}
                                 {neto.filhos && neto.ativo(pathname) && (
-                                  <div className="ml-4 space-y-1 border-l border-white/15 pl-2">
+                                  <div className="ml-2.5 space-y-1 border-l border-white/15 pl-1.5">
                                     {neto.filhos.map((bisneto) => (
                                       <LinkMenu key={bisneto.href} item={bisneto} pathname={pathname} recolhido={recolhido} filho />
                                     ))}
