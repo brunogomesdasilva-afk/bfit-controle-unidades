@@ -27,6 +27,7 @@ const PREFIXOS: [string, Modulo][] = [
   ["/rh", "rh"],
   ["/financeiro", "financeiro"],
   ["/usuarios", "adm"],
+  ["/admin", "adm"],
   ["/backup", "adm"],
   ["/tarefas", "adm"],
 ];
