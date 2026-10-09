@@ -5,6 +5,7 @@ import { nomePessoa } from "@/lib/financeiro";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 export const RELATORIOS = {
+  fluxo_pagamentos: "Fluxo de pagamentos (conferência)",
   pagar_aberto: "Contas a pagar em aberto",
   receber_aberto: "Contas a receber em aberto",
   pagamentos: "Pagamentos realizados",
@@ -40,6 +41,55 @@ export async function montarRelatorio(supabase: Supabase, rel: Relatorio, f: { a
   const conta = new Map((contas ?? []).map((c) => [c.id, c.nome]));
   const academia = new Map(f.academias.map((a) => [a.id, a.nome]));
   const comAcademia = !f.academia;
+
+  // No formato da planilha do fluxo usada na conferência de pagamentos: um título por linha, pela data de
+  // pagamento (previsão), com o valor negativo (a pagar). Cancelados ficam de fora.
+  if (rel === "fluxo_pagamentos") {
+    const titulos = await tudo((de, ate) => {
+      let q = supabase
+        .from("fin_titulos_situacao")
+        .select("academia_id, pessoa_id, categoria_id, conta_id, previsao, vencimento, documento, descricao, parcela, parcelas, valor, saldo, situacao")
+        .eq("tipo", "pagar")
+        .neq("situacao", "cancelado")
+        .gte("previsao", f.de)
+        .lte("previsao", f.ate)
+        .order("previsao")
+        .range(de, ate);
+      if (f.academia) q = q.eq("academia_id", f.academia);
+      return q;
+    });
+    const razao = new Map((pessoas ?? []).map((p) => [p.id, p.razao_social as string]));
+    const ordenados = titulos.sort((a, b) => (a.previsao ?? a.vencimento).localeCompare(b.previsao ?? b.vencimento) || (razao.get(a.pessoa_id) ?? "").localeCompare(razao.get(b.pessoa_id) ?? ""));
+    const situacao: Record<string, string> = { aberto: "a pagar", vencido: "vencido", parcial: "pago em parte", liquidado: "pago" };
+    const porConta = new Map<string, number>();
+    for (const x of ordenados) porConta.set(conta.get(x.conta_id) ?? "Sem conta", (porConta.get(conta.get(x.conta_id) ?? "Sem conta") ?? 0) - Number(x.valor));
+    return {
+      colunas: [
+        { rotulo: "Data de previsão", tipo: "data" },
+        { rotulo: "Cliente ou Fornecedor (Razão Social)", tipo: "texto" },
+        { rotulo: "Categoria", tipo: "texto" },
+        { rotulo: "Parcela", tipo: "texto" },
+        { rotulo: "Conta corrente", tipo: "texto" },
+        { rotulo: "Projeto", tipo: "texto" },
+        { rotulo: "NF", tipo: "texto" },
+        { rotulo: "A pagar", tipo: "moeda" },
+        { rotulo: "Situação", tipo: "texto" },
+      ],
+      linhas: ordenados.map((x) => [
+        x.previsao ?? x.vencimento,
+        razao.get(x.pessoa_id) ?? "",
+        categoria.get(x.categoria_id)?.nome ?? "",
+        `${String(x.parcela).padStart(3, "0")}/${String(x.parcelas).padStart(3, "0")}`,
+        conta.get(x.conta_id) ?? "",
+        academia.get(x.academia_id) ?? "",
+        x.documento ?? "",
+        -Number(x.valor),
+        situacao[x.situacao] ?? x.situacao,
+      ]),
+      totais: ["", "", "", "", "", "", "Total", -sum(ordenados, "valor"), ""],
+      nota: `Títulos a pagar com data de pagamento (previsão) de ${f.de.split("-").reverse().join("/")} a ${f.ate.split("-").reverse().join("/")}. Por conta: ${[...porConta].map(([c, v]) => `${c} ${v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`).join(" · ") || "—"}.`,
+    };
+  }
 
   if (rel === "pagar_aberto" || rel === "receber_aberto") {
     const titulos = await tudo((de, ate) => {

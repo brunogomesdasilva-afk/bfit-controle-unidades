@@ -66,6 +66,7 @@ export type Titulo = {
   ret_csll: number;
   observacoes: string | null;
   cancelado: boolean;
+  anexo?: string | null; // PDF da NF (pasta "pagamentos" do armazenamento)
   // da view fin_titulos_situacao
   baixado: number;
   pago: number;

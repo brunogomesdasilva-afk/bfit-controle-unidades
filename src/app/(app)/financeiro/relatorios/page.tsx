@@ -23,13 +23,15 @@ export default async function RelatoriosFinanceiroPage({ searchParams }: PagePro
   const params = await searchParams;
   const p = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const { supabase, academias, selecionada } = await contextoAcademias(p("academia"));
-  const rel: Relatorio = (p("rel") as Relatorio) in RELATORIOS ? (p("rel") as Relatorio) : "pagar_aberto";
+  const rel: Relatorio = (p("rel") as Relatorio) in RELATORIOS ? (p("rel") as Relatorio) : "fluxo_pagamentos";
   const mes = hoje().slice(0, 7);
-  const de = p("de") ?? (rel === "fluxo" ? `${mes.slice(0, 4)}-01-01` : `${mes}-01`);
+  const somarDias = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  // Fluxo de pagamentos: por padrão, de hoje aos próximos 7 dias (o lote da semana).
+  const de = p("de") ?? (rel === "fluxo_pagamentos" ? hoje() : rel === "fluxo" ? `${mes.slice(0, 4)}-01-01` : `${mes}-01`);
   // Último dia do mês atual + n meses.
   const fimDoMes = (n: number) => new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) + n, 0)).toISOString().slice(0, 10);
   // Padrão: previsto = próximos 3 meses; fluxo realizado = ano até hoje; os demais = mês atual.
-  const ate = p("ate") ?? (rel === "previsto" ? fimDoMes(2) : rel === "fluxo" ? hoje() : fimDoMes(0));
+  const ate = p("ate") ?? (rel === "fluxo_pagamentos" ? somarDias(hoje(), 7) : rel === "previsto" ? fimDoMes(2) : rel === "fluxo" ? hoje() : fimDoMes(0));
   const tabela = await montarRelatorio(supabase, rel, { academia: selecionada, de, ate, academias });
   const usaDe = rel !== "pagar_aberto" && rel !== "receber_aberto";
   const q = (mudar: Record<string, string | null>) => {
@@ -67,7 +69,7 @@ export default async function RelatoriosFinanceiroPage({ searchParams }: PagePro
         {selecionada && <input type="hidden" name="academia" value={selecionada} />}
         {usaDe && (
           <label className="text-xs text-slate-600">
-            De
+            {rel === "fluxo_pagamentos" ? "Data de pagamento de" : "De"}
             <input type="date" name="de" defaultValue={de} className="mt-1 block rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
           </label>
         )}

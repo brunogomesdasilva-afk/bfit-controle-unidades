@@ -3,6 +3,7 @@
 import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { consultarCnpj } from "@/lib/consultaCnpj";
+import { feriadosDaAcademia, proximoDiaUtil } from "@/lib/diasUteis";
 import { documentoValido, soNumeros, somarMeses, type TipoTitulo } from "@/lib/financeiro";
 import { data as lerData, hoje, mensagemErro, numero, texto } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
@@ -147,8 +148,11 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   if ("erro" in a) return { erro: a.erro };
   const total = valor(dados.valor);
   if (!total) return { erro: "Informe o valor." };
-  const vencimento = lerData(dados.vencimento);
-  if (!vencimento) return { erro: "Informe o vencimento." };
+  const vencimentoDigitado = lerData(dados.vencimento);
+  if (!vencimentoDigitado) return { erro: "Informe o vencimento." };
+  // Vencimento em sábado, domingo ou feriado vai para o próximo dia útil (também em cada parcela).
+  const feriados = await feriadosDaAcademia(a.supabase, dados.academia_id || null);
+  const vencimento = proximoDiaUtil(vencimentoDigitado, feriados);
   if (!dados.academia_id) return { erro: "Escolha a academia (projeto)." };
   if (!dados.pessoa_id) return { erro: tipo === "pagar" ? "Escolha o fornecedor." : "Escolha o cliente." };
   if (!dados.categoria_id) return { erro: "Escolha a categoria." };
@@ -190,7 +194,7 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   const porParcela = centavos(Math.floor((total / parcelas) * 100) / 100);
   const grupo = parcelas > 1 ? crypto.randomUUID() : null;
   const linhas = Array.from({ length: parcelas }, (_, i) => {
-    const venc = somarMeses(vencimento, i);
+    const venc = proximoDiaUtil(somarMeses(vencimentoDigitado, i), feriados);
     return {
       ...base,
       valor: i === parcelas - 1 ? centavos(total - porParcela * (parcelas - 1)) : porParcela,
@@ -206,6 +210,110 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   if (error) return { erro: mensagemErro(error) };
   atualizar();
   return { ok: parcelas > 1 ? `${parcelas} parcelas incluídas.` : "Título incluído.", id: criados?.[0]?.id };
+}
+
+// Lançamento de uma NF importada do PDF: cadastra o fornecedor (se for novo, já com a categoria padrão escolhida)
+// e cria os títulos a pagar, um por parcela, com o PDF anexado. Vencimento fora de dia útil vai para o próximo.
+export type NotaParaLancar = {
+  academiaId: string;
+  fornecedorId: string | null;
+  novoFornecedor: { documento: string; razao_social: string; nome_fantasia: string | null; regime_tributario: string | null; cnae: string | null; cidade: string | null; uf: string | null } | null;
+  categoriaId: string;
+  contaId: string;
+  documento: string;
+  descricao: string;
+  observacoes: string;
+  retencoes: Record<"ret_iss" | "ret_irrf" | "ret_inss" | "ret_pis" | "ret_cofins" | "ret_csll", string>;
+  parcelas: { vencimento: string; valor: string }[];
+  anexo: string | null;
+};
+
+export async function lancarNotaFiscal(n: NotaParaLancar): Promise<ResultadoFin> {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  if (!n.academiaId) return { erro: "Escolha a academia." };
+  if (!n.categoriaId) return { erro: "Escolha a categoria." };
+  if (!n.parcelas.length) return { erro: "Informe o vencimento e o valor (ou as parcelas)." };
+  const parcelas = n.parcelas.map((p) => ({ vencimento: lerData(p.vencimento), valor: valor(p.valor) }));
+  if (parcelas.some((p) => !p.vencimento || !p.valor)) return { erro: "Toda parcela precisa de vencimento e valor." };
+  const retencoes: Record<string, number> = {};
+  for (const [k, v] of Object.entries(n.retencoes)) {
+    const x = valor(v);
+    if (x === undefined) return { erro: "Valor de retenção inválido." };
+    retencoes[k] = x ?? 0;
+  }
+
+  // Fornecedor: o que já existe ou um novo, com a categoria escolhida como padrão para os próximos lançamentos.
+  let pessoaId = n.fornecedorId;
+  if (!pessoaId) {
+    if (!n.novoFornecedor) return { erro: "Fornecedor não identificado." };
+    const doc = soNumeros(n.novoFornecedor.documento);
+    const { data: existente } = doc ? await a.supabase.from("fin_pessoas").select("id").eq("documento", doc).maybeSingle() : { data: null };
+    if (existente) pessoaId = existente.id;
+    else {
+      const regime = ["MEI", "Simples Nacional", "Lucro Presumido", "Lucro Real", "Pessoa Física", "Outro"].includes(n.novoFornecedor.regime_tributario ?? "") ? n.novoFornecedor.regime_tributario : null;
+      const { data: nova, error } = await a.supabase
+        .from("fin_pessoas")
+        .insert({
+          documento: doc || null,
+          tipo_pessoa: doc.length === 11 ? "PF" : "PJ",
+          razao_social: texto(n.novoFornecedor.razao_social, 200) ?? "Fornecedor",
+          nome_fantasia: texto(n.novoFornecedor.nome_fantasia ?? undefined, 200),
+          regime_tributario: regime,
+          cnae: texto(n.novoFornecedor.cnae ?? undefined, 200),
+          cidade: texto(n.novoFornecedor.cidade ?? undefined, 100),
+          uf: n.novoFornecedor.uf ? n.novoFornecedor.uf.toUpperCase().slice(0, 2) : null,
+          fornecedor: true,
+          categoria_padrao_id: n.categoriaId,
+        })
+        .select("id")
+        .single();
+      if (error) return { erro: mensagemErro(error) };
+      pessoaId = nova.id;
+    }
+  } else {
+    // Fornecedor já cadastrado sem categoria padrão: passa a ter a desta nota.
+    await a.supabase.from("fin_pessoas").update({ categoria_padrao_id: n.categoriaId }).eq("id", pessoaId).is("categoria_padrao_id", null);
+  }
+
+  const feriados = await feriadosDaAcademia(a.supabase, n.academiaId);
+  const grupo = parcelas.length > 1 ? crypto.randomUUID() : null;
+  const linhas = parcelas.map((p, i) => {
+    const venc = proximoDiaUtil(p.vencimento!, feriados);
+    return {
+      tipo: "pagar",
+      academia_id: n.academiaId,
+      pessoa_id: pessoaId,
+      categoria_id: n.categoriaId,
+      conta_id: n.contaId || null,
+      descricao: texto(n.descricao, 300),
+      documento: texto(n.documento, 60),
+      data_registro: hoje(),
+      vencimento: venc,
+      previsao: venc,
+      valor: p.valor!,
+      parcela: i + 1,
+      parcelas: parcelas.length,
+      grupo_parcelas: grupo,
+      observacoes: texto(n.observacoes, 1000),
+      anexo: n.anexo,
+      // Retenções ficam só na 1ª parcela (são da nota inteira).
+      ...(i === 0 ? retencoes : {}),
+      criado_por: a.atual.id,
+    };
+  });
+  const { error } = await a.supabase.from("fin_titulos").insert(linhas);
+  if (error) return { erro: mensagemErro(error) };
+  atualizar();
+  return { ok: `NF ${n.documento} lançada${parcelas.length > 1 ? ` em ${parcelas.length} parcelas` : ""}${n.fornecedorId ? "" : " (fornecedor cadastrado)"}.` };
+}
+
+// Link temporário para abrir o PDF anexado a um título.
+export async function linkDoAnexo(caminho: string) {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  const { data, error } = await a.supabase.storage.from("pagamentos").createSignedUrl(caminho, 60 * 10);
+  return error || !data ? { erro: "Não foi possível abrir o anexo." } : { url: data.signedUrl };
 }
 
 export async function cancelarTitulo(id: string, cancelar: boolean): Promise<ResultadoFin> {

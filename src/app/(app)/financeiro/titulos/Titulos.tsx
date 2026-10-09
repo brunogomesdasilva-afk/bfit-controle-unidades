@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { proximoDiaUtil } from "@/lib/diasUteis";
 import { dataBr, FORMAS, nomePessoa, reais, SITUACOES, type Titulo, type TipoTitulo } from "@/lib/financeiro";
-import { baixarTitulos, cancelarTitulo, estornarBaixa, historicoTitulo, salvarTitulo, type BaixaPedida } from "../acoes";
+import { baixarTitulos, cancelarTitulo, estornarBaixa, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
 import { FormularioPessoa } from "../cadastros/pessoas/Pessoas";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
@@ -32,6 +33,7 @@ function FormularioTitulo({
   contas,
   aoSalvar,
   novoCadastro,
+  feriados,
 }: {
   tipo: TipoTitulo;
   inicial: Record<string, string>;
@@ -41,6 +43,7 @@ function FormularioTitulo({
   contas: ContaOpcao[];
   aoSalvar: () => void;
   novoCadastro: (aoSalvar: (id: string) => void) => void;
+  feriados: { data: string; academia_id: string | null }[];
 }) {
   const [d, setD] = useState(inicial);
   const [m, setM] = useState<{ erro?: string; ok?: string } | null>(null);
@@ -48,6 +51,15 @@ function FormularioTitulo({
   const [ocupado, iniciar] = useTransition();
   const campo = (c: string) => ({ valor: d[c] ?? "", mudar: (v: string) => setD({ ...d, [c]: v }) });
   const novo = !d.id;
+  // Vencimento que não é dia útil vai para o próximo dia útil (o servidor faz o mesmo ao salvar).
+  const [ajuste, setAjuste] = useState<string | null>(null);
+  const mudarVencimento = (v: string) => {
+    if (!/^d{4}-d{2}-d{2}$/.test(v)) return setD({ ...d, vencimento: v });
+    const doDia = new Set(feriados.filter((f) => !f.academia_id || f.academia_id === d.academia_id).map((f) => f.data));
+    const util = proximoDiaUtil(v, doDia);
+    setAjuste(util !== v ? `${dataBr(v)} não é dia útil: o vencimento foi para ${dataBr(util)}.` : null);
+    setD({ ...d, vencimento: util, previsao: !d.previsao || d.previsao === d.vencimento ? util : d.previsao });
+  };
   const salvar = () =>
     iniciar(async () => {
       const r = await salvarTitulo(tipo, d.id || null, d);
@@ -68,7 +80,10 @@ function FormularioTitulo({
             incluir={() => novoCadastro((id) => setD((x) => ({ ...x, pessoa_id: id })))}
           />
         </div>
-        <Texto rotulo={novo && Number(d.parcelas) > 1 ? "Vencimento da 1ª parcela" : "Vencimento"} tipo="date" {...campo("vencimento")} className="md:col-span-3" />
+        <div className="md:col-span-3">
+          <Texto rotulo={novo && Number(d.parcelas) > 1 ? "Vencimento da 1ª parcela" : "Vencimento"} tipo="date" valor={d.vencimento ?? ""} mudar={mudarVencimento} />
+          {ajuste && <p className="mt-1 text-xs text-amber-700">{ajuste}</p>}
+        </div>
         <CampoMoeda rotulo={novo && Number(d.parcelas) > 1 ? "Valor total (dividido nas parcelas)" : "Valor da conta"} {...campo("valor")} className="md:col-span-3" />
         <Escolha rotulo="Categoria" {...campo("categoria_id")} opcoes={categorias} className="md:col-span-6" />
         <Texto rotulo="Previsão de pagamento" tipo="date" {...campo("previsao")} className="md:col-span-3" />
@@ -265,6 +280,19 @@ function JanelaTitulo({
               Saldo <strong className="tabular-nums text-marca">{reais(titulo.saldo)}</strong>
             </span>
             <span className="ml-auto flex gap-2">
+              {titulo.anexo && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const r = await linkDoAnexo(titulo.anexo!);
+                    if (r.url) window.open(r.url, "_blank");
+                    else setM({ erro: r.erro });
+                  }}
+                  className={BOTAO_SECUNDARIO}
+                >
+                  Ver NF (PDF)
+                </button>
+              )}
               {titulo.saldo > 0 && !titulo.cancelado && (
                 <button type="button" onClick={() => baixar(titulo)} className={BOTAO_PRIMARIO}>
                   {tipo === "pagar" ? "Registrar pagamento" : "Registrar recebimento"}
@@ -349,6 +377,7 @@ export function Titulos({
   contas,
   categoriasCadastro,
   mostrarAcademia,
+  feriados,
 }: {
   tipo: TipoTitulo;
   titulos: Titulo[];
@@ -358,6 +387,7 @@ export function Titulos({
   contas: ContaOpcao[];
   categoriasCadastro: Opcao[];
   mostrarAcademia: boolean;
+  feriados: { data: string; academia_id: string | null }[];
 }) {
   const [busca, setBusca] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -386,6 +416,7 @@ export function Titulos({
   };
   const baixaveis = lista.filter((t) => selecionados.has(t.id) && t.saldo > 0 && !t.cancelado);
   const propsForm = {
+    feriados,
     academias,
     pessoas: listaPessoas,
     categorias,

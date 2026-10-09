@@ -36,7 +36,7 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
   if (filtro === "todos") consulta = consulta.neq("situacao", "cancelado");
   if (de) consulta = consulta.gte("vencimento", de);
   if (ate) consulta = consulta.lte("vencimento", ate);
-  const [{ data }, listas] = await Promise.all([consulta, listasFinanceiro(supabase)]);
+  const [{ data }, listas, { data: feriados }] = await Promise.all([consulta, listasFinanceiro(supabase), supabase.from("feriados").select("data, academia_id")]);
   const titulos = ((data ?? []) as Titulo[]).map((t) => ({
     ...t,
     valor: Number(t.valor),
@@ -129,6 +129,7 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
         categoriasCadastro={listas.opcoesCategoria()}
         contas={listas.contas.filter((c) => c.ativa).map((c) => ({ id: c.id, nome: c.nome, academia_id: c.academia_id }))}
         mostrarAcademia={!selecionada}
+        feriados={(feriados ?? []) as { data: string; academia_id: string | null }[]}
       />
     </div>
   );
