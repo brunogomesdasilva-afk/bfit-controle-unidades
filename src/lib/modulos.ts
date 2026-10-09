@@ -2,7 +2,7 @@
 // Sem dependências do servidor: é usado no proxy, nas telas e no menu.
 
 export const MODULOS = {
-  academia: "Academia",
+  academia: "Operação",
   rh: "RH",
   financeiro: "Financeiro",
   adm: "ADM",
@@ -14,7 +14,7 @@ export const DESCRICAO_MODULOS: Record<Modulo, string> = {
   academia: "Painel, academias, vendas, frequência, compras, manutenção, A.D.B, relatórios e clientes",
   rh: "Menu RH (conferência da folha)",
   financeiro: "Menu Financeiro",
-  adm: "Usuários, Tarefas e Backup (só com acesso a todas as academias)",
+  adm: "Menu Administrador (usuários, tarefas, fechamento de período) e Backup (só com acesso a todas as academias)",
 };
 
 // Primeira tela de cada módulo (para onde o usuário vai ao entrar ou ao abrir uma tela que não pode usar).
