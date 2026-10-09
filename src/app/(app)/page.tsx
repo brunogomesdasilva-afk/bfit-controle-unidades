@@ -1,3 +1,4 @@
+import { OrigensVisitantes } from "./OrigensVisitantes";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { contextoAcademias } from "@/lib/contexto";
@@ -12,7 +13,6 @@ import {
   montarPainel,
   numero,
   type Indicador,
-  type VisitantesPorOrigem,
 } from "@/lib/painelDados";
 import { diasEmAberto } from "@/lib/pendencias";
 import { PERIODOS, type OcupacaoProfessor, type Periodo } from "@/lib/ocupacao";
@@ -132,50 +132,6 @@ function CartaoTres({
       </summary>
       <div className="mt-3 border-t border-slate-100 pt-3">{children}</div>
     </details>
-  );
-}
-
-function TabelaOrigens({
-  titulo,
-  linhas,
-}: {
-  titulo: string;
-  linhas: VisitantesPorOrigem[];
-}) {
-  return (
-    <div className="min-w-0 flex-1">
-      <p className="mb-1 text-xs font-semibold text-slate-700">{titulo}</p>
-      {linhas.length === 0 ? (
-        <p className="text-xs text-slate-500">
-          Nenhuma passagem de outras unidades.
-        </p>
-      ) : (
-        <div className="overflow-auto">
-          <table className="w-full min-w-72 text-xs">
-            <thead className="text-slate-500">
-              <tr>
-                <th className="py-1 text-left font-medium">Unidade de origem</th>
-                <th className="py-1 text-right font-medium">Passagens</th>
-                <th className="py-1 text-right font-medium">Alunos</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {linhas.map((l) => (
-                <tr key={l.unidade_origem}>
-                  <td className="py-1">{l.unidade_origem}</td>
-                  <td className="py-1 text-right tabular-nums">
-                    {numero(l.passagens)}
-                  </td>
-                  <td className="py-1 text-right tabular-nums">
-                    {numero(l.alunos)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -470,18 +426,26 @@ export default async function PainelPage({
           ]}
           detalhe={
             d.visitantes.mes.disponivel
-              ? undefined
-              : "Rode o SQL 0027 para ver este número."
+              ? `No mês: ${numero(d.visitantes.mes.total.dias)} dias de acesso · média de ${d.visitantes.mes.total.alunos ? numero(d.visitantes.mes.total.dias / d.visitantes.mes.total.alunos, 1) : "—"} dias por aluno`
+              : "Rode o SQL 0045 para ver este número."
           }
         >
           <div className="flex flex-col gap-4 sm:flex-row">
-            <TabelaOrigens
+            <OrigensVisitantes
               titulo="No mês, por unidade de origem"
               linhas={d.visitantes.mes.porOrigem}
+              unidade={unidade}
+              inicio={d.periodos.mes.inicio}
+              fim={d.periodos.mes.fim}
+              mostrarAcademia={!unidade}
             />
-            <TabelaOrigens
+            <OrigensVisitantes
               titulo="No ano, por unidade de origem"
               linhas={d.visitantes.ano.porOrigem}
+              unidade={unidade}
+              inicio={d.periodos.ano.inicio}
+              fim={d.periodos.ano.fim}
+              mostrarAcademia={!unidade}
             />
           </div>
         </CartaoTres>
@@ -494,13 +458,21 @@ export default async function PainelPage({
           ]}
         >
           <div className="flex flex-col gap-4 sm:flex-row">
-            <TabelaOrigens
+            <OrigensVisitantes
               titulo="No mês, por unidade de origem"
               linhas={d.visitantes.mes.porOrigem}
+              unidade={unidade}
+              inicio={d.periodos.mes.inicio}
+              fim={d.periodos.mes.fim}
+              mostrarAcademia={!unidade}
             />
-            <TabelaOrigens
+            <OrigensVisitantes
               titulo="No ano, por unidade de origem"
               linhas={d.visitantes.ano.porOrigem}
+              unidade={unidade}
+              inicio={d.periodos.ano.inicio}
+              fim={d.periodos.ano.fim}
+              mostrarAcademia={!unidade}
             />
           </div>
         </CartaoTres>

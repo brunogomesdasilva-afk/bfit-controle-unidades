@@ -44,18 +44,19 @@ export const formatar = (n: number | null, f: Formato) =>
   f === "moeda" ? moeda(n) : f === "percentual" ? pct(n) : f === "decimal" ? numero(n, 1) : numero(n);
 export const formatarDia = (d: string) => d.split("-").reverse().join("/");
 
-export type Visitantes = { passagens: number; alunos: number };
-export type VisitantesPorOrigem = { unidade_origem: string; passagens: number; alunos: number };
+// dias: soma dos dias de acesso de cada aluno no período (quem veio 3 dias conta 3).
+export type Visitantes = { passagens: number; alunos: number; dias: number };
+export type VisitantesPorOrigem = { unidade_origem: string; passagens: number; alunos: number; dias: number };
 
 async function visitantes(db: Supabase, unidade: string | null, p: Periodo) {
   const [total, porOrigem] = await Promise.all([
     db.rpc("visitantes_outras_unidades_total", { p_academia: unidade, inicio: p.inicio, fim: p.fim }),
     db.rpc("visitantes_outras_unidades", { p_academia: unidade, inicio: p.inicio, fim: p.fim }),
   ]);
-  const t = (total.data as { passagens: number; alunos: number }[] | null)?.[0];
+  const t = (total.data as { passagens: number; alunos: number; dias?: number }[] | null)?.[0];
   return {
-    total: { passagens: Number(t?.passagens ?? 0), alunos: Number(t?.alunos ?? 0) } as Visitantes,
-    porOrigem: ((porOrigem.data ?? []) as VisitantesPorOrigem[]).map((o) => ({ ...o, passagens: Number(o.passagens), alunos: Number(o.alunos) })),
+    total: { passagens: Number(t?.passagens ?? 0), alunos: Number(t?.alunos ?? 0), dias: Number(t?.dias ?? 0) } as Visitantes,
+    porOrigem: ((porOrigem.data ?? []) as VisitantesPorOrigem[]).map((o) => ({ ...o, passagens: Number(o.passagens), alunos: Number(o.alunos), dias: Number(o.dias ?? 0) })),
     disponivel: !total.error,
   };
 }
