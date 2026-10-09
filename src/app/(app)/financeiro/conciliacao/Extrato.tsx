@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import { dataBr, FORMAS, reais } from "@/lib/financeiro";
 import { baixarTitulos, conciliar, excluirLancamento, importarOfx, salvarLancamento, transferir } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, Escolha, Janela, Mensagem, Texto } from "../componentes";
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CampoMoeda, Escolha, Janela, Mensagem, Texto } from "../componentes";
 
 // Extrato de uma conta no período, com o saldo dia a dia: conciliar o que bateu com o banco, lançar tarifas e
 // outros lançamentos avulsos, transferir entre contas, importar o extrato do banco (OFX) e baixar um título com
@@ -220,7 +220,7 @@ export function Extrato({
           <div className="grid gap-3 md:grid-cols-4">
             <Escolha rotulo="Tipo" valor={lancamento.sentido} mudar={(v) => setLancamento({ ...lancamento, sentido: v })} opcoes={[{ valor: "saida", rotulo: "Saída" }, { valor: "entrada", rotulo: "Entrada" }]} vazio="—" />
             <Texto rotulo="Data" tipo="date" valor={lancamento.data ?? ""} mudar={(v) => setLancamento({ ...lancamento, data: v })} />
-            <Texto rotulo="Valor" valor={lancamento.valor ?? ""} mudar={(v) => setLancamento({ ...lancamento, valor: v })} numerico />
+            <CampoMoeda rotulo="Valor" valor={lancamento.valor ?? ""} mudar={(v) => setLancamento({ ...lancamento, valor: v })} />
             <Escolha rotulo="Categoria" valor={lancamento.categoria_id ?? ""} mudar={(v) => setLancamento({ ...lancamento, categoria_id: v })} opcoes={categorias} vazio="—" />
             <div className="md:col-span-2">
               <BuscaPessoa rotulo="Cliente / fornecedor (opcional)" pessoas={pessoas} valor={lancamento.pessoa_id ?? ""} mudar={(id) => setLancamento({ ...lancamento, pessoa_id: id })} />
@@ -241,7 +241,7 @@ export function Extrato({
             <Escolha rotulo="Da conta" valor={transferencia.origem ?? ""} mudar={(v) => setTransferencia({ ...transferencia, origem: v })} opcoes={contas} />
             <Escolha rotulo="Para a conta" valor={transferencia.destino ?? ""} mudar={(v) => setTransferencia({ ...transferencia, destino: v })} opcoes={contas} />
             <Texto rotulo="Data" tipo="date" valor={transferencia.data ?? ""} mudar={(v) => setTransferencia({ ...transferencia, data: v })} />
-            <Texto rotulo="Valor" valor={transferencia.valor ?? ""} mudar={(v) => setTransferencia({ ...transferencia, valor: v })} numerico />
+            <CampoMoeda rotulo="Valor" valor={transferencia.valor ?? ""} mudar={(v) => setTransferencia({ ...transferencia, valor: v })} />
             <Texto rotulo="Descrição" valor={transferencia.descricao ?? ""} mudar={(v) => setTransferencia({ ...transferencia, descricao: v })} className="md:col-span-2" />
           </div>
           <div className="mt-4 flex justify-end">

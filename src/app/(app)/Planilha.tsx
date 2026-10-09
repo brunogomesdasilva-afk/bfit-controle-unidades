@@ -126,6 +126,8 @@ export function Planilha({
   somenteLeitura,
   numeroInicial = 1,
   barra,
+  rotuloExcluir = "Excluir",
+  confirmarExcluir = "Excluir esta linha? Essa ação não pode ser desfeita.",
 }: {
   colunas: Coluna[];
   linhas: Linha[];
@@ -141,6 +143,9 @@ export function Planilha({
   numeroInicial?: number;
   // Controles mostrados na mesma linha do botão de incluir (ex.: o seletor de mês).
   barra?: ReactNode;
+  // Texto do botão de excluir e da confirmação (ex.: "Cancelar" nas tarefas).
+  rotuloExcluir?: string;
+  confirmarExcluir?: string;
 }) {
   const editaveis = colunas.filter((c) => !SO_EXIBICAO.has(c.tipo));
   const temGrupos = colunas.some((c) => c.grupo);
@@ -203,7 +208,7 @@ export function Planilha({
 
   function remover(linha: Linha) {
     if (!excluir) return;
-    if (!window.confirm("Excluir esta linha? Essa ação não pode ser desfeita.")) return;
+    if (!window.confirm(confirmarExcluir)) return;
     iniciar(async () => {
       const r = await excluir(linha.id);
       setErro(r.erro ?? null);
@@ -415,7 +420,7 @@ export function Planilha({
                           disabled={editando !== null || salvando}
                           className="text-xs text-red-700 underline hover:text-red-900 disabled:text-slate-400 disabled:no-underline"
                         >
-                          Excluir
+                          {rotuloExcluir}
                         </button>
                       )}
                     </div>

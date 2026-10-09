@@ -16,11 +16,13 @@ export async function todasPessoas(supabase: Supabase) {
 
 export async function listasFinanceiro(supabase: Supabase) {
   const [{ data: categorias }, { data: contas }, pessoas] = await Promise.all([
-    supabase.from("fin_categorias").select("*").order("grupo").order("nome"),
+    supabase.from("fin_categorias").select("*, fin_grupos(nome)").order("nome"),
     supabase.from("fin_contas").select("*").order("nome"),
     todasPessoas(supabase),
   ]);
-  const cats = (categorias ?? []) as Categoria[];
+  const cats = ((categorias ?? []) as (Categoria & { fin_grupos: { nome: string } | null })[])
+    .map((c) => ({ ...c, grupo: c.fin_grupos?.nome ?? "" }))
+    .sort((a, b) => a.grupo.localeCompare(b.grupo) || a.nome.localeCompare(b.nome));
   return {
     categorias: cats,
     contas: ((contas ?? []) as Conta[]).map((c) => ({ ...c, saldo_inicial: Number(c.saldo_inicial) })),

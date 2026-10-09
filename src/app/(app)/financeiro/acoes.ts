@@ -79,14 +79,30 @@ export async function buscarCnpj(cnpj: string) {
 
 // ------------------------------------------------------------------------------------------- Categorias e contas
 
+export async function salvarGrupo(id: string | null, dados: Record<string, string>): Promise<Resultado> {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  const nome = texto(dados.nome, 120);
+  if (!nome) return { erro: "Informe o nome do grupo." };
+  if (!["receita", "despesa", "transferencia"].includes(dados.tipo)) return { erro: "Escolha o tipo." };
+  const registro = { nome, tipo: dados.tipo, ativo: dados.ativo !== "nao" };
+  const { error } = id ? await a.supabase.from("fin_grupos").update(registro).eq("id", id) : await a.supabase.from("fin_grupos").insert(registro);
+  if (error) return { erro: error.code === "23505" ? "Já existe esse grupo." : mensagemErro(error) };
+  // As categorias do grupo acompanham o tipo dele.
+  if (id) await a.supabase.from("fin_categorias").update({ tipo: dados.tipo }).eq("grupo_id", id);
+  atualizar();
+  return {};
+}
+
 export async function salvarCategoria(id: string | null, dados: Record<string, string>): Promise<Resultado> {
   const a = await acesso();
   if ("erro" in a) return { erro: a.erro };
   const nome = texto(dados.nome, 120);
-  const grupo = texto(dados.grupo, 120);
-  if (!nome || !grupo) return { erro: "Informe o nome e o grupo." };
-  if (!["receita", "despesa", "transferencia"].includes(dados.tipo)) return { erro: "Escolha o tipo." };
-  const registro = { nome, grupo, tipo: dados.tipo, ativo: dados.ativo !== "nao" };
+  if (!nome) return { erro: "Informe o nome da categoria." };
+  if (!dados.grupo_id) return { erro: "Escolha o grupo." };
+  const { data: grupo } = await a.supabase.from("fin_grupos").select("tipo").eq("id", dados.grupo_id).maybeSingle();
+  if (!grupo) return { erro: "Grupo não encontrado." };
+  const registro = { nome, grupo_id: dados.grupo_id, tipo: grupo.tipo, ativo: dados.ativo !== "nao" };
   const { error } = id ? await a.supabase.from("fin_categorias").update(registro).eq("id", id) : await a.supabase.from("fin_categorias").insert(registro);
   if (error) return { erro: error.code === "23505" ? "Já existe essa categoria." : mensagemErro(error) };
   atualizar();
@@ -136,7 +152,7 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   if (!dados.academia_id) return { erro: "Escolha a academia (projeto)." };
   if (!dados.pessoa_id) return { erro: tipo === "pagar" ? "Escolha o fornecedor." : "Escolha o cliente." };
   if (!dados.categoria_id) return { erro: "Escolha a categoria." };
-  const datas = { data_emissao: lerData(dados.data_emissao), previsao: lerData(dados.previsao), data_registro: lerData(dados.data_registro) };
+  const datas = { previsao: lerData(dados.previsao), data_registro: lerData(dados.data_registro) };
   if (Object.values(datas).some((d) => d === undefined)) return { erro: "Alguma data está inválida." };
   const retencoes: Record<string, number> = {};
   for (const r of ["ret_iss", "ret_irrf", "ret_inss", "ret_pis", "ret_cofins", "ret_csll"]) {
@@ -152,7 +168,6 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
     conta_id: dados.conta_id || null,
     descricao: texto(dados.descricao, 300),
     documento: texto(dados.documento, 60),
-    data_emissao: datas.data_emissao ?? null,
     data_registro: datas.data_registro ?? hoje(),
     observacoes: texto(dados.observacoes, 1000),
     ...retencoes,

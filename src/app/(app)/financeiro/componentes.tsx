@@ -58,6 +58,30 @@ export function Texto({
   );
 }
 
+// Valor em reais: digita só os números e o campo formata (1234 → 12,34; 123456 → 1.234,56). O valor guardado é o
+// texto formatado ("1.234,56"), que o servidor lê como número.
+export const formatarMoeda = (digitado: string) => {
+  const digitos = digitado.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  if (!digitos) return "";
+  return (Number(digitos) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+export function CampoMoeda({ valor, mudar, className = "", rotulo }: { valor: string; mudar: (v: string) => void; className?: string; rotulo?: string }) {
+  const campo = (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-500">R$</span>
+      <input value={valor} onChange={(e) => mudar(formatarMoeda(e.target.value))} inputMode="numeric" placeholder="0,00" aria-label={rotulo} className={`${CAMPO} pl-9 text-right tabular-nums`} />
+    </div>
+  );
+  return rotulo ? (
+    <Rotulo texto={rotulo} className={className}>
+      {campo}
+    </Rotulo>
+  ) : (
+    <div className={className}>{campo}</div>
+  );
+}
+
 export function Escolha({
   rotulo,
   valor,

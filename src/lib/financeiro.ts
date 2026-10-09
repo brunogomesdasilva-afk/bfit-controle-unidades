@@ -37,7 +37,9 @@ export type Pessoa = {
   ativo: boolean;
 };
 
-export type Categoria = { id: string; nome: string; grupo: string; tipo: "receita" | "despesa" | "transferencia"; ativo: boolean };
+export type Grupo = { id: string; nome: string; tipo: "receita" | "despesa" | "transferencia"; ativo: boolean };
+// "grupo" é o nome do grupo (vem junto ao carregar).
+export type Categoria = { id: string; nome: string; grupo_id: string; grupo: string; tipo: "receita" | "despesa" | "transferencia"; ativo: boolean };
 export type Conta = { id: string; academia_id: string; nome: string; tipo: string; banco: string | null; agencia: string | null; conta: string | null; saldo_inicial: number; data_saldo_inicial: string; ativa: boolean };
 
 export type Titulo = {
@@ -49,7 +51,6 @@ export type Titulo = {
   conta_id: string | null;
   descricao: string | null;
   documento: string | null;
-  data_emissao: string | null;
   data_registro: string;
   vencimento: string;
   previsao: string | null;

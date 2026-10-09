@@ -5,7 +5,7 @@ import { getPerfilAtual } from "@/lib/auth";
 import { COM_CREF } from "@/lib/database.types";
 import { hoje } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
-import { pendentesDe, type Pendente, type Tarefa } from "@/lib/tarefas";
+import { carregarTarefas, pendentesDe, type Pendente } from "@/lib/tarefas";
 import { AvisoContagens } from "./AvisoContagens";
 import { ChecklistTarefas } from "./ChecklistTarefas";
 import { AvisoVencimentos, type Vencimento } from "./AvisoVencimentos";
@@ -97,11 +97,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
       });
     vencimentos.sort((a, b) => a.vencimento.localeCompare(b.vencimento));
     // Checklist de tarefas do usuário: as do tipo de acesso dele ainda não marcadas no dia (ou no mês).
-    const [{ data: tarefas }, { data: feitas }] = await Promise.all([
-      supabase.from("tarefas").select("*").eq("ativo", true).order("created_at"),
+    const [doChecklist, { data: feitas }] = await Promise.all([
+      carregarTarefas(supabase, { soAtivas: true }),
       supabase.from("tarefas_feitas").select("tarefa_id, periodo").eq("usuario_id", atual.id).in("periodo", [dataHoje, dataHoje.slice(0, 7), "unica"]),
     ]);
-    pendentes = pendentesDe((tarefas ?? []) as Tarefa[], feitas ?? [], atual, dataHoje);
+    pendentes = pendentesDe(doChecklist.tarefas, feitas ?? [], atual, dataHoje, doChecklist.feriados);
     // Aniversários de hoje (e do fim de semana/feriado seguinte, avisados no último dia útil).
     lembretes = (await lembretesDeAniversario(supabase, academias.map((a) => a.id))).map((a) => ({
       chave: `${a.academiaId}-${a.nome}-${a.dia}`,

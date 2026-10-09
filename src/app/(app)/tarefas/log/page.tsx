@@ -3,7 +3,7 @@ import { exigirModulo } from "@/lib/auth";
 import { modulosDoPerfil } from "@/lib/modulos";
 import { hoje, intervaloDoMes, lerMes } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
-import { periodoDe, rotuloDoPeriodo, seAplica, type Tarefa } from "@/lib/tarefas";
+import { carregarTarefas, periodoDe, rotuloDoPeriodo, seAplica } from "@/lib/tarefas";
 import { SeletorMes } from "../../AbasAcademias";
 import { TabelaRelatorio } from "../../relatorios/comum";
 
@@ -29,8 +29,8 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
   const dataHoje = hoje();
   const supabase = await createClient();
 
-  const [{ data: tarefasData }, { data: perfis }, { data: feitasMes }, { data: feitasAtuais }] = await Promise.all([
-    supabase.from("tarefas").select("*").order("created_at"),
+  const [carregadas, { data: perfis }, { data: feitasMes }, { data: feitasAtuais }] = await Promise.all([
+    carregarTarefas(supabase),
     supabase.from("profiles").select("*").eq("ativo", true).order("nome"),
     // Marcadas no mês escolhido (horário de Brasília).
     supabase
@@ -42,16 +42,19 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
     // Marcadas no período atual (para as pendências de agora) e no mês escolhido (situação das mensais).
     supabase.from("tarefas_feitas").select("id, tarefa_id, usuario_id, periodo, feita_em").in("periodo", [dataHoje, dataHoje.slice(0, 7), mes, "unica"]),
   ]);
-  const tarefas = (tarefasData ?? []) as Tarefa[];
+  const { tarefas: todas, feriados } = carregadas;
+  // Canceladas só aparecem no histórico e na lista de canceladas.
+  const tarefas = todas.filter((t) => !t.cancelada_em);
+  const canceladas = todas.filter((t) => t.cancelada_em);
   const usuarios: Usuario[] = (perfis ?? []).map((p) => ({ id: p.id, nome: p.nome, perfil: p.perfil, modulos: modulosDoPerfil(p) }));
   const nomeUsuario = (id: string) => usuarios.find((u) => u.id === id)?.nome ?? "(usuário inativo)";
-  const tituloTarefa = (id: string) => tarefas.find((t) => t.id === id)?.titulo ?? "";
+  const tituloTarefa = (id: string) => todas.find((t) => t.id === id)?.titulo ?? "";
   const feita = (lista: Feita[] | null, tarefa: string, usuario: string, periodo: string) =>
     (lista ?? []).find((f) => f.tarefa_id === tarefa && f.usuario_id === usuario && f.periodo === periodo);
 
   // Pendentes agora: tarefa ativa, já começou no período atual, é do usuário e não foi marcada.
   const pendentesAgora = tarefas.flatMap((t) => {
-    const periodo = periodoDe(t, dataHoje);
+    const periodo = periodoDe(t, dataHoje, feriados);
     if (!periodo || !t.ativo) return [];
     const quem = usuarios.filter((u) => seAplica(t, u) && !feita(feitasAtuais as Feita[], t.id, u.id, periodo));
     return quem.length ? [{ tarefa: t, periodo, quem }] : [];
@@ -172,6 +175,22 @@ export default async function LogTarefasPage({ searchParams }: PageProps<"/taref
           />
         </section>
       ))}
+
+      {canceladas.length > 0 && (
+        <section>
+          <h2 className="mb-2 text-sm font-semibold text-slate-900">Tarefas canceladas</h2>
+          <TabelaRelatorio
+            colunas={[
+              { rotulo: "Tarefa", valor: (t) => t.titulo, alinhar: "esquerda", destaque: true },
+              { rotulo: "Cancelada em", valor: (t) => quando(t.cancelada_em!, { dateStyle: "short", timeStyle: "short" }), alinhar: "esquerda" },
+              { rotulo: "Por", valor: (t) => (t.cancelada_por ? nomeUsuario(t.cancelada_por) : "—"), alinhar: "esquerda" },
+            ]}
+            linhas={canceladas}
+            chave={(t) => t.id}
+            vazio=""
+          />
+        </section>
+      )}
 
       <section className="space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">

@@ -5,7 +5,7 @@ import { dataBr, FORMAS, nomePessoa, reais, SITUACOES, type Titulo, type TipoTit
 import { baixarTitulos, cancelarTitulo, estornarBaixa, historicoTitulo, salvarTitulo, type BaixaPedida } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
 import { FormularioPessoa } from "../cadastros/pessoas/Pessoas";
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
 
 // Contas a pagar e a receber (mesma tela): lista com seleção e totais; janela do título (dados, baixas e
 // histórico); janela de baixa, inclusive parcial e de vários títulos de uma vez.
@@ -57,8 +57,9 @@ function FormularioTitulo({
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 md:grid-cols-4">
-        <div className="md:col-span-2">
+      {/* Na ordem do sistema que já usamos: fornecedor, vencimento e valor; embaixo, categoria, previsão e conta. */}
+      <div className="grid gap-3 md:grid-cols-12">
+        <div className="md:col-span-6">
           <BuscaPessoa
             rotulo={tipo === "pagar" ? "Fornecedor / favorecido" : "Cliente"}
             pessoas={pessoas}
@@ -67,27 +68,29 @@ function FormularioTitulo({
             incluir={() => novoCadastro((id) => setD((x) => ({ ...x, pessoa_id: id })))}
           />
         </div>
-        <Escolha rotulo="Categoria" {...campo("categoria_id")} opcoes={categorias} className="md:col-span-2" />
-        <Escolha rotulo="Academia (projeto)" {...campo("academia_id")} opcoes={academias} />
-        <Texto rotulo={novo && Number(d.parcelas) > 1 ? "Valor total (dividido nas parcelas)" : "Valor"} {...campo("valor")} numerico />
-        <Texto rotulo={novo && Number(d.parcelas) > 1 ? "Vencimento da 1ª parcela" : "Vencimento"} tipo="date" {...campo("vencimento")} />
-        <Texto rotulo="Previsão de pagamento" tipo="date" {...campo("previsao")} />
-        {novo && (
-          <Rotulo texto="Parcelas (mensais)">
-            <input type="number" min={1} max={120} value={d.parcelas ?? "1"} onChange={(e) => setD({ ...d, parcelas: e.target.value })} className={CAMPO} />
-          </Rotulo>
-        )}
+        <Texto rotulo={novo && Number(d.parcelas) > 1 ? "Vencimento da 1ª parcela" : "Vencimento"} tipo="date" {...campo("vencimento")} className="md:col-span-3" />
+        <CampoMoeda rotulo={novo && Number(d.parcelas) > 1 ? "Valor total (dividido nas parcelas)" : "Valor da conta"} {...campo("valor")} className="md:col-span-3" />
+        <Escolha rotulo="Categoria" {...campo("categoria_id")} opcoes={categorias} className="md:col-span-6" />
+        <Texto rotulo="Previsão de pagamento" tipo="date" {...campo("previsao")} className="md:col-span-3" />
         <Escolha
-          rotulo="Conta corrente prevista"
+          rotulo="Conta corrente"
           {...campo("conta_id")}
           opcoes={contas.filter((c) => !d.academia_id || c.academia_id === d.academia_id).map((c) => ({ valor: c.id, rotulo: c.nome }))}
           vazio="—"
+          className="md:col-span-3"
         />
-        <Texto rotulo="Nota fiscal / documento" {...campo("documento")} />
-        <Texto rotulo="Data de emissão" tipo="date" {...campo("data_emissao")} />
-        <Texto rotulo="Data de registro" tipo="date" {...campo("data_registro")} />
-        <Texto rotulo="Descrição" {...campo("descricao")} className="md:col-span-3" />
-        <Texto rotulo="Observações" {...campo("observacoes")} className="md:col-span-4" />
+      </div>
+      <div className="grid gap-3 border-t border-slate-100 pt-3 md:grid-cols-12">
+        <Texto rotulo="Nota fiscal" {...campo("documento")} className="md:col-span-3" />
+        <Texto rotulo="Data de registro" tipo="date" {...campo("data_registro")} className="md:col-span-3" />
+        <Escolha rotulo="Academia (projeto)" {...campo("academia_id")} opcoes={academias} className="md:col-span-3" />
+        {novo && (
+          <Rotulo texto="Parcelas (mensais)" className="md:col-span-3">
+            <input type="number" min={1} max={120} value={d.parcelas ?? "1"} onChange={(e) => setD({ ...d, parcelas: e.target.value })} className={CAMPO} />
+          </Rotulo>
+        )}
+        <Texto rotulo="Descrição" {...campo("descricao")} className="md:col-span-12" />
+        <Texto rotulo="Observações" {...campo("observacoes")} className="md:col-span-12" />
       </div>
       <div>
         <button type="button" onClick={() => setRetencoes(!retencoes)} className="text-sm text-marca hover:underline">
@@ -103,7 +106,7 @@ function FormularioTitulo({
               ["ret_cofins", "COFINS"],
               ["ret_csll", "CSLL"],
             ].map(([c, r]) => (
-              <Texto key={c} rotulo={r} {...campo(c)} numerico />
+              <CampoMoeda key={c} rotulo={r} {...campo(c)} />
             ))}
             <p className="text-xs text-slate-500 md:col-span-6">Informativo: o valor do título é o líquido a {tipo === "pagar" ? "pagar" : "receber"}, já sem as retenções.</p>
           </div>
@@ -177,7 +180,7 @@ function JanelaBaixa({ tipo, titulos, contas, nomeDe, fechar }: { tipo: TipoTitu
                     <td className="px-2 text-right tabular-nums">{reais(t.saldo)}</td>
                     {(["valor", "juros", "multa", "desconto"] as const).map((c) => (
                       <td key={c} className="px-2">
-                        <input value={linhas[t.id][c] ?? ""} onChange={(e) => alterar(t.id, c, e.target.value)} inputMode="decimal" className={`${CAMPO} w-28 text-right`} />
+                        <CampoMoeda valor={linhas[t.id][c] ?? ""} mudar={(v) => alterar(t.id, c, v)} className="w-36" />
                       </td>
                     ))}
                   </tr>
