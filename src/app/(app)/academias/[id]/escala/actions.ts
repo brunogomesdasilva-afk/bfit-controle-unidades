@@ -27,7 +27,20 @@ export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEsc
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  const r = await gerarEscalaDoMes(supabase, academiaId, opcoes.mes, { indisponiveis: opcoes.indisponiveis, criadoPor: user?.id ?? null });
+  // As folgas do mês ficam gravadas (substituem as que estavam): a próxima geração, inclusive a automática, usa elas.
+  if (!/^d{4}-(0[1-9]|1[0-2])$/.test(opcoes.mes)) return { erro: "Escolha o mês da escala." };
+  const [ano, m] = opcoes.mes.split("-").map(Number);
+  const fimMes = new Date(Date.UTC(ano, m, 0)).toISOString().slice(0, 10);
+  const { error: erroApagar } = await supabase.from("escala_folgas").delete().eq("academia_id", academiaId).gte("data", `${opcoes.mes}-01`).lte("data", fimMes);
+  if (erroApagar) return { erro: mensagemErro(erroApagar) };
+  const novas = opcoes.indisponiveis.filter((f) => f.funcionarioId && f.data >= `${opcoes.mes}-01` && f.data <= fimMes);
+  if (novas.length) {
+    const { error } = await supabase
+      .from("escala_folgas")
+      .upsert(novas.map((f) => ({ academia_id: academiaId, funcionario_id: f.funcionarioId, data: f.data, criado_por: user?.id ?? null })), { onConflict: "funcionario_id,data" });
+    if (error) return { erro: mensagemErro(error) };
+  }
+  const r = await gerarEscalaDoMes(supabase, academiaId, opcoes.mes, { criadoPor: user?.id ?? null });
   revalidatePath(`/academias/${academiaId}/escala`);
   refresh();
   return r;

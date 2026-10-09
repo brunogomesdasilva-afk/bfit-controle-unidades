@@ -18,14 +18,18 @@ export function BotaoGerarEscala({
   gerar,
   mesAtual,
   funcionarios,
+  folgasGravadas,
 }: {
   gerar: (opcoes: OpcoesEscala) => Promise<ResultadoEscala>;
   mesAtual: string;
   funcionarios: Funcionario[];
+  // Folgas já gravadas (do mês atual em diante): o diálogo abre com as do mês escolhido.
+  folgasGravadas: { funcionarioId: string; data: string }[];
 }) {
   const [aberto, setAberto] = useState(false);
   const [mes, setMes] = useState(mesAtual);
-  const [folgas, setFolgas] = useState<{ funcionarioId: string; data: string }[]>([]);
+  const doMes = (m: string) => folgasGravadas.filter((f) => f.data.startsWith(m));
+  const [folgas, setFolgas] = useState<{ funcionarioId: string; data: string }[]>(() => doMes(mesAtual));
   const [gerando, iniciar] = useTransition();
   const [resultado, setResultado] = useState<ResultadoEscala | null>(null);
   const meses = Array.from({ length: 13 }, (_, i) => somarMes(mesAtual, i));
@@ -106,7 +110,7 @@ export function BotaoGerarEscala({
                 value={mes}
                 onChange={(e) => {
                   setMes(e.target.value);
-                  setFolgas([]);
+                  setFolgas(doMes(e.target.value));
                 }}
                 className="w-56 rounded-md border border-slate-300 bg-white px-2 py-1.5"
               >
@@ -120,7 +124,10 @@ export function BotaoGerarEscala({
 
             <div className="mt-5">
               <p className="text-sm font-medium text-slate-700">Folgas pedidas (opcional)</p>
-              <p className="text-xs text-slate-500">O funcionário não entra na escala na data escolhida.</p>
+              <p className="text-xs text-slate-500">
+                O funcionário não entra na escala na data escolhida. As folgas ficam gravadas: ao refazer a escala (ou na geração automática),
+                elas continuam valendo.
+              </p>
               <ul className="mt-2 space-y-2">
                 {folgas.map((f, i) => (
                   <li key={i} className="flex flex-wrap items-center gap-2">

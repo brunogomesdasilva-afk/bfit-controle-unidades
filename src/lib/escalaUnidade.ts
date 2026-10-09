@@ -28,7 +28,11 @@ export async function gerarEscalaDoMes(
   const inicio = `${mes}-01` > dataHoje ? `${mes}-01` : dataHoje;
   const setores = Object.keys(SETORES) as Setor[];
   const departamentos = setores.flatMap((s) => SETORES[s].departamentos);
-  const folgas = indisponiveis.filter((i) => i.funcionarioId && i.data >= inicio && i.data <= fim);
+  // Folgas: as gravadas na unidade (escala_folgas) mais as que vierem na chamada.
+  const { data: gravadas } = await supabase.from("escala_folgas").select("funcionario_id, data").eq("academia_id", academiaId).gte("data", inicio).lte("data", fim);
+  const folgas = [...indisponiveis, ...(gravadas ?? []).map((g) => ({ funcionarioId: g.funcionario_id as string, data: g.data as string }))].filter(
+    (i, k, lista) => i.funcionarioId && i.data >= inicio && i.data <= fim && lista.findIndex((x) => x.funcionarioId === i.funcionarioId && x.data === i.data) === k
+  );
 
   const [{ data: funcionarios }, { data: feriados }, { data: vizinhas }, { data: doPeriodo }] = await Promise.all([
     supabase.from("funcionarios").select("id, nome, departamento, genero, horario_entrada, horario_saida").eq("academia_id", academiaId).eq("ativo", true).in("departamento", departamentos),

@@ -110,7 +110,12 @@ export default async function EscalaPage({ params }: PageProps<"/academias/[id]/
             seguidos, mulheres 1). Considera que recepção e limpeza trabalham de segunda a sexta no horário do cadastro.
           </p>
         </div>
-        <BotaoGerarEscala gerar={gerarEscalaDaUnidade.bind(null, id)} mesAtual={dataHoje.slice(0, 7)} funcionarios={(funcionarios ?? []) as { id: string; nome: string; departamento: string }[]} />
+        <BotaoGerarEscala
+          gerar={gerarEscalaDaUnidade.bind(null, id)}
+          mesAtual={dataHoje.slice(0, 7)}
+          funcionarios={(funcionarios ?? []) as { id: string; nome: string; departamento: string }[]}
+          folgasGravadas={((await supabase.from("escala_folgas").select("funcionario_id, data").eq("academia_id", id).gte("data", `${dataHoje.slice(0, 7)}-01`)).data ?? []).map((f) => ({ funcionarioId: f.funcionario_id as string, data: f.data as string }))}
+        />
       </div>
 
       {(funcionarios ?? []).length === 0 && (
