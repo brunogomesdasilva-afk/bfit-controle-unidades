@@ -24,16 +24,18 @@ export function data(valor: string | undefined) {
 }
 
 // Número digitado no padrão brasileiro ("1.234,56") ou com ponto decimal ("1234.56").
-// Devolve null se vazio e undefined se inválido ou negativo.
-export function numero(valor: string | undefined, { inteiro = false } = {}) {
+// Devolve null se vazio e undefined se inválido ou negativo (negativo só é aceito com "negativo: true", ex.: NPS).
+export function numero(valor: string | undefined, { inteiro = false, negativo = false } = {}) {
   let v = (valor ?? "").trim().replace(/^R\$\s*/, "");
   if (!v) return null;
+  const menos = negativo && /^[-−]/.test(v);
+  if (menos) v = v.slice(1).trim();
   if (v.includes(",")) v = v.replace(/\./g, "").replace(",", ".");
   else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, ""); // "1.200" = mil e duzentos
   if (!/^\d+(\.\d+)?$/.test(v)) return undefined;
   const n = Number(v);
   if (inteiro && !Number.isInteger(n)) return undefined;
-  return n;
+  return menos ? -n : n;
 }
 
 // Horário no formato hh:mm. As telas oferecem de 30 em 30 minutos; aulas coletivas importadas podem ter
@@ -50,6 +52,9 @@ export type CampoValidado = {
   rotulo: string;
   tipo: "texto" | "data" | "hora" | "inteiro" | "decimal";
   obrigatorio?: boolean;
+  // Faixa aceita (ex.: NPS de -100 a 100). Com mínimo negativo, aceita número negativo.
+  minimo?: number;
+  maximo?: number;
 };
 
 export function validar(campos: CampoValidado[], dados: Record<string, string>) {
@@ -63,13 +68,15 @@ export function validar(campos: CampoValidado[], dados: Record<string, string>) 
           ? data(bruto)
           : c.tipo === "hora"
             ? hora(bruto)
-            : numero(bruto, { inteiro: c.tipo === "inteiro" });
+            : numero(bruto, { inteiro: c.tipo === "inteiro", negativo: (c.minimo ?? 0) < 0 });
     if (valor === undefined) {
       const dica =
         c.tipo === "inteiro" ? " Use um número inteiro." : c.tipo === "hora" ? " Escolha um horário da lista (de 30 em 30 minutos)." : "";
       return { erro: `“${c.rotulo}” inválido.${dica}` };
     }
     if (valor === null && c.obrigatorio) return { erro: `Preencha “${c.rotulo}”.` };
+    if (typeof valor === "number" && ((c.minimo !== undefined && valor < c.minimo) || (c.maximo !== undefined && valor > c.maximo)))
+      return { erro: `“${c.rotulo}” deve ficar entre ${c.minimo ?? 0} e ${c.maximo}.` };
     registro[c.campo] = valor;
   }
   return { registro };

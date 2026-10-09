@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh, revalidatePath } from "next/cache";
+import { continua, juntarSequencias } from "@/lib/aulasSeguidas";
 import { getPerfilAtual } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { COM_CREF, DEPARTAMENTOS, GENEROS, PROFESSORES } from "@/lib/database.types";
@@ -169,6 +170,35 @@ export async function salvarAulaGrade(
 
   // Aula nova: vale a partir da data informada (padrão: hoje).
   if (!id) {
+    // Continuação de uma aula que já está na grade (mesma modalidade e professor, começando quando ela termina,
+    // ou terminando quando ela começa): é a mesma aula, então só aumenta a duração dela (uma contagem só).
+    const supabase = await createClient();
+    const { data: doDia } = await supabase
+      .from("grade_aulas")
+      .select("id, dia_semana, horario, modalidade, professor, duracao_min")
+      .eq("academia_id", academiaId)
+      .eq("tipo", registro.tipo)
+      .eq("dia_semana", registro.dia_semana as number)
+      .is("vigente_ate", null);
+    const nova = {
+      dia_semana: registro.dia_semana as number,
+      horario: String(registro.horario).slice(0, 5),
+      modalidade: String(registro.modalidade),
+      professor: (registro.professor as string | null) ?? null,
+      duracao_min: registro.duracao_min as number,
+    };
+    const aulas = (doDia ?? []).map((a) => ({ ...a, horario: String(a.horario).slice(0, 5) }));
+    const antes = aulas.find((a) => continua(a, nova));
+    const depois = aulas.find((a) => continua(nova, a));
+    if (antes || depois) {
+      const alvo = antes ?? depois!;
+      const mudanca = antes ? { duracao_min: antes.duracao_min + nova.duracao_min } : { horario: nova.horario, duracao_min: depois!.duracao_min + nova.duracao_min };
+      const { error } = await supabase.from("grade_aulas").update(mudanca).eq("id", alvo.id);
+      if (error) return { erro: mensagemErro(error) };
+      revalidatePath("/academias", "layout");
+      refresh();
+      return { aviso: `É a continuação da aula de ${alvo.modalidade} das ${alvo.horario}: juntei numa aula só, de ${mudanca.duracao_min} minutos (uma contagem só).` };
+    }
     const r = await gravar("grade_aulas", academiaId, null, { ...registro, vigente_de: aPartirDe });
     return r.erro?.startsWith("Já existe") ? { erro: repetida } : r;
   }
@@ -218,7 +248,9 @@ export async function montarGradePelasContagens(academiaId: string): Promise<Res
   const semAcesso = await semAcessoAAcademia(academiaId);
   if (semAcesso) return { erro: semAcesso };
   const supabase = await createClient();
-  const aulas = await gradePelasContagens(supabase, academiaId);
+  const contadas = await gradePelasContagens(supabase, academiaId);
+  // Aulas iguais em sequência (ex.: FIT DANCE 20:00 e 20:30) viram uma aula só.
+  const aulas = (["coletivas", "lutas"] as const).flatMap((t) => juntarSequencias(contadas.filter((a) => a.tipo === t)).ficam);
   if (aulas.length === 0) return { erro: "Não há contagens nas últimas 8 semanas para montar a grade." };
   // Já tem grade: a atual é encerrada ontem (fica no histórico) e a nova vale a partir de hoje.
   // Primeira grade: vale desde o início das 8 semanas analisadas.

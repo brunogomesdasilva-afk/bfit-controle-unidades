@@ -38,6 +38,7 @@ export default function ControleDiarioPage({
       salvar={salvarDiario}
       excluir={excluirDiario}
       rotuloNovo="+ Novo dia"
+      diasPendentes
     />
   );
 }

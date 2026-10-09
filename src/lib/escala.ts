@@ -94,21 +94,49 @@ export function turnosDoDia(data: string, setor: Setor, feriados: Map<string, Fe
   return [];
 }
 
-export function gerarEscala({
-  inicio,
-  fim,
-  pessoas,
-  feriados: listaFeriados,
-  anteriores,
-  indisponiveis = [],
-}: {
+type Entrada = {
   inicio: string;
   fim: string;
   pessoas: Pessoa[];
   feriados: Feriado[];
   anteriores: Atribuicao[]; // escala já existente fora do período (antes e depois), para as regras na virada
   indisponiveis?: { funcionarioId: string; data: string }[]; // folgas pedidas: a pessoa não entra nesse dia
-}) {
+  manter?: Atribuicao[]; // escala do período já gravada: mantém e só preenche os turnos vazios (com trocas)
+};
+
+// Gera a escala várias vezes (a primeira sem sorteio; as outras sorteando o desempate entre quem pode pegar cada
+// turno) e fica com a melhor: menos turnos vazios e, depois, os turnos mais bem divididos entre as pessoas.
+// Decidir dia a dia às vezes prende alguém que faria falta uma semana depois; as outras tentativas resolvem isso.
+export function gerarEscala(entrada: Entrada) {
+  const TENTATIVAS = entrada.manter ? 1 : 500;
+  let semente = 20261009;
+  const sorteio = () => ((semente = (semente * 1103515245 + 12345) % 2147483648) / 2147483648);
+  let melhor: ReturnType<typeof gerarUmaVez> | null = null;
+  let melhorNota = Infinity;
+  let semMelhorar = 0;
+  const limite = Date.now() + 8000; // no máximo ~8 s por mês gerado
+  for (let i = 0; i < TENTATIVAS && Date.now() < limite; i++) {
+    const r = gerarUmaVez(entrada, i === 0 ? null : sorteio);
+    const porPessoa = new Map<string, number>();
+    for (const a of r.atribuicoes) if (a.funcionarioId) porPessoa.set(a.funcionarioId, (porPessoa.get(a.funcionarioId) ?? 0) + 1);
+    const qtds = [...porPessoa.values()];
+    const desequilibrio = qtds.length ? Math.max(...qtds) - Math.min(...qtds) : 0;
+    const nota = r.avisos.length * 1000 + desequilibrio;
+    if (nota < melhorNota) {
+      melhor = r;
+      melhorNota = nota;
+      semMelhorar = 0;
+    } else semMelhorar++;
+    // Sem turno vazio e sem melhora há um tempo: já está bom.
+    if (melhorNota < 1000 && (melhorNota <= 1 || semMelhorar >= 60)) break;
+  }
+  return melhor!;
+}
+
+function gerarUmaVez(
+  { inicio, fim, pessoas, feriados: listaFeriados, anteriores, indisponiveis = [], manter }: Entrada,
+  sorteio: (() => number) | null
+) {
   const folga = new Set(indisponiveis.map((i) => `${i.funcionarioId}|${i.data}`));
   const feriados = new Map(listaFeriados.map((f) => [f.data, f]));
   // Turnos de fim de semana/feriado de cada pessoa: data -> turno
@@ -156,30 +184,125 @@ export function gerarEscala({
 
   const atribuicoes: Atribuicao[] = [];
   const avisos: string[] = [];
-  for (let d = inicio; d <= fim; d = somarDias(d, 1)) {
+  const atribuir = (a: Atribuicao, id: string | null) => {
+    if (a.funcionarioId) {
+      escalado.get(a.funcionarioId)?.delete(a.data);
+      total.set(a.funcionarioId, (total.get(a.funcionarioId) ?? 1) - 1);
+    }
+    a.funcionarioId = id;
+    if (id) {
+      escalado.get(id)!.set(a.data, { inicio: a.inicio, fim: a.fim });
+      total.set(id, (total.get(id) ?? 0) + 1);
+      if ((ultimo.get(id) ?? "") < a.data) ultimo.set(id, a.data);
+    }
+  };
+  const servePara = (p: Pessoa, a: Atribuicao) => {
+    const turno = turnosDoDia(a.data, a.setor, feriados)[a.ordem - 1];
+    return p.setor === a.setor && (!turno?.papel || p.papel === turno.papel);
+  };
+
+  // Escala já existente mantida (só preenche os turnos vazios dela, com trocas se precisar).
+  if (manter) {
+    for (const a of manter.filter((x) => x.data >= inicio && x.data <= fim)) {
+      const copia = { ...a, funcionarioId: null };
+      atribuicoes.push(copia);
+      if (a.funcionarioId && escalado.has(a.funcionarioId)) atribuir(copia, a.funcionarioId);
+    }
+  }
+
+  for (let d = inicio; !manter && d <= fim; d = somarDias(d, 1)) {
     for (const setor of Object.keys(SETORES) as Setor[]) {
       turnosDoDia(d, setor, feriados).forEach((turno, i) => {
+        // Olha a semana seguinte: evita escalar quem é uma das poucas pessoas que podem pegar um turno próximo
+        // (ex.: no domingo, não usar quem é da manhã se o sábado seguinte precisa de todos os da manhã).
+        const futuros: { data: string; turno: Turno }[] = [];
+        for (let x = somarDias(d, 1); x <= somarDias(d, 7) && x <= fim; x = somarDias(x, 1))
+          for (const t of turnosDoDia(x, setor, feriados)) futuros.push({ data: x, turno: t });
+        const serve = (p: Pessoa, t: Turno) => p.setor === setor && (!t.papel || p.papel === t.papel);
+        const custo = new Map<string, number>();
+        const custoDe = (c: Pessoa) => {
+          if (custo.has(c.id)) return custo.get(c.id)!;
+          const antes = futuros.map((f) => pessoas.filter((p) => serve(p, f.turno) && pode(p, f.data, f.turno)));
+          escalado.get(c.id)!.set(d, turno);
+          let soma = 0;
+          futuros.forEach((f, k) => {
+            if (antes[k].some((p) => p.id === c.id) && !pode(c, f.data, f.turno)) soma += 1 / antes[k].length;
+          });
+          escalado.get(c.id)!.delete(d);
+          custo.set(c.id, soma);
+          return soma;
+        };
+        // Nas tentativas com sorteio: desempate sorteado e, às vezes, sem olhar a semana seguinte.
+        const acaso = new Map(pessoas.map((p) => [p.id, sorteio ? sorteio() * 3 : 0]));
+        const olhaFrente = !sorteio || sorteio() >= 0.2 ? 1 : 0;
         const candidatos = pessoas
           .filter((p) => p.setor === setor && (!turno.papel || p.papel === turno.papel) && pode(p, d, turno))
           .sort(
             (a, b) =>
-              (total.get(a.id) ?? 0) - (total.get(b.id) ?? 0) ||
+              // Quem deixaria um turno próximo sem gente (custo alto) fica por último.
+              (Number(custoDe(a) >= 0.5) - Number(custoDe(b) >= 0.5)) * olhaFrente ||
+              (total.get(a.id) ?? 0) + acaso.get(a.id)! - ((total.get(b.id) ?? 0) + acaso.get(b.id)!) ||
               (ultimo.get(a.id) ?? "").localeCompare(ultimo.get(b.id) ?? "") ||
               a.nome.localeCompare(b.nome, "pt-BR")
           );
-        const escolhido = candidatos[0] ?? null;
-        if (escolhido) {
-          escalado.get(escolhido.id)!.set(d, turno);
-          total.set(escolhido.id, (total.get(escolhido.id) ?? 0) + 1);
-          ultimo.set(escolhido.id, d);
-        } else {
-          avisos.push(
-            `${d.split("-").reverse().join("/")} · ${SETORES[setor].nome} ${turno.inicio}–${turno.fim}${turno.papel === "estagiario" ? " (estagiário)" : ""}: sem pessoa disponível`
-          );
-        }
-        atribuicoes.push({ data: d, setor, inicio: turno.inicio, fim: turno.fim, ordem: i + 1, funcionarioId: escolhido?.id ?? null });
+        const a: Atribuicao = { data: d, setor, inicio: turno.inicio, fim: turno.fim, ordem: i + 1, funcionarioId: null };
+        atribuicoes.push(a);
+        if (candidatos[0]) atribuir(a, candidatos[0].id);
       });
     }
   }
-  return { atribuicoes, avisos };
+
+  // Turno vazio: tenta uma troca. Alguém que poderia pegá-lo, mas está preso por outro turno próximo (ex.: pegou o
+  // domingo e não pode o sábado seguinte por causa dos 7 dias seguidos), passa esse outro turno para um colega.
+  const trocas: string[] = [];
+  for (const vazio of atribuicoes.filter((a) => !a.funcionarioId)) {
+    const turnoVazio = { inicio: vazio.inicio, fim: vazio.fim };
+    let resolvido = false;
+    for (const p of pessoas.filter((x) => servePara(x, vazio) && !folga.has(`${x.id}|${vazio.data}`))) {
+      const proximos = atribuicoes.filter(
+        (a) => a.funcionarioId === p.id && a !== vazio && a.data >= somarDias(vazio.data, -8) && a.data <= somarDias(vazio.data, 8) && a.data >= inicio && a.data <= fim
+      );
+      for (const outro of proximos) {
+        atribuir(outro, null);
+        if (pode(p, vazio.data, turnoVazio)) {
+          atribuir(vazio, p.id);
+          const turnoOutro = { inicio: outro.inicio, fim: outro.fim };
+          const colega = pessoas
+            .filter((q) => q.id !== p.id && servePara(q, outro) && pode(q, outro.data, turnoOutro))
+            .sort((a, b) => (total.get(a.id) ?? 0) - (total.get(b.id) ?? 0))[0];
+          if (colega) {
+            atribuir(outro, colega.id);
+            trocas.push(`${outro.data.split("-").reverse().join("/")}: ${p.nome.split(" ")[0]} passou o turno para ${colega.nome.split(" ")[0]}`);
+            resolvido = true;
+            break;
+          }
+          atribuir(vazio, null);
+        }
+        atribuir(outro, p.id); // desfaz
+      }
+      if (resolvido) break;
+    }
+  }
+
+  // O que ainda ficou vazio: aviso com o motivo de cada pessoa do setor não poder pegar.
+  for (const a of atribuicoes.filter((x) => !x.funcionarioId)) {
+    const turno = turnosDoDia(a.data, a.setor, feriados)[a.ordem - 1] ?? { inicio: a.inicio, fim: a.fim };
+    const motivos = pessoas.filter((p) => servePara(p, a)).map((p) => `${p.nome.split(" ")[0]}: ${motivo(p, a.data, turno)}`);
+    avisos.push(
+      `${a.data.split("-").reverse().join("/")} · ${SETORES[a.setor].nome} ${a.inicio}–${a.fim}${turno.papel === "estagiario" ? " (estagiário)" : ""}: sem pessoa disponível${motivos.length ? ` (${motivos.join("; ")})` : " (ninguém cadastrado para esse turno)"}`
+    );
+  }
+  return { atribuicoes, avisos, trocas };
+
+  // Por que a pessoa não pode pegar o turno (para o aviso).
+  function motivo(p: Pessoa, d: string, turno: Turno) {
+    if (escalado.get(p.id)!.has(d)) return "já tem turno no dia";
+    if (folga.has(`${p.id}|${d}`)) return "folga pedida";
+    const antes = jornada(p, somarDias(d, -1));
+    if (antes && antes !== "sem-horario" && 24 * 60 + minutos(turno.inicio) - fimDaJornada(antes) < INTERJORNADA) return `não descansa 11h depois do dia anterior (sai ${antes.fim})`;
+    const depois = jornada(p, somarDias(d, 1));
+    if (depois && depois !== "sem-horario" && 24 * 60 + minutos(depois.inicio) - fimDaJornada(turno) < INTERJORNADA) return `não descansa 11h antes do dia seguinte (entra ${depois.inicio})`;
+    if (diaDaSemana(d) === 0 && escalado.get(p.id)!.has(somarDias(d, -7))) return p.genero === "feminino" ? "trabalhou o domingo anterior" : "trabalhou os 2 domingos anteriores";
+    return "seria o 7º dia seguido";
+  }
 }

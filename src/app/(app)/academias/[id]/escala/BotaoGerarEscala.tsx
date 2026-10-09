@@ -73,6 +73,16 @@ export function BotaoGerarEscala({
           ))}
         </ul>
       )}
+      {!aberto && resultado?.trocas && resultado.trocas.length > 0 && (
+        <div className="mt-2 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <p className="font-medium">Trocas feitas para não deixar turno vazio:</p>
+          <ul className="list-disc pl-5">
+            {resultado.trocas.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {aberto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" onClick={() => !gerando && setAberto(false)}>

@@ -10,7 +10,9 @@ import {
 } from "./frequencia/ContagemPorDia";
 import { ImportarExcel } from "./frequencia/ImportarExcel";
 import { importarContagemSala } from "./frequencia/importar";
-import { salvarDiaDeAulas } from "./lancamentos";
+import { diasPendentesDoDiario } from "@/lib/diasPendentes";
+import { DiasPendentes } from "./vendas/diario/DiasPendentes";
+import { salvarDiaDeAulas, salvarDiasDoDiario } from "./lancamentos";
 import { Planilha, type Coluna, type Linha, type Resultado } from "./Planilha";
 
 type Registro = Record<string, unknown> & {
@@ -83,6 +85,7 @@ export async function TelaMensal({
   calcular,
   agruparPorDia,
   importarSala,
+  diasPendentes,
 }: {
   searchParams: Promise<{ academia?: string; mes?: string }>;
   titulo: string;
@@ -111,6 +114,8 @@ export async function TelaMensal({
   agruparPorDia?: "coletivas" | "lutas";
   // Contagem de sala: botão para importar a aba CONTAGEM da planilha operacional (na aba da academia).
   importarSala?: boolean;
+  // Controle diário: os dias sem lançamento até hoje aparecem em cima, para gravar todos de uma vez.
+  diasPendentes?: boolean;
 }) {
   const params = await searchParams;
   const { supabase, academias, selecionada, admin } = await contextoAcademias(
@@ -243,6 +248,13 @@ export async function TelaMensal({
             avisoCadastro(
               `Nenhum funcionário do departamento “${professores === "professor_lutas" ? "Professor de lutas" : "Professor de coletivas"}” cadastrado`,
             )}
+          {diasPendentes && selecionada && (
+            <DiasPendentes
+              dias={await diasPendentesDoDiario(supabase, selecionada)}
+              campos={colunas.filter((c) => ["inteiro", "decimal", "moeda"].includes(c.tipo)).map((c) => ({ campo: c.campo, rotulo: c.rotulo, tipo: c.tipo }))}
+              salvar={salvarDiasDoDiario.bind(null, selecionada)}
+            />
+          )}
           {importarSala && selecionada && (
             <ImportarExcel
               importar={importarContagemSala.bind(null, selecionada)}

@@ -18,7 +18,7 @@ const CAMPOS: Record<Tabela, CampoValidado[]> = {
     { campo: "faturamento", rotulo: "Faturamento", tipo: "decimal" },
     { campo: "cancelamentos_solicitados", rotulo: "Canc. solic.", tipo: "inteiro" },
     { campo: "cancelamentos_efetivados", rotulo: "Canc. efet.", tipo: "inteiro" },
-    { campo: "nps", rotulo: "NPS", tipo: "decimal" },
+    { campo: "nps", rotulo: "NPS", tipo: "decimal", minimo: -100, maximo: 100 },
     { campo: "neoassist", rotulo: "Neoassist", tipo: "inteiro" },
     { campo: "vendas_site", rotulo: "Vendas site", tipo: "inteiro" },
   ],
@@ -178,6 +178,25 @@ async function apagar(tabela: Tabela, id: string): Promise<Resultado> {
 }
 
 type Salvar = (academiaId: string, id: string | null, dados: Record<string, string>) => Promise<Resultado>;
+
+// Controle diário de vários dias de uma vez (os dias pendentes, ex.: sábado, domingo e segunda). Linha sem
+// nenhum valor preenchido é ignorada; cada dia é gravado como no "+ Novo dia".
+export async function salvarDiasDoDiario(academiaId: string, linhas: Record<string, string>[]): Promise<{ erro?: string; ok?: string }> {
+  const preenchidas = linhas.filter((l) => Object.entries(l).some(([k, v]) => k !== "data" && String(v ?? "").trim() !== ""));
+  if (!preenchidas.length) return { erro: "Preencha pelo menos um dia." };
+  // Valida tudo antes de gravar, para não gravar metade.
+  for (const l of preenchidas) {
+    const { erro } = validar(CAMPOS.controle_diario, l);
+    if (erro) return { erro: `${diaMes(l.data)}: ${erro}` };
+  }
+  const gravados: string[] = [];
+  for (const l of preenchidas) {
+    const r = await gravar("controle_diario", academiaId, null, l);
+    if (r.erro) return { erro: `${diaMes(l.data)}: ${r.erro}${gravados.length ? ` (já gravados: ${gravados.join(", ")})` : ""}` };
+    gravados.push(diaMes(l.data));
+  }
+  return { ok: `${gravados.length === 1 ? "Dia gravado" : "Dias gravados"}: ${gravados.join(", ")}.` };
+}
 
 // Controle de vendas
 export const salvarDiario: Salvar = async (a, id, d) => gravar("controle_diario", a, id, d);
