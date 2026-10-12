@@ -11,8 +11,8 @@ import { createClient } from "@/lib/supabase/server";
 // devolve o relatório em texto, aos poucos (a tela mostra enquanto ele é escrito). O relatório é gravado em
 // folha_conferencias, inclusive o parcial se a conferência for interrompida.
 
-// A conferência pode levar alguns minutos (leitura dos PDFs, cálculos e pesquisa das tabelas oficiais).
-export const maxDuration = 300;
+// A conferência pode levar vários minutos (leitura dos PDFs, cálculos e pesquisa das tabelas oficiais): até ~13 min.
+export const maxDuration = 800;
 
 const MODELO = "claude-opus-5-5";
 const TIPOS_ARQUIVO = { folha: "Folha de pagamento", ponto: "Relatório de ponto", vt: "Controle de vale-transporte" } as const;

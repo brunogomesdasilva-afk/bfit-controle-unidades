@@ -197,7 +197,7 @@ export function ConferenciaFolha({
               {fase === "enviando" ? "Enviando arquivos…" : fase === "conferindo" ? "Conferindo…" : "Conferir folha"}
             </button>
             {fase === "conferindo" && (
-              <span className="text-xs text-slate-500">A conferência leva alguns minutos. Mantenha esta página aberta.</span>
+              <span className="text-xs text-slate-500">A conferência leva de 5 a 10 minutos. Mantenha esta página aberta.</span>
             )}
           </div>
         </div>

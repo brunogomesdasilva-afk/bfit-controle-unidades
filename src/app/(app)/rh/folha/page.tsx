@@ -27,8 +27,8 @@ type Linha = {
   fechada_por: string | null;
 };
 
-// Conferência que fica parada em "processando" por mais que isso foi interrompida (o servidor encerra em 5 min).
-const INTERROMPIDA_MS = 7 * 60 * 1000;
+// Conferência que fica parada em "processando" por mais que isso foi interrompida (o servidor encerra em ~13 min).
+const INTERROMPIDA_MS = 15 * 60 * 1000;
 const SITUACAO = {
   fechada: { rotulo: "Fechada", cor: "bg-emerald-100 text-emerald-800" },
   conferida: { rotulo: "Conferida, aguardando fechamento", cor: "bg-sky-100 text-sky-800" },
