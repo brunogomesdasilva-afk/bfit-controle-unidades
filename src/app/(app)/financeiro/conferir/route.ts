@@ -4,6 +4,7 @@ import { PDFDocument } from "pdf-lib";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { acompanharStream, linhaDeEtapa } from "@/lib/progressoConferencia";
+import { TABELAS_OFICIAIS } from "@/lib/tabelasOficiais";
 import { conferirPlanilha } from "@/lib/conferirPlanilha";
 import { consultarCnpj } from "@/lib/consultaCnpj";
 import { excelParaTexto } from "@/lib/excelTexto";
@@ -214,8 +215,9 @@ export async function POST(request: Request) {
             max_tokens: 64000,
             thinking: { type: "adaptive" },
             output_config: { effort: "high" },
-            system: [{ type: "text", text: `${PROMPT_MESTRE}\n\n${REGRAS_PAGAMENTOS}`, cache_control: { type: "ephemeral" } }],
-            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }, FERRAMENTA_CNPJ],
+            system: [{ type: "text", text: `${PROMPT_MESTRE}\n\n${REGRAS_PAGAMENTOS}\n\n${TABELAS_OFICIAIS}`, cache_control: { type: "ephemeral" } }],
+            // As tabelas oficiais já vão no prompt; a pesquisa fica para o que não estiver nelas (ex.: ISS de Osasco).
+            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }, FERRAMENTA_CNPJ],
             betas: ["server-side-fallback-2026-07-01", BETA_ARQUIVOS],
             fallbacks: "default",
             messages: mensagens,

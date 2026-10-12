@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { aulasDoMes } from "@/lib/aulasDoMes";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { acompanharStream, linhaDeEtapa } from "@/lib/progressoConferencia";
+import { TABELAS_OFICIAIS } from "@/lib/tabelasOficiais";
 import { excelParaTexto } from "@/lib/excelTexto";
 import { PROMPT_MESTRE, REGRAS_DO_SISTEMA } from "@/lib/promptConferencia";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
@@ -141,6 +142,9 @@ export async function POST(request: Request) {
         controller.enqueue(codificador.encode(t));
         gravarParcial();
       };
+      // Os arquivos vão em cache: a cada passo (pesquisa, cálculo) eles não são lidos e cobrados inteiros de novo.
+      const ultimo = conteudo[conteudo.length - 1];
+      if (ultimo.type === "text") ultimo.cache_control = { type: "ephemeral" };
       const mensagens: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: conteudo }];
       let modelo = MODELO;
       try {
@@ -151,8 +155,9 @@ export async function POST(request: Request) {
             max_tokens: 64000,
             thinking: { type: "adaptive" },
             output_config: { effort: "high" },
-            system: [{ type: "text", text: `${PROMPT_MESTRE}\n\n${REGRAS_DO_SISTEMA}`, cache_control: { type: "ephemeral" } }],
-            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 5 }],
+            system: [{ type: "text", text: `${PROMPT_MESTRE}\n\n${REGRAS_DO_SISTEMA}\n\n${TABELAS_OFICIAIS}`, cache_control: { type: "ephemeral" } }],
+            // As tabelas oficiais já vão no prompt; a pesquisa fica para o que não estiver nelas (ex.: convenção coletiva).
+            tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 2 }],
             betas: ["server-side-fallback-2026-07-01"],
             fallbacks: "default",
             messages: mensagens,
