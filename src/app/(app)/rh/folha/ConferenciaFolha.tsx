@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { fecharFolha, reabrirFolha } from "./actions";
 import { Relatorio } from "./Relatorio";
@@ -51,6 +51,16 @@ export function ConferenciaFolha({
   const campos = useRef<Record<string, HTMLInputElement | null>>({});
   const [escolhidos, setEscolhidos] = useState<Record<string, string>>({});
   const [fase, setFase] = useState<"parado" | "enviando" | "conferindo">("parado");
+  // Tempo desde o início da conferência (ela leva de 5 a 10 minutos; o relatório só aparece no fim da análise).
+  const [inicio, setInicio] = useState<number | null>(null);
+  const [agora, setAgora] = useState(0);
+  useEffect(() => {
+    if (fase !== "conferindo") return;
+    const id = setInterval(() => setAgora(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [fase]);
+  const decorrido = inicio && agora > inicio ? Math.floor((agora - inicio) / 1000) : 0;
+  const relogio = `${Math.floor(decorrido / 60)}:${String(decorrido % 60).padStart(2, "0")}`;
   const [texto, setTexto] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ erro?: string; ok?: string } | null>(null);
   const [salvando, iniciar] = useTransition();
@@ -91,6 +101,7 @@ export function ConferenciaFolha({
         enviados.push({ tipo, nome: arquivo.name, caminho });
       }
 
+      setInicio(Date.now());
       setFase("conferindo");
       const resposta = await fetch("/rh/folha/conferir", {
         method: "POST",
@@ -197,7 +208,9 @@ export function ConferenciaFolha({
               {fase === "enviando" ? "Enviando arquivos…" : fase === "conferindo" ? "Conferindo…" : "Conferir folha"}
             </button>
             {fase === "conferindo" && (
-              <span className="text-xs text-slate-500">A conferência leva de 5 a 10 minutos. Mantenha esta página aberta.</span>
+              <span className="text-xs text-slate-500">
+                {relogio} · a conferência leva de 5 a 10 minutos. Mantenha esta página aberta.
+              </span>
             )}
           </div>
         </div>
@@ -214,7 +227,9 @@ export function ConferenciaFolha({
               {atual.criadoPor ? ` por ${atual.criadoPor}` : ""}
             </p>
           )}
-          {relatorio ? <Relatorio markdown={relatorio} /> : <p className="text-sm text-slate-500">Lendo os arquivos e conferindo…</p>}
+          {relatorio ? <Relatorio markdown={relatorio} /> : <p className="animate-pulse text-sm text-slate-500">
+              Lendo os arquivos, calculando e consultando as tabelas oficiais… ({relogio}). O relatório aparece quando a análise terminar.
+            </p>}
           {fase === "conferindo" && <p className="mt-4 animate-pulse text-sm text-slate-500">Escrevendo o relatório…</p>}
 
           {pronto && atual && (
