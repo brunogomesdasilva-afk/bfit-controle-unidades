@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { aulasDoMes } from "@/lib/aulasDoMes";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
+import { acompanharStream, linhaDeEtapa } from "@/lib/progressoConferencia";
 import { excelParaTexto } from "@/lib/excelTexto";
 import { PROMPT_MESTRE, REGRAS_DO_SISTEMA } from "@/lib/promptConferencia";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
@@ -133,6 +134,8 @@ export async function POST(request: Request) {
 
   const resposta = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Etapa da análise (vai para a tela, não para o relatório).
+      const etapa = (t: string) => controller.enqueue(codificador.encode(linhaDeEtapa(t)));
       const escrever = (t: string) => {
         relatorio += t;
         controller.enqueue(codificador.encode(t));
@@ -155,6 +158,7 @@ export async function POST(request: Request) {
             messages: mensagens,
           });
           stream.on("text", (delta) => escrever(delta));
+          acompanharStream(stream, etapa);
           const final = await stream.finalMessage();
           modelo = final.model;
           if (final.stop_reason === "pause_turn") {

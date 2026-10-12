@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition } from "react";
+import { separarProgresso } from "@/lib/progressoConferencia";
 import { createClient } from "@/lib/supabase/client";
 import { Relatorio } from "../rh/folha/Relatorio";
 
@@ -57,6 +58,8 @@ export function ConferenciaPagamentos({
   const [escolhido, setEscolhido] = useState("");
   const [fase, setFase] = useState<"parado" | "enviando" | "conferindo">("parado");
   const [texto, setTexto] = useState<string | null>(null);
+  // Etapa da análise enviada pelo servidor (ex.: "Pesquisando: tabela INSS 2026").
+  const [etapa, setEtapa] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ erro?: string; ok?: string } | null>(null);
   const [atualizando, iniciar] = useTransition();
   const ocupado = fase !== "parado" || atualizando;
@@ -74,6 +77,7 @@ export function ConferenciaPagamentos({
     }
     setMensagem(null);
     setTexto("");
+    setEtapa(null);
     setFase("enviando");
     let novoId: string | null = null;
     try {
@@ -98,7 +102,9 @@ export function ConferenciaPagamentos({
         const { done, value } = await leitor.read();
         if (done) break;
         acumulado += decodificador.decode(value, { stream: true });
-        setTexto(acumulado);
+        const { texto: relatorioAteAgora, etapa: ultimaEtapa } = separarProgresso(acumulado);
+        setTexto(relatorioAteAgora);
+        if (ultimaEtapa) setEtapa(ultimaEtapa);
       }
       setMensagem({ ok: "Conferência concluída." });
       if (campo.current) campo.current.value = "";
@@ -152,7 +158,7 @@ export function ConferenciaPagamentos({
         <div className="rounded-lg border border-marca/30 bg-white p-4 md:p-6">
           <p className="mb-3 text-xs font-medium text-marca">Lote novo · conferindo</p>
           {texto ? <Relatorio markdown={texto} /> : <p className="text-sm text-slate-500">Abrindo o .zip e lendo os arquivos…</p>}
-          {fase === "conferindo" && <p className="mt-4 animate-pulse text-sm text-slate-500">Escrevendo o relatório…</p>}
+          {fase === "conferindo" && <p className="mt-4 animate-pulse text-sm text-slate-500">{etapa ?? "Lendo os arquivos…"}</p>}
         </div>
       )}
 

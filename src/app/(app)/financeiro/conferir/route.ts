@@ -3,6 +3,7 @@ import { unzipSync } from "fflate";
 import { PDFDocument } from "pdf-lib";
 import { nomeDoMes } from "@/app/(app)/relatorios/comum";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
+import { acompanharStream, linhaDeEtapa } from "@/lib/progressoConferencia";
 import { conferirPlanilha } from "@/lib/conferirPlanilha";
 import { consultarCnpj } from "@/lib/consultaCnpj";
 import { excelParaTexto } from "@/lib/excelTexto";
@@ -130,6 +131,8 @@ export async function POST(request: Request) {
 
   const resposta = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Etapa da análise (vai para a tela, não para o relatório).
+      const etapa = (t: string) => controller.enqueue(codificador.encode(linhaDeEtapa(t)));
       const escrever = (t: string) => {
         relatorio += t;
         controller.enqueue(codificador.encode(t));
@@ -218,6 +221,7 @@ export async function POST(request: Request) {
             messages: mensagens,
           });
           stream.on("text", (delta) => escrever(delta));
+          acompanharStream(stream, etapa);
           const final = await stream.finalMessage();
           modelo = final.model;
           if (final.stop_reason === "pause_turn") {

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
+import { separarProgresso } from "@/lib/progressoConferencia";
 import { createClient } from "@/lib/supabase/client";
 import { fecharFolha, reabrirFolha } from "./actions";
 import { Relatorio } from "./Relatorio";
@@ -62,6 +63,8 @@ export function ConferenciaFolha({
   const decorrido = inicio && agora > inicio ? Math.floor((agora - inicio) / 1000) : 0;
   const relogio = `${Math.floor(decorrido / 60)}:${String(decorrido % 60).padStart(2, "0")}`;
   const [texto, setTexto] = useState<string | null>(null);
+  // Etapa da análise enviada pelo servidor (ex.: "Pesquisando: tabela INSS 2026").
+  const [etapa, setEtapa] = useState<string | null>(null);
   const [mensagem, setMensagem] = useState<{ erro?: string; ok?: string } | null>(null);
   const [salvando, iniciar] = useTransition();
   const fechada = atual?.status === "fechada";
@@ -88,6 +91,7 @@ export function ConferenciaFolha({
     }
     setMensagem(null);
     setTexto("");
+    setEtapa(null);
     setFase("enviando");
     try {
       // Os arquivos vão direto para a pasta da academia no armazenamento (só o módulo RH lê).
@@ -117,7 +121,9 @@ export function ConferenciaFolha({
         const { done, value } = await leitor.read();
         if (done) break;
         acumulado += decodificador.decode(value, { stream: true });
-        setTexto(acumulado);
+        const { texto: relatorioAteAgora, etapa: ultimaEtapa } = separarProgresso(acumulado);
+        setTexto(relatorioAteAgora);
+        if (ultimaEtapa) setEtapa(ultimaEtapa);
       }
       setMensagem({ ok: "Conferência concluída. Confira o relatório antes de fechar a folha." });
       for (const a of ARQUIVOS) if (campos.current[a.tipo]) campos.current[a.tipo]!.value = "";
@@ -227,10 +233,16 @@ export function ConferenciaFolha({
               {atual.criadoPor ? ` por ${atual.criadoPor}` : ""}
             </p>
           )}
-          {relatorio ? <Relatorio markdown={relatorio} /> : <p className="animate-pulse text-sm text-slate-500">
-              Lendo os arquivos, calculando e consultando as tabelas oficiais… ({relogio}). O relatório aparece quando a análise terminar.
-            </p>}
-          {fase === "conferindo" && <p className="mt-4 animate-pulse text-sm text-slate-500">Escrevendo o relatório…</p>}
+          {relatorio ? (
+            <Relatorio markdown={relatorio} />
+          ) : (
+            <p className="text-sm text-slate-500">Lendo os arquivos, calculando e consultando as tabelas oficiais. O relatório aparece quando a análise terminar.</p>
+          )}
+          {fase === "conferindo" && (
+            <p className="mt-4 animate-pulse text-sm text-slate-600">
+              <span className="font-medium tabular-nums">{relogio}</span> · {etapa ?? "Lendo os arquivos…"}
+            </p>
+          )}
 
           {pronto && atual && (
             <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-4">
