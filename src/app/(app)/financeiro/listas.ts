@@ -30,6 +30,6 @@ export async function listasFinanceiro(supabase: Supabase) {
     opcoesCategoria: (tipo?: "receita" | "despesa") =>
       cats
         .filter((c) => c.ativo && (!tipo || c.tipo === tipo || c.tipo === "transferencia"))
-        .map((c) => ({ valor: c.id, rotulo: c.nome, grupo: c.grupo })),
+        .map((c) => ({ valor: c.id, rotulo: c.nome, grupo: c.grupo, tipo: c.tipo })),
   };
 }

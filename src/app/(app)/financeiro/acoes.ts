@@ -212,12 +212,48 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   return { ok: parcelas > 1 ? `${parcelas} parcelas incluídas.` : "Título incluído.", id: criados?.[0]?.id };
 }
 
-// Lançamento de uma NF importada do PDF: cadastra o fornecedor (se for novo, já com a categoria padrão escolhida)
-// e cria os títulos a pagar, um por parcela, com o PDF anexado. Vencimento fora de dia útil vai para o próximo.
+// Importar NF, 1º passo quando o emitente não está cadastrado: cadastra o fornecedor com os dados da nota e da
+// Receita e a categoria padrão escolhida na tela. Só depois a nota é conferida e lançada.
+export type FornecedorDaNota = { documento: string; razao_social: string; nome_fantasia: string | null; regime_tributario: string | null; cnae: string | null; cidade: string | null; uf: string | null };
+
+export async function cadastrarFornecedorDaNota(f: FornecedorDaNota, categoriaId: string): Promise<ResultadoFin> {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  if (!categoriaId) return { erro: "Escolha a categoria padrão do fornecedor." };
+  const doc = soNumeros(f.documento);
+  const { data: existente } = doc ? await a.supabase.from("fin_pessoas").select("id").eq("documento", doc).maybeSingle() : { data: null };
+  if (existente) {
+    await a.supabase.from("fin_pessoas").update({ categoria_padrao_id: categoriaId, fornecedor: true }).eq("id", existente.id);
+    atualizar();
+    return { ok: "Fornecedor já estava cadastrado: categoria padrão atualizada.", id: existente.id };
+  }
+  const regime = ["MEI", "Simples Nacional", "Lucro Presumido", "Lucro Real", "Pessoa Física", "Outro"].includes(f.regime_tributario ?? "") ? f.regime_tributario : null;
+  const { data: nova, error } = await a.supabase
+    .from("fin_pessoas")
+    .insert({
+      documento: doc || null,
+      tipo_pessoa: doc.length === 11 ? "PF" : "PJ",
+      razao_social: texto(f.razao_social, 200) ?? "Fornecedor",
+      nome_fantasia: texto(f.nome_fantasia ?? undefined, 200),
+      regime_tributario: regime,
+      cnae: texto(f.cnae ?? undefined, 200),
+      cidade: texto(f.cidade ?? undefined, 100),
+      uf: f.uf ? f.uf.toUpperCase().slice(0, 2) : null,
+      fornecedor: true,
+      categoria_padrao_id: categoriaId,
+    })
+    .select("id")
+    .single();
+  if (error) return { erro: mensagemErro(error) };
+  atualizar();
+  return { ok: "Fornecedor cadastrado.", id: nova.id };
+}
+
+// Lançamento de uma NF importada do PDF (o fornecedor já está cadastrado): cria os títulos a pagar, um por
+// parcela, com o PDF anexado. Vencimento fora de dia útil vai para o próximo.
 export type NotaParaLancar = {
   academiaId: string;
-  fornecedorId: string | null;
-  novoFornecedor: { documento: string; razao_social: string; nome_fantasia: string | null; regime_tributario: string | null; cnae: string | null; cidade: string | null; uf: string | null } | null;
+  fornecedorId: string;
   categoriaId: string;
   contaId: string;
   documento: string;
@@ -243,38 +279,10 @@ export async function lancarNotaFiscal(n: NotaParaLancar): Promise<ResultadoFin>
     retencoes[k] = x ?? 0;
   }
 
-  // Fornecedor: o que já existe ou um novo, com a categoria escolhida como padrão para os próximos lançamentos.
-  let pessoaId = n.fornecedorId;
-  if (!pessoaId) {
-    if (!n.novoFornecedor) return { erro: "Fornecedor não identificado." };
-    const doc = soNumeros(n.novoFornecedor.documento);
-    const { data: existente } = doc ? await a.supabase.from("fin_pessoas").select("id").eq("documento", doc).maybeSingle() : { data: null };
-    if (existente) pessoaId = existente.id;
-    else {
-      const regime = ["MEI", "Simples Nacional", "Lucro Presumido", "Lucro Real", "Pessoa Física", "Outro"].includes(n.novoFornecedor.regime_tributario ?? "") ? n.novoFornecedor.regime_tributario : null;
-      const { data: nova, error } = await a.supabase
-        .from("fin_pessoas")
-        .insert({
-          documento: doc || null,
-          tipo_pessoa: doc.length === 11 ? "PF" : "PJ",
-          razao_social: texto(n.novoFornecedor.razao_social, 200) ?? "Fornecedor",
-          nome_fantasia: texto(n.novoFornecedor.nome_fantasia ?? undefined, 200),
-          regime_tributario: regime,
-          cnae: texto(n.novoFornecedor.cnae ?? undefined, 200),
-          cidade: texto(n.novoFornecedor.cidade ?? undefined, 100),
-          uf: n.novoFornecedor.uf ? n.novoFornecedor.uf.toUpperCase().slice(0, 2) : null,
-          fornecedor: true,
-          categoria_padrao_id: n.categoriaId,
-        })
-        .select("id")
-        .single();
-      if (error) return { erro: mensagemErro(error) };
-      pessoaId = nova.id;
-    }
-  } else {
-    // Fornecedor já cadastrado sem categoria padrão: passa a ter a desta nota.
-    await a.supabase.from("fin_pessoas").update({ categoria_padrao_id: n.categoriaId }).eq("id", pessoaId).is("categoria_padrao_id", null);
-  }
+  if (!n.fornecedorId) return { erro: "Cadastre o fornecedor antes de lançar a nota." };
+  const pessoaId = n.fornecedorId;
+  // Fornecedor já cadastrado sem categoria padrão: passa a ter a desta nota.
+  await a.supabase.from("fin_pessoas").update({ categoria_padrao_id: n.categoriaId }).eq("id", pessoaId).is("categoria_padrao_id", null);
 
   const feriados = await feriadosDaAcademia(a.supabase, n.academiaId);
   const grupo = parcelas.length > 1 ? crypto.randomUUID() : null;

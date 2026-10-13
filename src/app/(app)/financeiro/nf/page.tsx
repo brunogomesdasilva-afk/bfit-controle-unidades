@@ -14,7 +14,7 @@ export default async function ImportarNfPage() {
         <h1 className="text-lg font-semibold text-slate-900">Importar NF</h1>
         <p className="text-sm text-slate-500">
           Envie o PDF da nota: o sistema lê fornecedor, academia (pelo CNPJ do tomador), número, valores, retenções e vencimentos. Fornecedor novo é
-          cadastrado na hora, com a categoria que você escolher, que passa a vir preenchida nas próximas notas dele.
+          cadastrado antes da nota (você escolhe só a categoria padrão dele, que passa a vir preenchida nas próximas notas).
         </p>
       </div>
       <ImportarNf

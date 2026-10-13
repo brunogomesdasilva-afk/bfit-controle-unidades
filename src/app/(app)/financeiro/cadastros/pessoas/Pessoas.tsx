@@ -8,7 +8,7 @@ import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, Escolha, Janela, Mensagem, Texto } fr
 // Cadastro de clientes e fornecedores (a mesma tabela): lista com busca e a janela de inclusão/alteração, que
 // preenche os dados da Receita pelo CNPJ.
 
-type Opcao = { valor: string; rotulo: string; grupo?: string };
+type Opcao = { valor: string; rotulo: string; grupo?: string; tipo?: string };
 const VAZIA: Record<string, string> = { cliente: "nao", fornecedor: "sim", ativo: "sim" };
 
 export function FormularioPessoa({ inicial, categorias, fechar, aoSalvar }: { inicial: Record<string, string>; categorias: Opcao[]; fechar: () => void; aoSalvar?: (id: string, nome: string) => void }) {
@@ -17,6 +17,9 @@ export function FormularioPessoa({ inicial, categorias, fechar, aoSalvar }: { in
   const [ocupado, iniciar] = useTransition();
   const campo = (c: string) => ({ valor: d[c] ?? "", mudar: (v: string) => setD({ ...d, [c]: v }) });
   const doc = soNumeros(d.documento);
+  // Fornecedor escolhe entre as categorias de pagar; cliente, entre as de receber; quem é os dois, entre todas.
+  const tiposCategoria = [d.fornecedor === "sim" && "despesa", d.cliente === "sim" && "receita"].filter(Boolean);
+  const opcoesCategoria = categorias.filter((c) => !c.tipo || c.tipo === "transferencia" || !tiposCategoria.length || tiposCategoria.includes(c.tipo) || c.valor === d.categoria_padrao_id);
 
   const receita = () =>
     iniciar(async () => {
@@ -54,7 +57,7 @@ export function FormularioPessoa({ inicial, categorias, fechar, aoSalvar }: { in
           <Texto rotulo="CNAE principal" {...campo("cnae")} className="md:col-span-3" />
           <Texto rotulo="Inscrição estadual" {...campo("inscricao_estadual")} />
           <Texto rotulo="Inscrição municipal" {...campo("inscricao_municipal")} />
-          <Escolha rotulo="Categoria padrão" {...campo("categoria_padrao_id")} opcoes={categorias} vazio="—" className="md:col-span-2" />
+          <Escolha rotulo="Categoria padrão (vem preenchida nos lançamentos)" {...campo("categoria_padrao_id")} opcoes={opcoesCategoria} vazio="—" className="md:col-span-2" />
         </section>
 
         <section>
@@ -112,6 +115,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "fornecedor" | "cliente" | "inativos">("todos");
   const [editando, setEditando] = useState<Record<string, string> | null>(null);
+  const nomeCategoria = useMemo(() => new Map(categorias.map((c) => [c.valor, c.rotulo])), [categorias]);
   const lista = useMemo(() => {
     const b = busca.trim().toLowerCase();
     const bd = soNumeros(busca);
@@ -144,6 +148,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
               <th className="px-3 py-2">Nome</th>
               <th className="px-3 py-2">CPF/CNPJ</th>
               <th className="px-3 py-2">Tipo</th>
+              <th className="px-3 py-2">Categoria padrão</th>
               <th className="px-3 py-2">Regime</th>
               <th className="px-3 py-2">Cidade/UF</th>
               <th className="px-3 py-2">PIX / banco</th>
@@ -158,6 +163,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
                 </td>
                 <td className="px-3 py-2 tabular-nums">{formatarDocumento(p.documento)}</td>
                 <td className="px-3 py-2">{[p.fornecedor && "Fornecedor", p.cliente && "Cliente"].filter(Boolean).join(" e ")}</td>
+                <td className="px-3 py-2">{p.categoria_padrao_id ? (nomeCategoria.get(p.categoria_padrao_id) ?? "") : <span className="text-xs text-amber-700">sem categoria</span>}</td>
                 <td className="px-3 py-2">{p.regime_tributario ?? ""}</td>
                 <td className="px-3 py-2">{[p.cidade, p.uf].filter(Boolean).join("/")}</td>
                 <td className="px-3 py-2 text-xs text-slate-600">{p.chave_pix ? `PIX ${p.chave_pix}` : [p.banco, p.agencia && `ag ${p.agencia}`, p.conta && `cc ${p.conta}`].filter(Boolean).join(" · ")}</td>
@@ -165,7 +171,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
                   Nenhum cadastro encontrado.
                 </td>
               </tr>

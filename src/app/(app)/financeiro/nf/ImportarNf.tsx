@@ -6,11 +6,12 @@ import { proximoDiaUtil } from "@/lib/diasUteis";
 import { dataBr, formatarDocumento, reais, somarMeses } from "@/lib/financeiro";
 import type { NotaLida } from "@/lib/lerNotaFiscal";
 import { createClient } from "@/lib/supabase/client";
-import { lancarNotaFiscal } from "../acoes";
+import { cadastrarFornecedorDaNota, lancarNotaFiscal } from "../acoes";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Mensagem, Rotulo, Texto, formatarMoeda } from "../componentes";
 
-// Importar NF: o PDF é lido pelo Claude; a tela mostra o que foi lido para conferir, cadastra o fornecedor novo
-// (pedindo a categoria, que fica como padrão dele) e, se a nota não traz vencimento ou condição de pagamento,
+// Importar NF: o PDF é lido pelo Claude. Se o emitente não estiver cadastrado, o 1º passo é cadastrá-lo (a tela
+// pede só a categoria padrão; o resto vem da nota e da Receita). Depois a tela mostra o que foi lido para conferir
+// e lançar no contas a pagar; se a nota não traz vencimento ou condição de pagamento,
 // pede a data e a forma (à vista ou parcelado). Vencimento fora de dia útil vai para o próximo dia útil.
 
 type Opcao = { valor: string; rotulo: string; grupo?: string };
@@ -105,8 +106,33 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
     if (semVencimento && ["forma", "primeiro", "quantas", "liquido"].includes(campo)) gerarParcelas(novo);
   };
 
+  function cadastrarFornecedor() {
+    if (!leitura) return;
+    const n = leitura.nota;
+    const dados = {
+      documento: n.emitente.documento,
+      razao_social: leitura.receita?.razao_social ?? n.emitente.razao_social,
+      nome_fantasia: leitura.receita?.nome_fantasia ?? n.emitente.nome_fantasia,
+      regime_tributario: leitura.receita?.regime ?? null,
+      cnae: leitura.receita?.cnae ?? null,
+      cidade: leitura.receita?.municipio.split("/")[0] ?? n.emitente.municipio,
+      uf: leitura.receita?.municipio.split("/")[1] ?? n.emitente.uf,
+    };
+    iniciar(async () => {
+      setM(null);
+      const r = await cadastrarFornecedorDaNota(dados, d.categoria_id ?? "");
+      if (r.erro || !r.id) return setM({ erro: r.erro ?? "Não foi possível cadastrar o fornecedor." });
+      setLeitura({
+        ...leitura,
+        fornecedor: { id: r.id, razao_social: dados.razao_social, nome_fantasia: dados.nome_fantasia, categoria_padrao_id: d.categoria_id, regime_tributario: dados.regime_tributario },
+      });
+      setM({ ok: `${r.ok} Agora confira a nota e lance.` });
+    });
+  }
+
   function lancar() {
-    if (!leitura || !arquivo) return;
+    if (!leitura || !arquivo || !leitura.fornecedor) return;
+    const fornecedorId = leitura.fornecedor.id;
     iniciar(async () => {
       setM(null);
       // O PDF fica guardado na pasta da academia e anexado ao título.
@@ -116,21 +142,9 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
         const { error } = await createClient().storage.from("pagamentos").upload(caminho, arquivo, { contentType: "application/pdf" });
         if (!error) anexo = caminho;
       }
-      const n = leitura.nota;
       const r = await lancarNotaFiscal({
         academiaId: d.academia_id,
-        fornecedorId: leitura.fornecedor?.id ?? null,
-        novoFornecedor: leitura.fornecedor
-          ? null
-          : {
-              documento: n.emitente.documento,
-              razao_social: leitura.receita?.razao_social ?? n.emitente.razao_social,
-              nome_fantasia: leitura.receita?.nome_fantasia ?? n.emitente.nome_fantasia,
-              regime_tributario: leitura.receita?.regime ?? null,
-              cnae: leitura.receita?.cnae ?? null,
-              cidade: leitura.receita?.municipio.split("/")[0] ?? n.emitente.municipio,
-              uf: leitura.receita?.municipio.split("/")[1] ?? n.emitente.uf,
-            },
+        fornecedorId,
         categoriaId: d.categoria_id,
         contaId: d.conta_id,
         documento: d.documento,
@@ -179,7 +193,36 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
         </p>
       )}
 
-      {leitura && n && (
+      {leitura && n && !leitura.fornecedor && (
+        <div className="space-y-4 rounded-lg border border-amber-300 bg-amber-50/40 p-5">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">1º passo: cadastrar o fornecedor</h3>
+            <p className="text-sm text-slate-600">Este emitente ainda não está cadastrado. Os dados vêm da nota e da Receita; escolha só a categoria padrão dele.</p>
+          </div>
+          <div className="rounded-md bg-white px-3 py-2 text-sm">
+            <p className="font-semibold text-slate-900">{leitura.receita?.razao_social ?? n.emitente.razao_social}</p>
+            <p className="text-xs text-slate-600">
+              {formatarDocumento(n.emitente.documento)}
+              {leitura.receita
+                ? ` · Receita: ${leitura.receita.situacao}${leitura.receita.regime ? ` · ${leitura.receita.regime}` : ""} · ${leitura.receita.municipio}`
+                : " · não foi possível consultar a Receita"}
+            </p>
+            {leitura.receita?.cnae && <p className="text-xs text-slate-500">CNAE: {leitura.receita.cnae}</p>}
+            {leitura.receita && leitura.receita.situacao !== "ATIVA" && <p className="text-xs font-medium text-red-700">Situação cadastral na Receita: {leitura.receita.situacao}.</p>}
+          </div>
+          <div className="flex flex-wrap items-end gap-3">
+            <Escolha rotulo="Categoria padrão do fornecedor" valor={d.categoria_id ?? ""} mudar={(v) => mudar("categoria_id", v)} opcoes={categorias} className="w-full max-w-md" />
+            <button type="button" onClick={cadastrarFornecedor} disabled={gravando || !d.categoria_id} className={BOTAO_PRIMARIO}>
+              {gravando ? "Cadastrando…" : "Cadastrar fornecedor e continuar"}
+            </button>
+            <button type="button" onClick={() => setLeitura(null)} className={BOTAO_SECUNDARIO}>
+              Descartar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {leitura && n && leitura.fornecedor && (
         <div className="space-y-5 rounded-lg border border-marca/30 bg-white p-5">
           {leitura.repetidas.length > 0 && (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -196,10 +239,10 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
           <section className="grid gap-3 md:grid-cols-12">
             <div className="rounded-md bg-slate-50 px-3 py-2 text-sm md:col-span-6">
               <p className="text-xs text-slate-500">Fornecedor</p>
-              <p className="font-semibold text-slate-900">{leitura.fornecedor ? leitura.fornecedor.nome_fantasia || leitura.fornecedor.razao_social : (leitura.receita?.razao_social ?? n.emitente.razao_social)}</p>
+              <p className="font-semibold text-slate-900">{leitura.fornecedor.nome_fantasia || leitura.fornecedor.razao_social}</p>
               <p className="text-xs text-slate-600">
                 {formatarDocumento(n.emitente.documento)}
-                {leitura.fornecedor ? " · já cadastrado" : " · fornecedor novo: será cadastrado ao lançar"}
+                {" · cadastrado"}
                 {leitura.receita && ` · Receita: ${leitura.receita.situacao}${leitura.receita.regime ? ` · ${leitura.receita.regime}` : ""}`}
               </p>
               {leitura.receita && leitura.receita.situacao !== "ATIVA" && <p className="text-xs font-medium text-red-700">Situação cadastral na Receita: {leitura.receita.situacao}.</p>}
@@ -207,8 +250,7 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
             <Escolha rotulo="Academia (tomador)" valor={d.academia_id ?? ""} mudar={(v) => mudar("academia_id", v)} opcoes={academias} className="md:col-span-3" />
             <Texto rotulo="Nota fiscal" valor={d.documento ?? ""} mudar={(v) => mudar("documento", v)} className="md:col-span-3" />
             <div className="md:col-span-6">
-              <Escolha rotulo={leitura.fornecedor ? "Categoria" : "Categoria (fica como padrão deste fornecedor)"} valor={d.categoria_id ?? ""} mudar={(v) => mudar("categoria_id", v)} opcoes={categorias} />
-              {!leitura.fornecedor && !d.categoria_id && <p className="mt-1 text-xs text-amber-700">Fornecedor novo: escolha a categoria. Nos próximos lançamentos dele ela já vem preenchida.</p>}
+              <Escolha rotulo="Categoria" valor={d.categoria_id ?? ""} mudar={(v) => mudar("categoria_id", v)} opcoes={categorias} />
             </div>
             <Escolha
               rotulo="Conta corrente"
