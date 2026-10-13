@@ -417,6 +417,10 @@ export default async function UsuariosPage({
                 <th className="px-4 py-2 font-medium">WhatsApp</th>
                 <th className="px-4 py-2 font-medium">Acesso</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                {/* Ações fixas na borda direita: a tabela é larga e o menu ficava escondido na rolagem. */}
+                <th className="sticky right-0 bg-slate-50 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">
+                  <span className="sr-only">Ações</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -527,7 +531,7 @@ export default async function UsuariosPage({
                     )}
                   </td>
                   <td className="px-4 py-2">
-                    <div className="flex items-center justify-between gap-2">
+                    <div>
                       <div>
                         {u.ativo === false ? (
                           <>
@@ -553,6 +557,11 @@ export default async function UsuariosPage({
                           </span>
                         )}
                       </div>
+                    </div>
+                  </td>
+                  <td
+                    className={`sticky right-0 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)] ${u.ativo === false ? "bg-slate-50" : "bg-white"}`}
+                  >
                       <MenuAcoesUsuario>
                         <Link
                           href={`/usuarios?editarEmail=${u.id}`}
@@ -593,7 +602,6 @@ export default async function UsuariosPage({
                           </Link>
                         )}
                       </MenuAcoesUsuario>
-                    </div>
                   </td>
                 </tr>
               ))}
