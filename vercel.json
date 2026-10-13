@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/acompanhamento", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/escala", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/escala", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/semanal", "schedule": "0 11 * * 4" }
   ]
 }

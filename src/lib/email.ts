@@ -9,6 +9,7 @@ export async function enviarEmail(opcoes: {
   para: string[];
   assunto: string;
   texto: string;
+  html?: string; // corpo formatado (ex.: tabelas); o texto fica como alternativa
   anexos?: { nome: string; conteudo: Buffer }[];
 }) {
   const porta = Number(process.env.SMTP_PORT ?? 587);
@@ -24,6 +25,7 @@ export async function enviarEmail(opcoes: {
     to: opcoes.para,
     subject: opcoes.assunto,
     text: opcoes.texto,
+    html: opcoes.html,
     attachments: opcoes.anexos?.map((a) => ({ filename: a.nome, content: a.conteudo })),
   });
 }
