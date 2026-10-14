@@ -27,8 +27,11 @@ export default async function AcompanhamentoPage() {
         </p>
       </div>
       <p className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">
-        Em teste: o envio automático das 8h está indo só para os administradores. Os gerentes passam a receber quando o
-        Bruno liberar.
+        Quem recebe o envio automático, em que dias e a que hora: menu Administrador &gt;{" "}
+        <a href="/admin/envios" className="font-medium underline">
+          Envios automáticos
+        </a>
+        .
       </p>
       {!cronConfigurado && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
