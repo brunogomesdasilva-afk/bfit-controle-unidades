@@ -12,15 +12,20 @@ export const maxDuration = 300;
 export default async function EnviosAutomaticosPage() {
   await exigirAdmin();
   const supabase = await createClient();
-  const [{ data: regras }, { data: perfis }] = await Promise.all([
+  const [{ data: regras }, { data: perfis }, { data: cadastrados }] = await Promise.all([
     supabase.from("regras_envio").select("*").order("hora").order("nome"),
     supabase.from("profiles").select("id, nome, email, email_relatorios, whatsapp, perfil").eq("ativo", true).order("nome"),
+    supabase.from("grupos_whatsapp").select("nome, grupo_id").order("nome"),
   ]);
-  let grupos: GrupoWhatsapp[] = [];
+  // Grupos para escolher: primeiro os do cadastro (Administrador > Cadastro), depois os do WhatsApp conectado que
+  // ainda não foram cadastrados.
+  let grupos: GrupoWhatsapp[] = (cadastrados ?? []).map((g) => ({ id: g.grupo_id as string, nome: g.nome as string }));
   let erroGrupos: string | null = null;
   if (whatsappConfigurado()) {
     try {
-      grupos = (await listarGrupos()).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      const doCadastro = new Set(grupos.map((g) => g.id));
+      const doWhatsapp = (await listarGrupos()).filter((g) => !doCadastro.has(g.id)).sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+      grupos = [...grupos, ...doWhatsapp];
     } catch (e) {
       erroGrupos = e instanceof Error ? e.message : "erro";
     }

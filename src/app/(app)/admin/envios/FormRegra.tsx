@@ -163,8 +163,8 @@ export function FormRegra({
             </select>
             <p className="mt-1 text-xs text-slate-500">
               {erroGrupos
-                ? `Não foi possível listar os grupos (${erroGrupos}).`
-                : "Só aparecem os grupos de que o número conectado participa. Grupo novo: adicione o número ao grupo e recarregue a página."}
+                ? `Não foi possível listar os grupos do WhatsApp (${erroGrupos}). Os cadastrados em Administrador > Cadastro aparecem mesmo assim.`
+                : "Aparecem os grupos cadastrados em Administrador > Cadastro e os do número conectado. Grupo novo: cadastre-o em Cadastro."}
             </p>
           </div>
         )}
