@@ -227,5 +227,5 @@ export async function alterarWhatsappUsuario(usuarioId: string, formData: FormDa
   if (error) voltar({ erro: error.message });
 
   revalidatePath("/usuarios");
-  voltar({ ok: celular ? "WhatsApp salvo: os relatórios também vão por WhatsApp." : "WhatsApp removido." });
+  voltar({ ok: celular ? "WhatsApp salvo: os relatórios vão para este celular." : "WhatsApp removido." });
 }

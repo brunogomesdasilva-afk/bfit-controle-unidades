@@ -1,4 +1,5 @@
 import { exigirAdmin } from "@/lib/auth";
+import { nomeDoCanal } from "@/lib/notificar";
 import { ontem } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
 import { BotaoEnviarEmail } from "../pendencias/BotaoEnviarEmail";
@@ -21,7 +22,7 @@ export default async function AcompanhamentoPage() {
         <p className="text-xs uppercase tracking-wide text-slate-500">BFIT · Relatórios</p>
         <h1 className="text-lg font-semibold text-slate-900">Acompanhamento diário</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Todo dia às 8h, cada unidade recebe por e-mail o Painel do dia anterior em PDF: vão para os usuários da unidade e
+          Todo dia às 8h, cada unidade recebe por {nomeDoCanal()} o Painel do dia anterior em PDF: vão para os usuários da unidade e
           para os administradores.
         </p>
       </div>

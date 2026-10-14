@@ -1,6 +1,7 @@
 import { contextoAcademias } from "@/lib/contexto";
 import { TIPOS_MANUTENCAO, type Compra, type Manutencao } from "@/lib/database.types";
 import { atrasada, carregarPendencias, diasEmAberto } from "@/lib/pendencias";
+import { nomeDoCanal } from "@/lib/notificar";
 import { hoje } from "@/lib/planilha";
 import { AbasAcademias } from "../../AbasAcademias";
 import { SemAcademias } from "../../SemAcademias";
@@ -9,7 +10,7 @@ import { enviarPendencias } from "./actions";
 import { BotaoEnviarEmail } from "./BotaoEnviarEmail";
 
 // Relatório de compras e manutenção: o que está em aberto, separado por unidade e, dentro de cada
-// unidade, compras e manutenções (da mais antiga para a mais nova). Cada unidade tem o envio por e-mail
+// unidade, compras e manutenções (da mais antiga para a mais nova). Cada unidade tem o envio (WhatsApp ou e-mail, ver NOTIFY_CHANNEL)
 // do PDF para os usuários dela e o administrador.
 export default async function RelatorioComprasManutencaoPage({
   searchParams,
@@ -21,6 +22,7 @@ export default async function RelatorioComprasManutencaoPage({
   const { compras, manutencoes } = await carregarPendencias(supabase, selecionada);
   const dataHoje = hoje();
   const unidades = selecionada ? academias.filter((a) => a.id === selecionada) : academias;
+  const canal = nomeDoCanal();
 
   const colunasCompras: ColunaRelatorio<Compra>[] = [
     { rotulo: "Solicitada em", valor: (c) => formatarDia(c.data_solicitacao) },
@@ -55,8 +57,8 @@ export default async function RelatorioComprasManutencaoPage({
             <div className="mb-5">
               <BotaoEnviarEmail
                 enviar={enviarPendencias.bind(null, null)}
-                rotulo="Enviar por e-mail para todas as unidades"
-                confirmacao="Enviar um e-mail para cada unidade, com o PDF das pendências dela, aos usuários da unidade e ao administrador?"
+                rotulo={`Enviar por ${canal} para todas as unidades`}
+                confirmacao={`Enviar por ${canal}, para cada unidade, o PDF das pendências dela aos usuários da unidade e ao administrador?`}
               />
             </div>
           )}
@@ -83,7 +85,7 @@ export default async function RelatorioComprasManutencaoPage({
                     {podeEnviar && (
                       <BotaoEnviarEmail
                         enviar={enviarPendencias.bind(null, unidade.id)}
-                        rotulo="Enviar por e-mail"
+                        rotulo={`Enviar por ${canal}`}
                         confirmacao={`Enviar o PDF das pendências de ${unidade.nome} para os usuários da unidade e o administrador?`}
                       />
                     )}
@@ -109,7 +111,7 @@ export default async function RelatorioComprasManutencaoPage({
             })}
           </div>
           <p className="mt-4 text-xs text-slate-500 print:hidden">
-            O e-mail leva um PDF com as compras e manutenções pendentes da unidade e vai para os usuários ativos dela e para
+            O envio por {canal} leva um PDF com as compras e manutenções pendentes da unidade e vai para os usuários ativos dela e para
             os administradores.
           </p>
         </>
