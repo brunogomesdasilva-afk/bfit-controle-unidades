@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { gerarPdfFechamento, type SecaoPdf } from "@/lib/pdfFechamento";
 
 // Relatório semanal das unidades (e-mail de quinta-feira, 8h): para cada academia, os números do controle diário
 // no dia de referência ("Hoje" = véspera do envio) e sete dias antes, no modelo da planilha do Bruno.
@@ -144,26 +145,35 @@ const pct = (n: number | null) => (n === null ? "-" : `${(n * 100).toLocaleStrin
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sinal = (n: number | null) => (n === null ? "-" : `${n > 0 ? "+" : ""}${n.toLocaleString("pt-BR")}`);
 
-function tabela(u: UnidadeSemanal, destaque = false) {
-  const linhas: [string, (c: ColunaSemanal) => string, ((c: ColunaSemanal) => boolean)?][] = [
-    ["Total de ativos", (c) => int(c.totalAtivos)],
-    ["Adimplentes", (c) => int(c.adimplentes)],
-    ["Inadimplentes", (c) => int(c.inadimplentes)],
-    ["% Inadimplentes", (c) => pct(c.pctInadimplentes)],
-    ["Ativos últimos 7 dias", (c) => sinal(c.ativos7dias), (c) => (c.ativos7dias ?? 0) < 0],
-    ["Total de vendas mês", (c) => int(c.vendasMes)],
-    ["Total de vendas mês anterior", (c) => int(c.vendasMesAnterior)],
-    ["Faturamento mês atual", (c) => brl(c.faturamentoMes)],
-    ["Fat. mês anterior mesma data", (c) => brl(c.faturamentoMesAnteriorMesmaData)],
-    ["Faturamento mês anterior", (c) => brl(c.faturamentoMesAnterior)],
-    ["Churn", (c) => pct(c.churn)],
-  ];
-  const borda = "border:1px solid #cbd5e1;";
-  const cel = `${borda}padding:4px 8px;font-size:13px;`;
-  const aviso = [u.hoje, u.semanaAnterior]
+// Linhas da tabela de cada unidade (e-mail e PDF): rótulo, valor formatado e se a célula fica em vermelho.
+const INDICADORES: [string, (c: ColunaSemanal) => string, ((c: ColunaSemanal) => boolean)?][] = [
+  ["Total de ativos", (c) => int(c.totalAtivos)],
+  ["Adimplentes", (c) => int(c.adimplentes)],
+  ["Inadimplentes", (c) => int(c.inadimplentes)],
+  ["% Inadimplentes", (c) => pct(c.pctInadimplentes)],
+  ["Ativos últimos 7 dias", (c) => sinal(c.ativos7dias), (c) => (c.ativos7dias ?? 0) < 0],
+  ["Total de vendas mês", (c) => int(c.vendasMes)],
+  ["Total de vendas mês anterior", (c) => int(c.vendasMesAnterior)],
+  ["Faturamento mês atual", (c) => brl(c.faturamentoMes)],
+  ["Fat. mês anterior mesma data", (c) => brl(c.faturamentoMesAnteriorMesmaData)],
+  ["Faturamento mês anterior", (c) => brl(c.faturamentoMesAnterior)],
+  ["Churn", (c) => pct(c.churn)],
+];
+
+const avisos = (u: UnidadeSemanal) =>
+  [u.hoje, u.semanaAnterior]
     .filter((c) => c.dataAtivos && c.dataAtivos !== c.data)
     .map((c) => `Ativos de ${dm(c.data)}: dia sem lançamento, usado ${dm(c.dataAtivos!)}.`)
     .concat([u.hoje, u.semanaAnterior].filter((c) => !c.dataAtivos).map((c) => `Sem lançamentos até ${dm(c.data)}.`));
+
+const LEGENDA =
+  "Total de ativos = adimplentes + inadimplentes · % inadimplentes = inadimplentes ÷ adimplentes · Ativos últimos 7 dias = variação dos adimplentes em 7 dias · Churn = cancelamentos efetivados no mês ÷ total de ativos.";
+
+function tabela(u: UnidadeSemanal, destaque = false) {
+  const linhas = INDICADORES;
+  const borda = "border:1px solid #cbd5e1;";
+  const cel = `${borda}padding:4px 8px;font-size:13px;`;
+  const aviso = avisos(u);
   return `<table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;max-width:440px;font-family:Calibri,Arial,sans-serif;color:#0f172a;">
   <tr style="background:${destaque ? "#0b4ea2" : "#e2e8f0"};color:${destaque ? "#fff" : "#0f172a"};">
     <th style="${cel}text-align:left;">${u.nome}</th><th style="${cel}text-align:center;">Hoje (${dm(u.hoje.data)})</th><th style="${cel}text-align:center;">${dm(u.semanaAnterior.data)}</th>
@@ -187,6 +197,45 @@ export function htmlRelatorioSemanal(r: RelatorioSemanal) {
 <p style="font-size:12px;color:#475569;margin:0 0 16px;">"Hoje" = ${dm(r.referencia)} (último dia completo) · comparação com ${dm(r.anterior)} · dados do controle diário do BFIT.</p>
 ${bloco(r.total, true)}
 ${r.unidades.map((u) => bloco(u)).join("\n")}
-<p style="font-size:11px;color:#64748b;margin:8px 0 0;">Total de ativos = adimplentes + inadimplentes · % inadimplentes = inadimplentes ÷ adimplentes · Ativos últimos 7 dias = variação dos adimplentes em 7 dias · Churn = cancelamentos efetivados no mês ÷ total de ativos.</p>
+<p style="font-size:11px;color:#64748b;margin:8px 0 0;">${LEGENDA}</p>
 </div>`;
+}
+
+// ------------------------------------------------------------------ PDF (para o envio por WhatsApp)
+// Uma tabela por unidade (o total primeiro), com os mesmos indicadores do e-mail.
+export async function pdfRelatorioSemanal(r: RelatorioSemanal) {
+  const secao = (u: UnidadeSemanal): SecaoPdf => ({
+    titulo: u.nome,
+    mostrarQuantidade: false,
+    colunas: [
+      { rotulo: "Indicador", largura: 223 },
+      { rotulo: `Hoje (${dm(u.hoje.data)})`, largura: 150 },
+      { rotulo: dm(u.semanaAnterior.data), largura: 150 },
+    ],
+    linhas: INDICADORES.map(([rotulo, valor]) => [rotulo, valor(u.hoje), valor(u.semanaAnterior)]),
+    destaques: INDICADORES.map(([, , vermelho]) => (vermelho?.(u.hoje) ? "vermelho" : null)),
+    vazio: "",
+  });
+  const observacoes = [r.total, ...r.unidades].flatMap((u) => avisos(u).map((a) => [u.nome, a]));
+  const pdf = await gerarPdfFechamento({
+    academia: "Todas as unidades",
+    mesTexto: "",
+    titulo: "Relatório semanal das unidades",
+    subtitulo: `"Hoje" = ${dm(r.referencia)} (último dia completo) · comparação com ${dm(r.anterior)} · dados do controle diário`,
+    secoes: [
+      secao(r.total),
+      ...r.unidades.map(secao),
+      {
+        titulo: "Observações",
+        mostrarQuantidade: false,
+        colunas: [
+          { rotulo: "Unidade", largura: 150 },
+          { rotulo: "Observação", largura: 373 },
+        ],
+        linhas: [...observacoes, ["Como ler", LEGENDA]],
+        vazio: "",
+      },
+    ],
+  });
+  return { pdf, arquivo: `Relatorio semanal ${r.referencia}.pdf` };
 }
