@@ -268,11 +268,11 @@ export async function enviarAcompanhamento(
     academiaId?: string | null;
   },
 ) {
-  const { enviarEmail, emailConfigurado, emailDeRelatorio } = await import("@/lib/email");
-  if (!emailConfigurado())
+  const { avisoNaoConfigurado, contatos, enviarRelatorio, envioConfigurado } = await import("@/lib/notificar");
+  if (!envioConfigurado())
     return {
       enviados: [] as string[],
-      falhas: ["e-mail de envio não configurado"],
+      falhas: [avisoNaoConfigurado()],
     };
   const { data: todas } = await db.from("academias").select("*").order("nome");
   const academias = (todas ?? []) as Academia[];
@@ -280,35 +280,23 @@ export async function enviarAcompanhamento(
     .from("profiles")
     .select("email, email_relatorios, whatsapp, perfil, academia_id, academias_manutencao")
     .eq("ativo", true);
-  const admins = (perfis ?? [])
-    .filter((p) => p.perfil === "admin")
-    .map((p) => emailDeRelatorio(p));
-  const { enviarWhatsapp } = await import("@/lib/whatsapp");
-  const adminsWhats = (perfis ?? []).filter((p) => p.perfil === "admin").map((p) => p.whatsapp as string | null);
+  const admins = (perfis ?? []).filter((p) => p.perfil === "admin");
   const enviados: string[] = [];
   const falhas: string[] = [];
   for (const academia of academias.filter(
     (a) => !opcoes.academiaId || a.id === opcoes.academiaId,
   )) {
+    // Gerentes e equipe da unidade recebem a versão sem faturamento.
     const gerentes = opcoes.soAdministradores
       ? []
-      : (perfis ?? [])
-          .filter(
-            (p) =>
-              p.academia_id === academia.id &&
-              !admins.includes(emailDeRelatorio(p)),
-          )
-          .map((p) => emailDeRelatorio(p));
-    // WhatsApp: os mesmos destinatários (gerentes recebem a versão sem faturamento).
-    const gerentesWhats = opcoes.soAdministradores
-      ? []
-      : (perfis ?? []).filter((p) => p.academia_id === academia.id && p.perfil !== "admin").map((p) => p.whatsapp as string | null);
+      : (perfis ?? []).filter((p) => p.academia_id === academia.id && p.perfil !== "admin");
     try {
-      for (const [para, whats, comFaturamento] of [
-        [admins, adminsWhats, true],
-        [gerentes, gerentesWhats, false],
-      ] as [string[], (string | null)[], boolean][]) {
-        if (!para.length && !whats.some(Boolean)) continue;
+      let quantos = 0;
+      for (const [para, comFaturamento] of [
+        [admins, true],
+        [gerentes, false],
+      ] as [typeof admins, boolean][]) {
+        if (!contatos(para).length) continue;
         const { dados, pdf, arquivo } = await acompanhamentoDiario(
           db,
           academia,
@@ -316,16 +304,7 @@ export async function enviarAcompanhamento(
           opcoes.referencia,
           comFaturamento,
         );
-        if (whats.some(Boolean)) {
-          const w = await enviarWhatsapp({
-            para: whats,
-            legenda: `BFIT · Acompanhamento diário · ${academia.nome} · ${formatarDia(opcoes.referencia)}`,
-            pdf: { nome: arquivo, conteudo: pdf },
-          });
-          falhas.push(...w.falhas.map((f) => `${academia.nome}: ${f}`));
-        }
-        if (!para.length) continue;
-        await enviarEmail({
+        const r = await enviarRelatorio({
           para,
           assunto: `BFIT · Acompanhamento diário · ${academia.nome} · ${formatarDia(opcoes.referencia)}`,
           texto: [
@@ -343,10 +322,12 @@ export async function enviarAcompanhamento(
             ``,
             `Enviado automaticamente pelo sistema BFIT · Controle de unidades.`,
           ].join("\n"),
-          anexos: [{ nome: arquivo, conteudo: pdf }],
+          pdf: { nome: arquivo, conteudo: pdf },
         });
+        falhas.push(...r.falhas.map((f) => `${academia.nome}: ${f}`));
+        quantos += r.enviados.length;
       }
-      enviados.push(`${academia.nome} (${admins.length + gerentes.length})`);
+      enviados.push(`${academia.nome} (${quantos})`);
     } catch (e) {
       falhas.push(
         `${academia.nome}: ${e instanceof Error ? e.message : "erro"}`,

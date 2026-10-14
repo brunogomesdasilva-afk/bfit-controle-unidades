@@ -1,9 +1,8 @@
 "use server";
 
 import { getPerfilAtual } from "@/lib/auth";
-import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
-import { enviarWhatsapp } from "@/lib/whatsapp";
 import { avisarManutencao } from "@/lib/avisoManutencao";
+import { avisoNaoConfigurado, enviarRelatorio, envioConfigurado, nomeDoCanal } from "@/lib/notificar";
 import { carregarPendencias, linhasDoPdf } from "@/lib/pendencias";
 import { gerarPdfPendencias } from "@/lib/pdfPendencias";
 import { hoje } from "@/lib/planilha";
@@ -11,16 +10,15 @@ import { createClient } from "@/lib/supabase/server";
 
 export type ResultadoEnvio = { erro?: string; ok?: string };
 
-// Envia por e-mail o PDF das compras e manutenções pendentes de cada academia escolhida para os
-// usuários ativos daquela academia e para os administradores.
-// Com academiaId = null (aba "Todas", só administrador) sai um e-mail por academia.
+// Envia (pelo canal de NOTIFY_CHANNEL: WhatsApp ou e-mail) o PDF das compras e manutenções pendentes de cada academia
+// escolhida para os usuários ativos daquela academia e para os administradores.
+// Com academiaId = null (aba "Todas", só administrador) sai um envio por academia.
 export async function enviarPendencias(academiaId: string | null): Promise<ResultadoEnvio> {
   const atual = await getPerfilAtual();
   if (!atual) return { erro: "Sua sessão expirou. Entre novamente." };
   if (atual.perfil !== "admin" && (!academiaId || academiaId !== atual.academiaId))
     return { erro: "Você só pode enviar o relatório da sua academia." };
-  if (!emailConfigurado())
-    return { erro: "O e-mail de envio ainda não foi configurado no sistema. Fale com o administrador." };
+  if (!envioConfigurado()) return { erro: avisoNaoConfigurado() };
 
   const supabase = await createClient();
   let consultaAcademias = supabase.from("academias").select("id, nome").order("nome");
@@ -30,22 +28,16 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
 
   const dataHoje = hoje();
   const dataTexto = dataHoje.split("-").reverse().join("/");
-  const administradores = (perfis ?? []).filter((p) => p.perfil === "admin").map((p) => emailDeRelatorio(p));
   const enviados: string[] = [];
   const falhas: string[] = [];
+  let semContato = 0;
 
   for (const academia of academias ?? []) {
-    const para = [
-      ...new Set([
-        ...administradores,
-        ...(perfis ?? []).filter((p) => p.academia_id === academia.id).map((p) => emailDeRelatorio(p)),
-      ]),
-    ];
-    const { compras, manutencoes } = await carregarPendencias(supabase, academia.id);
-    const pdf = await gerarPdfPendencias({ academia: academia.nome, dataTexto, ...linhasDoPdf(compras, manutencoes) });
-
     try {
-      await enviarEmail({
+      const para = (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id);
+      const { compras, manutencoes } = await carregarPendencias(supabase, academia.id);
+      const pdf = await gerarPdfPendencias({ academia: academia.nome, dataTexto, ...linhasDoPdf(compras, manutencoes) });
+      const r = await enviarRelatorio({
         para,
         assunto: `BFIT · Compras e manutenção pendentes · ${academia.nome} · ${dataTexto}`,
         texto: [
@@ -57,25 +49,24 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
           ``,
           `Enviado por ${atual.nome} pelo sistema BFIT · Controle de unidades.`,
         ].join("\n"),
-        anexos: [{ nome: `Pendencias ${academia.nome} ${dataHoje}.pdf`, conteudo: pdf }],
-      });
-      const whats = await enviarWhatsapp({
-        para: (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id).map((p) => p.whatsapp as string | null),
-        legenda: `BFIT · Compras e manutenção pendentes · ${academia.nome} · ${dataTexto}`,
         pdf: { nome: `Pendencias ${academia.nome} ${dataHoje}.pdf`, conteudo: pdf },
       });
-      falhas.push(...whats.falhas.map((f) => `${academia.nome}: ${f}`));
+      falhas.push(...r.falhas.map((f) => `${academia.nome}: ${f}`));
+      semContato = Math.max(semContato, r.semContato);
       // Pessoal de manutenção da unidade: só as manutenções pendentes.
       const equipe = await avisarManutencao(supabase, academia, perfis ?? []);
       falhas.push(...equipe.falhas);
-      enviados.push(
-        `${academia.nome} (${para.length} ${para.length === 1 ? "destinatário" : "destinatários"}${whats.enviados.length ? `, WhatsApp ${whats.enviados.length}` : ""})`
-      );
+      const total = r.enviados.length + equipe.enviados;
+      if (total) enviados.push(`${academia.nome} (${total} ${total === 1 ? "destinatário" : "destinatários"})`);
     } catch (e) {
       falhas.push(`${academia.nome}: ${e instanceof Error ? e.message : "erro no envio"}`);
     }
   }
 
-  if (falhas.length) return { erro: `Não foi possível enviar: ${falhas.join("; ")}` + (enviados.length ? `. Enviados: ${enviados.join(", ")}.` : "") };
-  return { ok: `E-mail enviado: ${enviados.join(", ")}.` };
+  const canal = nomeDoCanal();
+  const pulados = semContato ? ` ${semContato} sem ${canal} no cadastro (não receberam).` : "";
+  if (falhas.length)
+    return { erro: `Não foi possível enviar: ${falhas.join("; ")}` + (enviados.length ? `. Enviados: ${enviados.join(", ")}.` : "") + pulados };
+  if (!enviados.length) return { erro: `Ninguém com ${canal} cadastrado para receber.${pulados}` };
+  return { ok: `Enviado por ${canal}: ${enviados.join(", ")}.${pulados}` };
 }
