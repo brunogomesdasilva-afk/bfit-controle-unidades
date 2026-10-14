@@ -4,7 +4,8 @@ import { normalizarCelular } from "./telefone";
 import type { DocumentoWhatsapp, ProvedorWhatsapp } from "./tipos";
 
 // Envio de relatórios por WhatsApp. O serviço é escolhido pela variável WHATSAPP_PROVIDER:
-// "meta" (padrão, WhatsApp Cloud API oficial) ou "zapi" (Z-API). Só roda no servidor: as credenciais nunca vão ao navegador.
+// "zapi" (padrão, Z-API com o número atual conectado por QR code) ou "meta" (WhatsApp Cloud API oficial).
+// Só roda no servidor: as credenciais nunca vão ao navegador.
 
 export { normalizarCelular };
 export type { DocumentoWhatsapp };
@@ -12,7 +13,7 @@ export type { DocumentoWhatsapp };
 const PROVEDORES: Record<string, ProvedorWhatsapp> = { meta, zapi };
 
 export function provedorWhatsapp(): ProvedorWhatsapp {
-  const nome = (process.env.WHATSAPP_PROVIDER || "meta").trim().toLowerCase();
+  const nome = (process.env.WHATSAPP_PROVIDER || "zapi").trim().toLowerCase();
   const provedor = PROVEDORES[nome];
   if (!provedor) throw new Error(`WHATSAPP_PROVIDER inválido: "${nome}" (use meta ou zapi).`);
   return provedor;
