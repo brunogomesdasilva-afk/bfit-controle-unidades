@@ -14,7 +14,7 @@ export const canalDeEnvio = (): Canal => ((process.env.NOTIFY_CHANNEL ?? "").tri
 
 export const nomeDoCanal = (canal: Canal = canalDeEnvio()) => (canal === "email" ? "e-mail" : "WhatsApp");
 
-export const envioConfigurado = () => (canalDeEnvio() === "email" ? emailConfigurado() : whatsappConfigurado());
+export const envioConfigurado = (canal: Canal = canalDeEnvio()) => (canal === "email" ? emailConfigurado() : whatsappConfigurado());
 
 export const avisoNaoConfigurado = () => `O ${nomeDoCanal()} de envio ainda não foi configurado no sistema. Fale com o administrador.`;
 
@@ -28,14 +28,16 @@ export type ResumoEnvio = { canal: Canal; enviados: string[]; falhas: string[]; 
 
 export async function enviarRelatorio(opcoes: {
   para: Destinatario[];
+  grupos?: string[]; // WhatsApp: IDs de grupos que também recebem
+  canal?: Canal; // padrão: NOTIFY_CHANNEL (as regras de envio automático escolhem o seu)
   assunto: string; // também é a legenda do PDF no WhatsApp
   texto: string; // corpo do e-mail
   html?: string; // corpo formatado do e-mail (opcional)
   pdf: { nome: string; conteudo: Uint8Array };
 }): Promise<ResumoEnvio> {
-  const canal = canalDeEnvio();
+  const canal = opcoes.canal ?? canalDeEnvio();
   if (canal === "whatsapp") {
-    const r = await enviarWhatsapp({ para: opcoes.para.map((p) => p.whatsapp), legenda: opcoes.assunto, pdf: opcoes.pdf });
+    const r = await enviarWhatsapp({ para: opcoes.para.map((p) => p.whatsapp), grupos: opcoes.grupos, legenda: opcoes.assunto, pdf: opcoes.pdf });
     return { canal, enviados: r.enviados, falhas: r.falhas, semContato: r.semCelular };
   }
 

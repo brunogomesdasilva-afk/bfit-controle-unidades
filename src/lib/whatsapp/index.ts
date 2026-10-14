@@ -41,10 +41,19 @@ export async function listarGrupos(): Promise<GrupoWhatsapp[]> {
   return provedor.listarGrupos();
 }
 
-// Envia o PDF com uma legenda para cada celular. Não lança erro: devolve os enviados, as falhas e quantos ficaram sem
-// celular cadastrado (esses são pulados).
+// Contra o WhatsApp tratar como spam: entre uma mensagem e a seguinte, uma pausa de alguns segundos (variável, como
+// uma pessoa faria). WHATSAPP_PAUSA_SEGUNDOS muda a pausa mínima (padrão 4; 0 desliga).
+const esperar = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+function pausaEntreMensagens() {
+  const minimo = Number(process.env.WHATSAPP_PAUSA_SEGUNDOS ?? 4);
+  return minimo > 0 ? esperar((minimo + Math.random() * 4) * 1000) : Promise.resolve();
+}
+
+// Envia o PDF com uma legenda para cada celular (e para os grupos, se houver). Não lança erro: devolve os enviados,
+// as falhas e quantos ficaram sem celular cadastrado (esses são pulados).
 export async function enviarWhatsapp(opcoes: {
   para: (string | null | undefined)[];
+  grupos?: string[];
   legenda: string;
   pdf: { nome: string; conteudo: Uint8Array };
 }) {
@@ -56,8 +65,14 @@ export async function enviarWhatsapp(opcoes: {
     return { enviados, falhas, semCelular };
   }
   if (semCelular) console.info(`[whatsapp] ${semCelular} destinatário(s) sem WhatsApp cadastrado: pulados (${opcoes.legenda}).`);
-  const celulares = [...new Set(opcoes.para.map(normalizarCelular).filter((c): c is string => Boolean(c)))];
-  for (const celular of celulares) {
+  const celulares = [
+    ...new Set([
+      ...(opcoes.grupos ?? []).filter(ehGrupo),
+      ...opcoes.para.map(normalizarCelular).filter((c): c is string => Boolean(c)),
+    ]),
+  ];
+  for (const [i, celular] of celulares.entries()) {
+    if (i > 0) await pausaEntreMensagens();
     try {
       await sendDocument({ to: celular, fileBuffer: opcoes.pdf.conteudo, fileName: opcoes.pdf.nome, caption: opcoes.legenda });
       enviados.push(celular);
