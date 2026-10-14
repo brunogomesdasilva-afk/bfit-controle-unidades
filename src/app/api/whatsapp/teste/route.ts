@@ -1,11 +1,12 @@
 import { getPerfilAtual } from "@/lib/auth";
 import { gerarPdfFechamento } from "@/lib/pdfFechamento";
 import { createClient } from "@/lib/supabase/server";
-import { normalizarCelular, provedorWhatsapp, sendDocument, whatsappConfigurado } from "@/lib/whatsapp";
+import { normalizarDestino, provedorWhatsapp, sendDocument, whatsappConfigurado } from "@/lib/whatsapp";
 
 // Teste do envio por WhatsApp para UM número (só administrador, logado no sistema). Abra no navegador:
 //   /api/whatsapp/teste                     → manda para o WhatsApp do seu cadastro
 //   /api/whatsapp/teste?para=11988887777    → manda para esse número
+//   /api/whatsapp/teste?para=<ID do grupo>  → manda para o grupo (IDs em /api/whatsapp/grupos)
 // Envia um PDF pequeno de teste pelo provedor de WHATSAPP_PROVIDER e mostra o resultado (ou o erro do provedor).
 export async function GET(request: Request) {
   const atual = await getPerfilAtual();
@@ -19,8 +20,9 @@ export async function GET(request: Request) {
     const { data } = await supabase.from("profiles").select("whatsapp").eq("id", atual.id).maybeSingle();
     para = data?.whatsapp ?? null;
   }
-  const celular = normalizarCelular(para);
-  if (!celular) return Response.json({ ok: false, erro: "Informe ?para=DDD+número ou cadastre seu WhatsApp em Usuários." }, { status: 400 });
+  const celular = normalizarDestino(para);
+  if (!celular)
+    return Response.json({ ok: false, erro: "Informe ?para=DDD+número (ou o ID de um grupo) ou cadastre seu WhatsApp em Usuários." }, { status: 400 });
 
   const agora = new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
   const pdf = await gerarPdfFechamento({

@@ -1,14 +1,14 @@
 import { meta } from "./providers/meta";
 import { zapi } from "./providers/zapi";
-import { normalizarCelular } from "./telefone";
-import type { DocumentoWhatsapp, ProvedorWhatsapp } from "./tipos";
+import { ehGrupo, normalizarCelular, normalizarDestino } from "./telefone";
+import type { DocumentoWhatsapp, GrupoWhatsapp, ProvedorWhatsapp } from "./tipos";
 
 // Envio de relatórios por WhatsApp. O serviço é escolhido pela variável WHATSAPP_PROVIDER:
 // "zapi" (padrão, Z-API com o número atual conectado por QR code) ou "meta" (WhatsApp Cloud API oficial).
 // Só roda no servidor: as credenciais nunca vão ao navegador.
 
-export { normalizarCelular };
-export type { DocumentoWhatsapp };
+export { ehGrupo, normalizarCelular, normalizarDestino };
+export type { DocumentoWhatsapp, GrupoWhatsapp };
 
 const PROVEDORES: Record<string, ProvedorWhatsapp> = { meta, zapi };
 
@@ -27,11 +27,18 @@ export function whatsappConfigurado(): boolean {
   }
 }
 
-// Um documento para um celular. Lança erro se falhar.
+// Um documento para um celular ou grupo. Lança erro se falhar.
 export async function sendDocument(documento: DocumentoWhatsapp) {
-  const to = normalizarCelular(documento.to);
-  if (!to) throw new Error(`celular inválido: "${documento.to}"`);
+  const to = normalizarDestino(documento.to);
+  if (!to) throw new Error(`celular ou grupo inválido: "${documento.to}"`);
   await provedorWhatsapp().sendDocument({ ...documento, to });
+}
+
+// Grupos de que o número conectado participa (para descobrir o ID de um grupo).
+export async function listarGrupos(): Promise<GrupoWhatsapp[]> {
+  const provedor = provedorWhatsapp();
+  if (!provedor.listarGrupos) throw new Error(`${provedor.nome} não envia para grupos.`);
+  return provedor.listarGrupos();
 }
 
 // Envia o PDF com uma legenda para cada celular. Não lança erro: devolve os enviados, as falhas e quantos ficaram sem

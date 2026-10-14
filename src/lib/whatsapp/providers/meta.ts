@@ -57,6 +57,7 @@ export const meta: ProvedorWhatsapp = {
   nome: "WhatsApp Cloud API",
   configurado: () => Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID),
   async sendDocument(d: DocumentoWhatsapp) {
+    if (!/^\d+$/.test(d.to)) throw new Error("a Cloud API da Meta não envia para grupos (use a Z-API)");
     const documento = d.fileBuffer
       ? { id: await subirMidia(d.fileBuffer, d.fileName), filename: d.fileName }
       : d.fileUrl
