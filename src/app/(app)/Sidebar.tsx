@@ -538,6 +538,18 @@ const TODOS: ItemMenu[] = [
         ),
       },
       {
+        href: "/admin/envios",
+        rotulo: "Envios automáticos",
+        somenteAdmin: true,
+        ativo: (p: string) => p === "/admin/envios",
+        icone: (
+          <Icone>
+            <path d="M22 2 11 13" />
+            <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+          </Icone>
+        ),
+      },
+      {
         href: "/admin/fechamento",
         rotulo: "Fechamento de período",
         somenteAdmin: true,
