@@ -1,5 +1,6 @@
 import type { Aniversariante } from "@/lib/aniversarios";
 import { contextoAcademias } from "@/lib/contexto";
+import { nomeDoCanal } from "@/lib/notificar";
 import { dadosDoFechamento, diaCurto, mesDeFechamento, mesesDisponiveis, nomeDoMes, type DataImportante } from "@/lib/fechamento";
 import { AbasAcademias } from "../../AbasAcademias";
 import { SemAcademias } from "../../SemAcademias";
@@ -42,7 +43,7 @@ const COLUNAS_DATAS: ColunaRelatorio<DataImportante>[] = [
   },
 ];
 
-// Fechamento do mês: escolhe o mês (do atual para trás) e, por unidade, abre o PDF e envia por e-mail
+// Fechamento do mês: escolhe o mês (do atual para trás) e, por unidade, abre o PDF e envia (WhatsApp ou e-mail, ver NOTIFY_CHANNEL)
 // para os usuários da unidade e os administradores. Traz os aniversariantes do mês seguinte e o que
 // ficou sem preencher no mês (diário e contagens).
 export default async function FechamentoDoMesPage({
@@ -103,7 +104,7 @@ export default async function FechamentoDoMesPage({
                       <BotaoFechamento
                         enviar={enviarFechamento.bind(null, unidade.id, mes)}
                         pdf={`/relatorios/fechamento/pdf?academia=${unidade.id}&mes=${mes}`}
-                        confirmacao={`Executar o fechamento de ${nomeDoMes(mes)} de ${unidade.nome}? O PDF abre numa nova aba e vai por e-mail para os usuários da unidade e o administrador.`}
+                        confirmacao={`Executar o fechamento de ${nomeDoMes(mes)} de ${unidade.nome}? O PDF abre numa nova aba e vai por ${nomeDoCanal()} para os usuários da unidade e o administrador.`}
                       />
                     )}
                   </div>

@@ -538,6 +538,32 @@ const TODOS: ItemMenu[] = [
         ),
       },
       {
+        href: "/admin/envios",
+        rotulo: "Envios automáticos",
+        somenteAdmin: true,
+        ativo: (p: string) => p === "/admin/envios",
+        icone: (
+          <Icone>
+            <path d="M22 2 11 13" />
+            <path d="M22 2 15 22l-4-9-9-4 20-7z" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/admin/cadastro",
+        rotulo: "Cadastro",
+        somenteAdmin: true,
+        ativo: (p: string) => p === "/admin/cadastro",
+        icone: (
+          <Icone>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+            <rect x="8" y="2" width="8" height="4" rx="1" />
+            <path d="M9 12h6" />
+            <path d="M9 16h6" />
+          </Icone>
+        ),
+      },
+      {
         href: "/admin/fechamento",
         rotulo: "Fechamento de período",
         somenteAdmin: true,

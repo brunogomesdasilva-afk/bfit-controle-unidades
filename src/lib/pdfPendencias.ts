@@ -41,11 +41,12 @@ export function quebrar(texto: string, fonte: PDFFont, tamanho: number, largura:
   return linhas;
 }
 
-// soManutencoes: versão do pessoal de manutenção (sem as compras).
+// soManutencoes: versão do pessoal de manutenção (sem as compras). soCompras: só as compras (envio das quintas).
 export async function gerarPdfPendencias(dados: {
   academia: string;
   dataTexto: string;
   soManutencoes?: boolean;
+  soCompras?: boolean;
   compras: LinhaPdf[];
   manutencoes: LinhaPdf[];
 }) {
@@ -60,7 +61,7 @@ export async function gerarPdfPendencias(dados: {
   function cabecalhoDaPagina() {
     pagina.drawText("BFIT · Controle de unidades", { x: MARGEM, y, size: 9, font: negrito, color: AZUL });
     y -= 20;
-    pagina.drawText(limpar(`${dados.soManutencoes ? "Manutenções pendentes" : "Compras e manutenção pendentes"} - ${dados.academia}`), { x: MARGEM, y, size: 15, font: negrito, color: CINZA });
+    pagina.drawText(limpar(`${dados.soManutencoes ? "Manutenções pendentes" : dados.soCompras ? "Compras pendentes" : "Compras e manutenção pendentes"} - ${dados.academia}`), { x: MARGEM, y, size: 15, font: negrito, color: CINZA });
     y -= 16;
     pagina.drawText(limpar(`Situação em ${dados.dataTexto}`), { x: MARGEM, y, size: 9.5, font: normal, color: CINZA });
     y -= 22;
@@ -123,6 +124,7 @@ export async function gerarPdfPendencias(dados: {
     linhas: dados.compras,
     vazio: "Nenhuma compra pendente.",
   });
+  if (!dados.soCompras)
   tabela({
     titulo: "Manutenções pendentes",
     colunas: [

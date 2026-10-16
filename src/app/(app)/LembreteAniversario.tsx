@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
+
+const nadaParaOuvir = () => () => {};
 
 export type Lembrete = { chave: string; nome: string; academia: string; departamento: string; quando: string; idade: number };
 
@@ -8,21 +10,26 @@ export type Lembrete = { chave: string; nome: string; academia: string; departam
 // Depois de fechado, só volta no dia seguinte (fica guardado neste navegador).
 export function LembreteAniversario({ dia, lembretes }: { dia: string; lembretes: Lembrete[] }) {
   const chave = `aniversarios_vistos_${dia}`;
-  const [fechado, setFechado] = useState(true);
-  useEffect(() => {
-    let visto = false;
-    try {
-      visto = localStorage.getItem(chave) === "1";
-    } catch {}
-    setFechado(visto);
-  }, [chave]);
+  // No servidor fica fechado; no navegador, aberto até ser visto hoje (guardado no localStorage).
+  const visto = useSyncExternalStore(
+    nadaParaOuvir,
+    () => {
+      try {
+        return localStorage.getItem(chave) === "1";
+      } catch {
+        return false;
+      }
+    },
+    () => true
+  );
+  const [fechadoEm, setFechadoEm] = useState<string | null>(null);
 
-  if (fechado || lembretes.length === 0) return null;
+  if (visto || fechadoEm === chave || lembretes.length === 0) return null;
   const fechar = () => {
     try {
       localStorage.setItem(chave, "1");
     } catch {}
-    setFechado(true);
+    setFechadoEm(chave);
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 print:hidden" onClick={fechar}>
