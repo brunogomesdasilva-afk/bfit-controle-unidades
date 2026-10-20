@@ -67,7 +67,7 @@ function Cartao({
 }) {
   return (
     <div
-      className={`rounded-lg border p-3 ${destaque ? "border-marca bg-marca text-white" : "border-slate-200 bg-white"}`}
+      className={`rounded-lg border p-3.5 sm:p-3 ${destaque ? "border-marca bg-marca text-white" : "border-slate-200 bg-white"}`}
     >
       <p className={`text-xs ${destaque ? "text-blue-100" : "text-slate-500"}`}>
         {titulo}
@@ -326,14 +326,15 @@ export default async function PainelPage({
             </span>
           </p>
         </div>
-        <form action="/" className="flex flex-wrap items-end gap-3 text-sm">
+        {/* Celular: unidade na linha de cima (largura toda), data e "Ver" embaixo. */}
+        <form action="/" className="grid w-full grid-cols-[1fr_auto] items-end gap-2 text-sm sm:flex sm:w-auto sm:flex-wrap sm:gap-3">
           {academias.length > 1 && (
-            <label className="flex flex-col gap-1">
+            <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
               <span className="text-xs text-slate-500">Unidade</span>
               <select
                 name="unidade"
                 defaultValue={unidade ?? ""}
-                className="rounded-md border border-slate-300 bg-white px-2 py-1.5"
+                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5"
               >
                 <option value="">Todas</option>
                 {academias.map((a) => (
@@ -350,10 +351,10 @@ export default async function PainelPage({
               type="date"
               name="data"
               defaultValue={referencia}
-              className="rounded-md border border-slate-300 bg-white px-2 py-1.5"
+              className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5"
             />
           </label>
-          <button className="rounded-md bg-marca px-3 py-1.5 font-medium text-white hover:bg-marca-escuro">
+          <button className="rounded-md bg-marca px-4 py-1.5 font-medium text-white hover:bg-marca-escuro">
             Ver
           </button>
         </form>
@@ -390,7 +391,7 @@ export default async function PainelPage({
 
       {/* Dois painéis lado a lado: termômetro de ocupação e termômetro financeiro */}
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <section className="sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-50 sm:p-3">
           <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Termômetro de ocupação · mês</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <Cartao
@@ -429,7 +430,7 @@ export default async function PainelPage({
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <section className="sm:rounded-xl sm:border sm:border-slate-200 sm:bg-slate-50 sm:p-3">
           <h2 className="mb-2 px-1 text-sm font-semibold text-slate-900">Termômetro financeiro · mês</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             <Cartao
