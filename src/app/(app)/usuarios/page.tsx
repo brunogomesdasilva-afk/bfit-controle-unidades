@@ -31,6 +31,14 @@ function valorAcesso(u: Profile) {
         : (u.academia_id ?? "");
 }
 
+// "5511988887777" → "(11) 98888-7777" (o que não reconhecer fica como está).
+function celularFormatado(numero: string) {
+  const d = numero.replace(/\D/g, "").replace(/^55(?=\d{10,11}$)/, "");
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return numero;
+}
+
 // Unidades do perfil Manutenção (marcadas só quando o acesso escolhido é "Manutenção").
 function UnidadesManutencao({
   academias,
@@ -139,6 +147,15 @@ export default async function UsuariosPage({
   const nomeAcademia = new Map(academias.map((a) => [a.id, a.nome]));
   const chaveConfigurada = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
   const nomePorId = new Map(usuarios.map((u) => [u.id, u.nome]));
+  // Acesso em texto, para o resumo de cada usuário.
+  const rotuloAcesso = (u: Profile) =>
+    u.perfil === "admin"
+      ? "Administrador"
+      : u.perfil === "manutencao"
+        ? "Manutenção"
+        : u.perfil === "coletivas"
+          ? `Coletivas · ${nomeAcademia.get(u.academia_id ?? "") ?? "sem academia"}`
+          : (nomeAcademia.get(u.academia_id ?? "") ?? "Sem acesso");
 
   const alvoInativar =
     inativar && inativar !== atual.id
@@ -416,212 +433,161 @@ export default async function UsuariosPage({
           </form>
         )}
 
-        <div className="mt-6 overflow-auto rounded-xl border border-slate-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-xs uppercase text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-medium">Nome</th>
-                <th className="px-4 py-2 font-medium">E-mail de acesso</th>
-                <th className="px-4 py-2 font-medium">
-                  E-mail para relatórios
-                </th>
-                <th className="px-4 py-2 font-medium">WhatsApp</th>
-                <th className="px-4 py-2 font-medium">Acesso</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                {/* Ações fixas na borda direita: a tabela é larga e o menu ficava escondido na rolagem. */}
-                <th className="sticky right-0 bg-slate-50 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]">
-                  <span className="sr-only">Ações</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {usuarios.map((u) => (
-                <tr
-                  key={u.id}
-                  className={
-                    u.ativo === false ? "bg-slate-50 text-slate-400" : undefined
-                  }
-                >
-                  <td className="px-4 py-2">
-                    <form
-                      action={alterarNomeUsuario.bind(null, u.id)}
-                      className="flex items-center gap-2"
-                    >
+        {/* Lista: um cartão por usuário com o resumo; "Editar" abre os campos daquele usuário. */}
+        <ul className="mt-6 space-y-2.5">
+          {usuarios.map((u) => (
+            <li
+              key={u.id}
+              className={`relative rounded-xl border ${u.ativo === false ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"}`}
+            >
+              <details className="group">
+                <summary className="flex cursor-pointer list-none flex-col gap-2 p-4 pr-24 sm:flex-row sm:items-center sm:gap-4">
+                  <div className="min-w-0 sm:w-64 sm:shrink-0">
+                    <p className={`truncate font-medium ${u.ativo === false ? "text-slate-500" : "text-slate-900"}`}>
+                      {u.nome}
+                      {u.id === atual.id && <span className="ml-1 text-xs font-normal text-slate-500">(você)</span>}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">{u.email}</p>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-xs">
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-700">{rotuloAcesso(u)}</span>
+                    {u.whatsapp ? (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-800">WhatsApp {celularFormatado(u.whatsapp)}</span>
+                    ) : (
+                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-800">sem WhatsApp</span>
+                    )}
+                    {u.ativo === false ? (
+                      <span className="rounded-full bg-slate-200 px-2 py-0.5 font-medium text-slate-600">Inativo</span>
+                    ) : (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-medium text-emerald-800">Ativo</span>
+                    )}
+                    <span className="text-slate-400">· {nomesDosModulos(u)}</span>
+                  </div>
+                  <span className="text-xs font-medium text-marca group-open:hidden">Editar</span>
+                  <span className="hidden text-xs font-medium text-slate-500 group-open:inline">Fechar</span>
+                </summary>
+
+                <div className="grid gap-4 border-t border-slate-100 p-4 sm:grid-cols-3">
+                  <form action={alterarNomeUsuario.bind(null, u.id)} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600" htmlFor={`nome-${u.id}`}>
+                      Nome
+                    </label>
+                    <div className="flex gap-2">
                       <input
+                        id={`nome-${u.id}`}
                         name="nome"
                         defaultValue={u.nome}
                         required
                         maxLength={80}
-                        className="w-full min-w-40 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                       />
-                      <button
-                        type="submit"
-                        className="text-xs text-slate-500 underline hover:text-slate-900"
-                      >
-                        salvar
+                      <button type="submit" className="rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-50">
+                        Salvar
                       </button>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2 text-slate-600">{u.email}</td>
-                  <td className="px-4 py-2">
-                    <form
-                      action={alterarEmailRelatorios.bind(null, u.id)}
-                      className="flex items-center gap-2"
-                    >
+                    </div>
+                  </form>
+                  <form action={alterarEmailRelatorios.bind(null, u.id)} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600" htmlFor={`email-rel-${u.id}`}>
+                      E-mail para relatórios
+                    </label>
+                    <div className="flex gap-2">
                       <input
+                        id={`email-rel-${u.id}`}
                         name="email_relatorios"
                         type="email"
                         defaultValue={u.email_relatorios ?? ""}
                         placeholder="mesmo do acesso"
-                        className="w-full min-w-48 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                       />
-                      <button
-                        type="submit"
-                        className="text-xs text-slate-500 underline hover:text-slate-900"
-                      >
-                        salvar
+                      <button type="submit" className="rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-50">
+                        Salvar
                       </button>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
-                    <form
-                      action={alterarWhatsappUsuario.bind(null, u.id)}
-                      className="flex items-center gap-2"
-                    >
+                    </div>
+                  </form>
+                  <form action={alterarWhatsappUsuario.bind(null, u.id)} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-slate-600" htmlFor={`whatsapp-${u.id}`}>
+                      WhatsApp
+                    </label>
+                    <div className="flex gap-2">
                       <input
+                        id={`whatsapp-${u.id}`}
                         name="whatsapp"
                         type="tel"
                         defaultValue={u.whatsapp ?? ""}
                         placeholder="(11) 98888-7777"
-                        className="w-full min-w-36 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900"
+                        className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                       />
-                      <button
-                        type="submit"
-                        className="text-xs text-slate-500 underline hover:text-slate-900"
-                      >
-                        salvar
+                      <button type="submit" className="rounded-md border border-slate-300 px-3 text-sm text-slate-700 hover:bg-slate-50">
+                        Salvar
                       </button>
-                    </form>
-                  </td>
-                  <td className="px-4 py-2">
+                    </div>
+                  </form>
+
+                  <div className="sm:col-span-3">
+                    <p className="text-xs font-medium text-slate-600">Acesso e módulos</p>
                     {u.id === atual.id ? (
-                      <span className="text-slate-600">
-                        {u.perfil === "admin"
-                          ? "Administrador"
-                          : u.perfil === "manutencao"
-                            ? "Manutenção"
-                            : (nomeAcademia.get(u.academia_id ?? "") ??
-                              "Sem acesso")}{" "}
-                        (você)
-                        <span className="mt-1 block text-xs text-slate-500">Módulos: {nomesDosModulos(u)}</span>
-                      </span>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {rotuloAcesso(u)} (você) · Módulos: {nomesDosModulos(u)}
+                      </p>
                     ) : (
-                      <form action={alterarAcessoUsuario.bind(null, u.id)}>
-                        <div className="flex items-center gap-2">
+                      <form action={alterarAcessoUsuario.bind(null, u.id)} className="mt-1 rounded-lg border border-slate-200 p-3">
+                        <div className="flex flex-wrap items-center gap-2">
                           <select
                             name="acesso"
                             defaultValue={valorAcesso(u)}
                             required
-                            className="max-w-56 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                            className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm sm:w-auto sm:max-w-72"
                           >
                             <OpcoesAcesso academias={academias} />
                           </select>
-                          <button
-                            type="submit"
-                            className="text-xs text-slate-500 underline hover:text-slate-900"
-                          >
-                            salvar
+                          <button type="submit" className="rounded-md bg-marca px-3 py-1.5 text-sm font-medium text-white hover:bg-marca-escuro">
+                            Salvar acesso
                           </button>
                         </div>
-                        <UnidadesManutencao
-                          academias={academias}
-                          marcadas={u.academias_manutencao ?? []}
-                        />
+                        <UnidadesManutencao academias={academias} marcadas={u.academias_manutencao ?? []} />
                         <CaixasModulos marcados={modulosDoPerfil(u)} />
                       </form>
                     )}
-                  </td>
-                  <td className="px-4 py-2">
-                    <div>
-                      <div>
-                        {u.ativo === false ? (
-                          <>
-                            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
-                              Inativo
-                            </span>
-                            {u.ativo_alterado_em && (
-                              <p className="mt-1 text-xs text-slate-500">
-                                desde{" "}
-                                {new Date(
-                                  u.ativo_alterado_em,
-                                ).toLocaleDateString("pt-BR")}
-                                {u.ativo_alterado_por &&
-                                nomePorId.get(u.ativo_alterado_por)
-                                  ? ` por ${nomePorId.get(u.ativo_alterado_por)}`
-                                  : ""}
-                              </p>
-                            )}
-                          </>
-                        ) : (
-                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
-                            Ativo
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td
-                    className={`sticky right-0 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)] ${u.ativo === false ? "bg-slate-50" : "bg-white"}`}
-                  >
-                    <div className="flex items-center gap-0.5">
-                      {u.id !== atual.id && <BotaoExcluirUsuario nome={u.nome} excluir={excluirUsuario.bind(null, u.id)} />}
-                      <MenuAcoesUsuario>
-                        <Link
-                          href={`/usuarios?editarEmail=${u.id}`}
-                          role="menuitem"
-                          className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          Alterar e-mail
-                        </Link>
-                        <Link
-                          href={`/usuarios?redefinirSenha=${u.id}`}
-                          role="menuitem"
-                          className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-                        >
-                          Redefinir senha
-                        </Link>
-                        {u.ativo === false ? (
-                          <form action={alterarStatusUsuario.bind(null, u.id)}>
-                            <input type="hidden" name="ativo" value="true" />
-                            <button
-                              type="submit"
-                              role="menuitem"
-                              className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
-                            >
-                              Reativar usuário
-                            </button>
-                          </form>
-                        ) : u.id === atual.id ? (
-                          <span className="block px-4 py-2 text-sm text-slate-400">
-                            Você não pode inativar a si mesmo
-                          </span>
-                        ) : (
-                          <Link
-                            href={`/usuarios?inativar=${u.id}`}
-                            role="menuitem"
-                            className="block px-4 py-2 text-sm text-red-700 hover:bg-red-50"
-                          >
-                            Inativar usuário
-                          </Link>
-                        )}
-                      </MenuAcoesUsuario>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+
+                  {u.ativo === false && u.ativo_alterado_em && (
+                    <p className="text-xs text-slate-500 sm:col-span-3">
+                      Inativo desde {new Date(u.ativo_alterado_em).toLocaleDateString("pt-BR")}
+                      {u.ativo_alterado_por && nomePorId.get(u.ativo_alterado_por) ? ` por ${nomePorId.get(u.ativo_alterado_por)}` : ""}.
+                    </p>
+                  )}
+                </div>
+              </details>
+
+              {/* Ações fora do resumo (clicar nelas não abre/fecha o cartão). */}
+              <div className="absolute right-2 top-3 flex items-center gap-0.5">
+                {u.id !== atual.id && <BotaoExcluirUsuario nome={u.nome} excluir={excluirUsuario.bind(null, u.id)} />}
+                <MenuAcoesUsuario>
+                  <Link href={`/usuarios?editarEmail=${u.id}`} role="menuitem" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                    Alterar e-mail
+                  </Link>
+                  <Link href={`/usuarios?redefinirSenha=${u.id}`} role="menuitem" className="block px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                    Redefinir senha
+                  </Link>
+                  {u.ativo === false ? (
+                    <form action={alterarStatusUsuario.bind(null, u.id)}>
+                      <input type="hidden" name="ativo" value="true" />
+                      <button type="submit" role="menuitem" className="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50">
+                        Reativar usuário
+                      </button>
+                    </form>
+                  ) : u.id === atual.id ? (
+                    <span className="block px-4 py-2 text-sm text-slate-400">Você não pode inativar a si mesmo</span>
+                  ) : (
+                    <Link href={`/usuarios?inativar=${u.id}`} role="menuitem" className="block px-4 py-2 text-sm text-red-700 hover:bg-red-50">
+                      Inativar usuário
+                    </Link>
+                  )}
+                </MenuAcoesUsuario>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
