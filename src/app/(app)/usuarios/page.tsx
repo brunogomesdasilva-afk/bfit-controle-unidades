@@ -24,7 +24,9 @@ function valorAcesso(u: Profile) {
     ? "admin"
     : u.perfil === "manutencao"
       ? "manutencao"
-      : (u.academia_id ?? "");
+      : u.perfil === "coletivas"
+        ? `coletivas:${u.academia_id ?? ""}`
+        : (u.academia_id ?? "");
 }
 
 // Unidades do perfil Manutenção (marcadas só quando o acesso escolhido é "Manutenção").
@@ -90,6 +92,13 @@ function OpcoesAcesso({ academias }: { academias: Academia[] }) {
           {a.nome}
         </option>
       ))}
+      <optgroup label="Coletivas (só grade de aulas e contagens de coletivas e lutas)">
+        {academias.map((a) => (
+          <option key={a.id} value={`coletivas:${a.id}`}>
+            Coletivas · {a.nome}
+          </option>
+        ))}
+      </optgroup>
     </>
   );
 }

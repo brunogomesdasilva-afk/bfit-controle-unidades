@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { inicioDoUsuario, moduloDaRota, modulosDoPerfil } from "@/lib/modulos";
+import { INICIO_COLETIVAS, rotaPermitidaColetivas } from "@/lib/perfilColetivas";
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -54,6 +55,10 @@ export async function updateSession(request: NextRequest) {
       !["/manutencao", "/minha-conta", "/login", "/auth/"].some((p) => caminho.startsWith(p))
     ) {
       return irPara("/manutencao");
+    }
+    // Perfil Coletivas: só a Grade de aulas da academia dele, as contagens de coletivas e lutas e Minha conta.
+    if (perfil?.perfil === "coletivas" && perfil.ativo !== false && !rotaPermitidaColetivas(caminho, perfil.academia_id ?? null)) {
+      return irPara(INICIO_COLETIVAS);
     }
     // Módulos: tela (ou ação de tela) de um módulo que o usuário não tem vai para a tela inicial dele.
     // A tela inicial é sempre de um módulo que ele tem (ou Minha conta), então não entra em laço.

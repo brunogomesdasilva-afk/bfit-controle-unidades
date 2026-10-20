@@ -6,7 +6,8 @@ export type PerfilAtual = {
   id: string;
   nome: string;
   // "manutencao": só vê a tela de Manutenção das unidades escolhidas para ele.
-  perfil: "admin" | "usuario" | "manutencao";
+  // "coletivas": da academia dele, só a Grade de aulas e as contagens de coletivas e lutas.
+  perfil: "admin" | "usuario" | "manutencao" | "coletivas";
   // Academia que o usuário pode acessar (administrador acessa todas e fica sem academia).
   academiaId: string | null;
   academiaNome: string | null;
@@ -45,7 +46,7 @@ export async function getPerfilAtual(): Promise<PerfilAtual | null> {
   return {
     id: user.id,
     nome: data?.nome ?? user.email ?? "",
-    perfil: admin ? "admin" : manutencao ? "manutencao" : "usuario",
+    perfil: admin ? "admin" : manutencao ? "manutencao" : data?.perfil === "coletivas" ? "coletivas" : "usuario",
     academiaId: admin || manutencao ? null : (data?.academia_id ?? null),
     academiaNome: admin ? null : manutencao ? "Manutenção" : (academia?.nome ?? null),
     modulos: modulosDoPerfil(data as { perfil?: string; modulos?: string[] } | null),

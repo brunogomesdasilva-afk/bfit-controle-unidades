@@ -146,11 +146,13 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
             Sistema em manutenção (backup): só você está acessando. Se nenhum backup estiver rodando, libere em Backup.
           </p>
         )}
-        {atual && <ChecklistTarefas sessao={sessao} pendentes={pendentes} />}
-        {/* Avisos das academias: só para quem usa o módulo Academia. */}
+        {atual && atual.perfil !== "coletivas" && <ChecklistTarefas sessao={sessao} pendentes={pendentes} />}
+        {/* Avisos das academias: só para quem usa o módulo Academia (o perfil Coletivas vê só o de contagens). */}
         {atual?.modulos.includes("academia") && <AvisoContagens sessao={sessao} />}
-        {atual?.modulos.includes("academia") && <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />}
-        <LembreteAniversario dia={dataHoje} lembretes={lembretes} />
+        {atual?.modulos.includes("academia") && atual.perfil !== "coletivas" && (
+          <AvisoVencimentos sessao={`${sessao}-${dataHoje}`} vencimentos={vencimentos} />
+        )}
+        {atual?.perfil !== "coletivas" && <LembreteAniversario dia={dataHoje} lembretes={lembretes} />}
         {children}
       </main>
     </div>

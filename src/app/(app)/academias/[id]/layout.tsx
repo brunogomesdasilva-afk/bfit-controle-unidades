@@ -20,7 +20,8 @@ export default async function AcademiaLayout({ children, params }: LayoutProps<"
     <div>
       <p className="text-xs uppercase tracking-wide text-slate-500">Academias</p>
       <h1 className="text-lg font-semibold text-slate-900">{academia.nome}</h1>
-      <AbasDaAcademia id={academia.id} />
+      {/* Perfil Coletivas só abre a Grade de aulas: sem as abas dos outros cadastros. */}
+      {atual.perfil !== "coletivas" && <AbasDaAcademia id={academia.id} />}
       {children}
     </div>
   );

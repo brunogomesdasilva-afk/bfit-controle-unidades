@@ -289,7 +289,7 @@ export async function enviarAcompanhamento(
     // Gerentes e equipe da unidade recebem a versão sem faturamento.
     const gerentes = opcoes.soAdministradores
       ? []
-      : (perfis ?? []).filter((p) => p.academia_id === academia.id && p.perfil !== "admin");
+      : (perfis ?? []).filter((p) => p.academia_id === academia.id && p.perfil !== "admin" && p.perfil !== "coletivas");
     try {
       let quantos = 0;
       for (const [para, comFaturamento] of [
