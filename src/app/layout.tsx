@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Suspense } from "react";
 import { RouteProgressBar } from "./RouteProgressBar";
@@ -17,6 +17,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "BFIT | Controle de unidades",
   description: "Controle de unidades BFIT",
+  // iPhone: "Adicionar à Tela de Início" abre em tela cheia, com o nome BFIT (o ícone é o src/app/apple-icon.png).
+  appleWebApp: { capable: true, title: "BFIT", statusBarStyle: "default" },
+};
+
+// Cor da barra do navegador/sistema no celular (o grafite do menu).
+export const viewport: Viewport = {
+  themeColor: "#3b4047",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
