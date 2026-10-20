@@ -67,7 +67,7 @@ function Dia({
 
   return (
     <details className="group rounded-lg border border-slate-200 bg-white">
-      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50">
+      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-3 text-sm sm:py-2.5 hover:bg-slate-50">
         <span className="flex items-center gap-2">
           <span className="text-slate-400 transition group-open:rotate-90">
             ›
@@ -90,7 +90,7 @@ function Dia({
             </span>
           )}
         </span>
-        <span className="flex items-center gap-4 tabular-nums text-slate-600">
+        <span className="flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums text-slate-600 [&>*]:whitespace-nowrap">
           <span>
             <strong className="text-slate-900">{dia.lancadas}</strong> de{" "}
             {dia.previstas} aulas
@@ -269,7 +269,7 @@ export function ContagemPorDia({
       </p>
     );
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {dias.map((d) => (
         <Dia
           key={d.data}
@@ -305,7 +305,7 @@ export function ContagemPorDiaTodas({ dias }: { dias: DiaTodas[] }) {
       </p>
     );
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       {dias.map((d) => {
         const faltando = d.unidades.reduce(
           (t, u) =>
@@ -317,7 +317,7 @@ export function ContagemPorDiaTodas({ dias }: { dias: DiaTodas[] }) {
             key={d.data}
             className="group rounded-lg border border-slate-200 bg-white"
           >
-            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-slate-50">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-x-2 gap-y-2 px-3 py-3 text-sm sm:py-2.5 hover:bg-slate-50">
               <span className="flex items-center gap-2">
                 <span className="text-slate-400 transition group-open:rotate-90">
                   ›
@@ -334,7 +334,7 @@ export function ContagemPorDiaTodas({ dias }: { dias: DiaTodas[] }) {
                   </span>
                 )}
               </span>
-              <span className="flex items-center gap-4 tabular-nums text-slate-600">
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1 tabular-nums text-slate-600 [&>*]:whitespace-nowrap">
                 <span>
                   <strong className="text-slate-900">{d.lancadas}</strong> de{" "}
                   {d.previstas} aulas

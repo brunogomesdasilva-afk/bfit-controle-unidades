@@ -140,7 +140,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
         submenusIniciais={submenusAbertos}
         modulos={atual?.modulos ?? []}
       />
-      <main className="min-w-0 flex-1 px-3 py-4 md:px-6 md:py-6 print:p-0">
+      <main className="min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6 print:p-0">
         {manutencao && (
           <p className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 print:hidden">
             Sistema em manutenção (backup): só você está acessando. Se nenhum backup estiver rodando, libere em Backup.
