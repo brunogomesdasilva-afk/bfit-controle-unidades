@@ -733,6 +733,27 @@ const CADASTROS_DA_ACADEMIA = [
   },
 ];
 
+// Perfil Coletivas: só a Grade de aulas da academia dele e as contagens de coletivas e lutas, direto no menu.
+function procurarItem(lista: ItemMenu[], href: string): ItemMenu | undefined {
+  for (const item of lista) {
+    if (item.href === href) return item;
+    const filho = item.filhos && procurarItem(item.filhos, href);
+    if (filho) return filho;
+  }
+}
+
+function menuColetivas(academiaId: string | null): ItemMenu[] {
+  const grade = CADASTROS_DA_ACADEMIA.find((c) => c.caminho === "grade");
+  const itens: (ItemMenu | undefined)[] = [
+    academiaId && grade
+      ? { href: `/academias/${academiaId}/grade`, rotulo: grade.rotulo, ativo: (p: string) => p === `/academias/${academiaId}/grade`, icone: grade.icone }
+      : undefined,
+    procurarItem(ITENS, "/frequencia/coletivas"),
+    procurarItem(ITENS, "/frequencia/lutas"),
+  ];
+  return itens.filter((i): i is ItemMenu => Boolean(i)).map((item) => ({ ...item, filhos: undefined }));
+}
+
 function comSubmenuDeAcademias(item: ItemMenu, academias: { id: string; nome: string }[]): ItemMenu {
   if (academias.length === 0) return item;
   return {
@@ -846,7 +867,7 @@ export function Sidebar({
   modulos,
 }: {
   nome: string;
-  perfil: "admin" | "usuario" | "manutencao";
+  perfil: "admin" | "usuario" | "manutencao" | "coletivas";
   modulos: Modulo[];
   academiaNome: string | null;
   academias: { id: string; nome: string }[];
@@ -880,7 +901,7 @@ export function Sidebar({
             : item
       )
       .filter((item) => !item.grupo || (item.filhos?.length ?? 0) > 0);
-  const itens = filtrar(ITENS);
+  const itens = perfil === "coletivas" ? menuColetivas(academias[0]?.id ?? null) : filtrar(ITENS);
   // Menu (e, dentro dele, o submenu) da página atual: ex.: em Vendas → Diário, Operação e Vendas.
   const menuDaPagina = (caminho: string) => itens.find((i) => i.filhos?.some((f) => contem(f, caminho)))?.href ?? null;
   const submenuDaPagina = (caminho: string) =>

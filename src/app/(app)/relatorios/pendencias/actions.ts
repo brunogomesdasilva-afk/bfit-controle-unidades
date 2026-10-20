@@ -34,7 +34,7 @@ export async function enviarPendencias(academiaId: string | null): Promise<Resul
 
   for (const academia of academias ?? []) {
     try {
-      const para = (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id);
+      const para = (perfis ?? []).filter((p) => p.perfil === "admin" || (p.academia_id === academia.id && p.perfil !== "coletivas"));
       const { compras, manutencoes } = await carregarPendencias(supabase, academia.id);
       const pdf = await gerarPdfPendencias({ academia: academia.nome, dataTexto, ...linhasDoPdf(compras, manutencoes) });
       const r = await enviarRelatorio({

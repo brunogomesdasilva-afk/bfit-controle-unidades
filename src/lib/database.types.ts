@@ -2,7 +2,7 @@ export type Profile = {
   id: string;
   nome: string;
   email: string;
-  perfil: "admin" | "usuario" | "manutencao";
+  perfil: "admin" | "usuario" | "manutencao" | "coletivas";
   academia_id: string | null;
   ativo: boolean;
   ativo_alterado_em: string | null;

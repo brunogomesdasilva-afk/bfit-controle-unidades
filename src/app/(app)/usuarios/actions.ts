@@ -15,8 +15,8 @@ function voltar(params: Record<string, string>): never {
 // Acesso (quais academias) + módulos marcados (o que a pessoa pode usar).
 async function lerAcesso(formData: FormData, extra: Record<string, string> = {}) {
   const acesso = await lerAcademias(formData, extra);
-  // Perfil Manutenção só usa a tela de Manutenção, que é do módulo Academia.
-  if (acesso.perfil === "manutencao") return { ...acesso, modulos: ["academia"] as Modulo[] };
+  // Perfis Manutenção e Coletivas só usam telas do módulo Academia.
+  if (acesso.perfil === "manutencao" || acesso.perfil === "coletivas") return { ...acesso, modulos: ["academia"] as Modulo[] };
   const modulos = formData
     .getAll("modulos")
     .map(String)
@@ -27,10 +27,16 @@ async function lerAcesso(formData: FormData, extra: Record<string, string> = {})
   return { ...acesso, modulos };
 }
 
-// O campo "acesso" da tela vale "admin" (todas as academias), "manutencao" (com as unidades marcadas) ou o id
-// de uma academia.
+// O campo "acesso" da tela vale "admin" (todas as academias), "manutencao" (com as unidades marcadas),
+// "coletivas:<id da academia>" (perfil Coletivas daquela academia) ou o id de uma academia.
 async function lerAcademias(formData: FormData, extra: Record<string, string> = {}) {
   const acesso = String(formData.get("acesso") ?? "");
+  if (acesso.startsWith("coletivas:")) {
+    const supabase = await createClient();
+    const { data: academia } = await supabase.from("academias").select("id").eq("id", acesso.slice("coletivas:".length)).maybeSingle();
+    if (!academia) voltar({ erro: "Escolha a academia do perfil Coletivas.", ...extra });
+    return { perfil: "coletivas", academia_id: academia.id as string, academias_manutencao: [] as string[] };
+  }
   if (acesso === "admin") return { perfil: "admin", academia_id: null, academias_manutencao: [] as string[] };
   if (acesso === "manutencao") {
     const unidades = formData.getAll("unidades_manutencao").map(String).filter(Boolean);

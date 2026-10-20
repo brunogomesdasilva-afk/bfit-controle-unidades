@@ -19,7 +19,7 @@ export async function enviarFechamento(academiaId: string, mesPedido: string): P
   const { data: academia } = await supabase.from("academias").select("id, nome").eq("id", academiaId).maybeSingle();
   if (!academia) return { erro: "Academia não encontrada." };
   const { data: perfis } = await supabase.from("profiles").select("email, email_relatorios, whatsapp, perfil, academia_id").eq("ativo", true);
-  const para = (perfis ?? []).filter((p) => p.perfil === "admin" || p.academia_id === academia.id);
+  const para = (perfis ?? []).filter((p) => p.perfil === "admin" || (p.academia_id === academia.id && p.perfil !== "coletivas"));
   const canal = nomeDoCanal();
   if (!contatos(para).length) return { erro: `Ninguém com ${canal} cadastrado para receber o fechamento.` };
 
