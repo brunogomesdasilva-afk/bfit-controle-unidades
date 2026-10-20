@@ -180,7 +180,41 @@ export async function redefinirSenhaUsuario(usuarioId: string, formData: FormDat
   voltar({ ok: "Senha redefinida. Avise o usuário pessoalmente — não fica registrado em nenhum lugar." });
 }
 
-// Ativa ou inativa um usuário (nunca exclui, para preservar o histórico).
+// Exclui o usuário de vez (login e cadastro). Os lançamentos que ele fez continuam no sistema, só sem o autor.
+// Quem tem tarefas atribuídas não pode ser excluído (reatribua as tarefas ou inative o usuário).
+export async function excluirUsuario(usuarioId: string) {
+  const atual = await exigirModulo("adm");
+  if (usuarioId === atual.id) voltar({ erro: "Você não pode excluir o seu próprio usuário." });
+
+  const admin = createAdminClient();
+  if (!admin) voltar({ erro: "Para excluir usuários, configure a chave de serviço do Supabase (SUPABASE_SERVICE_ROLE_KEY)." });
+  const { data: alvo } = await admin.from("profiles").select("id, nome").eq("id", usuarioId).maybeSingle();
+  if (!alvo) voltar({ erro: "Usuário não encontrado." });
+
+  const { count: tarefas } = await admin.from("tarefas").select("id", { count: "exact", head: true }).eq("usuario_id", usuarioId);
+  if (tarefas)
+    voltar({
+      erro: `${alvo.nome} tem ${tarefas} ${tarefas === 1 ? "tarefa atribuída" : "tarefas atribuídas"}. Passe as tarefas para outra pessoa em Tarefas, ou inative o usuário em vez de excluir.`,
+    });
+
+  // Registros que apontam para ele e não se apagam sozinhos: "quem ativou/inativou" e as regras de envio.
+  await admin.from("profiles").update({ ativo_alterado_por: null }).eq("ativo_alterado_por", usuarioId);
+  const { data: regras } = await admin.from("regras_envio").select("id, usuarios").contains("usuarios", [usuarioId]);
+  for (const r of regras ?? [])
+    await admin
+      .from("regras_envio")
+      .update({ usuarios: (r.usuarios as string[]).filter((u) => u !== usuarioId) })
+      .eq("id", r.id);
+
+  // Apagar o login apaga também o cadastro (profiles) e o que é só dele.
+  const { error } = await admin.auth.admin.deleteUser(usuarioId);
+  if (error) voltar({ erro: `Não foi possível excluir ${alvo.nome}: ${error.message}. Se ele tiver registros ligados, inative em vez de excluir.` });
+
+  revalidatePath("/", "layout");
+  voltar({ ok: `${alvo.nome} foi excluído.` });
+}
+
+// Ativa ou inativa um usuário (para guardar o histórico; excluir de vez é a lixeira da lista).
 export async function alterarStatusUsuario(usuarioId: string, formData: FormData) {
   const atual = await exigirModulo("adm");
   const ativar = String(formData.get("ativo") ?? "") === "true";

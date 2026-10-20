@@ -11,8 +11,10 @@ import {
   alterarNomeUsuario,
   alterarStatusUsuario,
   criarUsuario,
+  excluirUsuario,
   redefinirSenhaUsuario,
 } from "./actions";
+import { BotaoExcluirUsuario } from "./BotaoExcluirUsuario";
 import { MenuAcoesUsuario } from "./MenuAcoesUsuario";
 
 const CAMPO =
@@ -571,6 +573,8 @@ export default async function UsuariosPage({
                   <td
                     className={`sticky right-0 px-2 py-2 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)] ${u.ativo === false ? "bg-slate-50" : "bg-white"}`}
                   >
+                    <div className="flex items-center gap-0.5">
+                      {u.id !== atual.id && <BotaoExcluirUsuario nome={u.nome} excluir={excluirUsuario.bind(null, u.id)} />}
                       <MenuAcoesUsuario>
                         <Link
                           href={`/usuarios?editarEmail=${u.id}`}
@@ -611,6 +615,7 @@ export default async function UsuariosPage({
                           </Link>
                         )}
                       </MenuAcoesUsuario>
+                    </div>
                   </td>
                 </tr>
               ))}
