@@ -8,6 +8,9 @@ const MOTIVOS = [
   "Vai verificar com familiares",
   "Conhecer o Wellhub / Gympass",
   "Voltará em um outro dia / Vai pensar",
+  "Gostaria de pagar no débito",
+  "Não tem cartão de crédito",
+  "Menor de idade",
 ];
 
 const COLUNAS: Coluna[] = [
