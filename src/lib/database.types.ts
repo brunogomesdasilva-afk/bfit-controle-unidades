@@ -38,8 +38,16 @@ export type Compra = {
   descricao: string;
   necessario_ate: string | null;
   data_efetivacao: string | null;
+  // Só quem tem "aprova_compras" no cadastro muda (trava no banco).
+  aprovacao: "pendente" | "em_andamento" | "aprovado";
   created_at: string;
   updated_at: string;
+};
+
+export const APROVACAO_COMPRA: Record<Compra["aprovacao"], string> = {
+  pendente: "Pendente",
+  em_andamento: "Em andamento",
+  aprovado: "Aprovado",
 };
 
 export const TIPOS_MANUTENCAO = {
