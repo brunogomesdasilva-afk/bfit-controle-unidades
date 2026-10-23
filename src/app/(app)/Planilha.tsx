@@ -24,6 +24,8 @@ export type Coluna = {
   grupo?: string;
   // Coluna "calculado" mostrada em reais (ex.: preço de venda calculado).
   emReais?: boolean;
+  // Coluna "opcoes" mostrada como etiqueta colorida (ex.: aprovação da compra), com as cores de COR_SITUACAO.
+  selo?: boolean;
 };
 
 const NUMERICOS = new Set<Coluna["tipo"]>(["inteiro", "decimal", "moeda", "calculado", "percentual"]);
@@ -54,6 +56,9 @@ const COR_SITUACAO: Record<string, string> = {
   "Vence em breve": "bg-amber-100 text-amber-800",
   "Em dia": "bg-emerald-100 text-emerald-800",
   "Sem data": "bg-slate-100 text-slate-600",
+  // Aprovação das compras
+  "Em andamento": "bg-sky-100 text-sky-800",
+  Aprovado: "bg-emerald-100 text-emerald-800",
 };
 
 function formatarData(valor: string | null) {
@@ -397,6 +402,14 @@ export function Planilha({
                             {linha[c.campo]}
                           </span>
                         )
+                      ) : c.selo && linha[c.campo] ? (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            COR_SITUACAO[exibir(c, linha[c.campo])] ?? "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {exibir(c, linha[c.campo])}
+                        </span>
                       ) : (
                         exibir(c, linha[c.campo])
                       )}

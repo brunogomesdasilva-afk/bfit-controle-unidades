@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getPerfilAtual } from "@/lib/auth";
-import type { Academia, Compra } from "@/lib/database.types";
+import { APROVACAO_COMPRA, type Academia, type Compra } from "@/lib/database.types";
 import { hoje } from "@/lib/planilha";
 import { AbasAcademias, lerSituacao } from "../AbasAcademias";
 import { SemAcademias } from "../SemAcademias";
@@ -31,7 +31,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
   // Concluído = data de efetivação preenchida. Por padrão a tela mostra só as pendentes.
   if (filtroSituacao === "pendente") consulta = consulta.is("data_efetivacao", null);
   if (filtroSituacao === "concluido") consulta = consulta.not("data_efetivacao", "is", null);
-  const { data } = await consulta;
+  const [{ data }, { data: podeAprovar }] = await Promise.all([consulta, supabase.rpc("pode_aprovar_compras")]);
 
   const dataHoje = hoje();
   const linhas: Linha[] = ((data ?? []) as Compra[]).map((c) => ({
@@ -42,6 +42,7 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
     necessario_ate: c.necessario_ate,
     data_efetivacao: c.data_efetivacao,
     situacao: c.data_efetivacao ? "Concluído" : "Pendente",
+    aprovacao: c.aprovacao ?? "pendente",
   }));
 
   const colunas: Coluna[] = [
@@ -61,6 +62,16 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
     { campo: "necessario_ate", rotulo: "Necessário para", tipo: "data", largura: "w-40" },
     { campo: "data_efetivacao", rotulo: "Data da efetivação", tipo: "data", largura: "w-40" },
     { campo: "situacao", rotulo: "Situação", tipo: "situacao", largura: "w-28" },
+    // Só quem aprova compras (hoje, o Bruno) escolhe; para os demais aparece travada.
+    {
+      campo: "aprovacao",
+      rotulo: "Aprovação",
+      tipo: "opcoes",
+      largura: "w-36",
+      selo: true,
+      fixa: !podeAprovar,
+      opcoes: Object.entries(APROVACAO_COMPRA).map(([valor, rotulo]) => ({ valor, rotulo })),
+    },
   ];
 
   return (
@@ -83,10 +94,11 @@ export default async function ComprasPage({ searchParams }: { searchParams: Prom
             linhas={linhas}
             salvar={salvarCompra}
             excluir={atual?.perfil === "admin" ? excluirCompra : undefined}
-            padroesNovo={{ data_solicitacao: dataHoje, academia_id: selecionada ?? "" }}
+            padroesNovo={{ data_solicitacao: dataHoje, academia_id: selecionada ?? "", aprovacao: "pendente" }}
             rotuloNovo="+ Nova compra"
             somenteLeitura={
-              selecionada
+              // Quem aprova compras também altera na visão de todas as academias (para aprovar sem abrir cada aba).
+              selecionada || podeAprovar
                 ? undefined
                 : "Visão de todas as academias: só consulta. Para incluir ou alterar, abra a aba da academia."
             }
