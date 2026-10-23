@@ -133,6 +133,7 @@ export function Planilha({
   barra,
   rotuloExcluir = "Excluir",
   confirmarExcluir = "Excluir esta linha? Essa ação não pode ser desfeita.",
+  escolhaRapida,
 }: {
   colunas: Coluna[];
   linhas: Linha[];
@@ -151,6 +152,8 @@ export function Planilha({
   // Texto do botão de excluir e da confirmação (ex.: "Cancelar" nas tarefas).
   rotuloExcluir?: string;
   confirmarExcluir?: string;
+  // Uma coluna "opcoes" que se muda direto na linha e grava na hora, sem "Alterar" (ex.: aprovação da compra).
+  escolhaRapida?: { campo: string; salvar: (id: string, valor: string) => Promise<Resultado> };
 }) {
   const editaveis = colunas.filter((c) => !SO_EXIBICAO.has(c.tipo));
   const temGrupos = colunas.some((c) => c.grupo);
@@ -402,6 +405,29 @@ export function Planilha({
                             {linha[c.campo]}
                           </span>
                         )
+                      ) : escolhaRapida?.campo === c.campo ? (
+                        <select
+                          value={linha[c.campo] ?? ""}
+                          disabled={salvando || editando !== null}
+                          aria-label={`${c.rotulo}: ${exibir(c, linha[c.campo])}`}
+                          onChange={(e) => {
+                            const valor = e.target.value;
+                            setErro(null);
+                            iniciar(async () => {
+                              const r = await escolhaRapida.salvar(linha.id, valor);
+                              if (r.erro) setErro(r.erro);
+                            });
+                          }}
+                          className={`cursor-pointer rounded-full border-0 px-2 py-0.5 text-xs font-medium disabled:opacity-60 ${
+                            COR_SITUACAO[exibir(c, linha[c.campo])] ?? "bg-slate-100 text-slate-700"
+                          }`}
+                        >
+                          {c.opcoes?.map((o) => (
+                            <option key={o.valor} value={o.valor}>
+                              {o.rotulo}
+                            </option>
+                          ))}
+                        </select>
                       ) : c.selo && linha[c.campo] ? (
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${

@@ -46,6 +46,21 @@ export async function salvarCompra(id: string | null, dados: Record<string, stri
   return {};
 }
 
+// Aprovação direto na linha (sem "Alterar"): só quem aprova compras; o banco também trava.
+export async function alterarAprovacaoCompra(id: string, valor: string): Promise<Resultado> {
+  const semAcesso = await verificarAcesso();
+  if (semAcesso) return { erro: semAcesso };
+  if (!(valor in APROVACAO_COMPRA)) return { erro: "Aprovação inválida." };
+  const supabase = await createClient();
+  const { data: podeAprovar } = await supabase.rpc("pode_aprovar_compras");
+  if (!podeAprovar) return { erro: "Só quem aprova compras pode alterar a aprovação." };
+  const { error } = await supabase.from("compras").update({ aprovacao: valor }).eq("id", id);
+  if (error) return { erro: mensagemErro(error) };
+  revalidatePath("/compras");
+  refresh();
+  return {};
+}
+
 export async function excluirCompra(id: string): Promise<Resultado> {
   const semAcesso = await verificarAcesso(true);
   if (semAcesso) return { erro: semAcesso };
