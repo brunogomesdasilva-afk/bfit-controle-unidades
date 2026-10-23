@@ -45,12 +45,16 @@ function Dia({
     quantidade: a.quantidade === null ? "" : String(a.quantidade),
     substituto: a.substituto ?? "",
   });
-  const [valores, setValores] = useState(dia.aulas.map(inicial));
-  // Depois de salvar, a tela recarrega os dados do dia: os campos voltam a mostrar o que está gravado.
+  const [guardados, setValores] = useState(dia.aulas.map(inicial));
+  // Depois de salvar (ou ao trocar de academia, que pode mudar as aulas do mesmo dia), a tela recebe os dados do
+  // dia de novo: os campos voltam a mostrar o que está gravado. Já nesta renderização usa os valores novos (a
+  // lista antiga pode ter outro número de aulas).
   const [base, setBase] = useState(dia);
+  let valores = guardados;
   if (base !== dia) {
+    valores = dia.aulas.map(inicial);
     setBase(dia);
-    setValores(dia.aulas.map(inicial));
+    setValores(valores);
   }
   const [resultado, setResultado] = useState<{
     erro?: string;
