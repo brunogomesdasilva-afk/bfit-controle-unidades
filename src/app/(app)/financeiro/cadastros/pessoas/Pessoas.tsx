@@ -113,7 +113,7 @@ const paraForm = (p: Pessoa): Record<string, string> =>
 
 export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias: Opcao[] }) {
   const [busca, setBusca] = useState("");
-  const [filtro, setFiltro] = useState<"todos" | "fornecedor" | "cliente" | "inativos">("todos");
+  const [filtro, setFiltro] = useState<"todos" | "fornecedor" | "cliente" | "semCategoria" | "inativos">("todos");
   const [editando, setEditando] = useState<Record<string, string> | null>(null);
   const nomeCategoria = useMemo(() => new Map(categorias.map((c) => [c.valor, c.rotulo])), [categorias]);
   const lista = useMemo(() => {
@@ -124,6 +124,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
         (filtro === "inativos" ? !p.ativo : p.ativo) &&
         (filtro !== "fornecedor" || p.fornecedor) &&
         (filtro !== "cliente" || p.cliente) &&
+        (filtro !== "semCategoria" || !p.categoria_padrao_id) &&
         (!b || `${p.razao_social} ${p.nome_fantasia ?? ""}`.toLowerCase().includes(b) || (bd.length >= 3 && (p.documento ?? "").includes(bd)))
     );
   }, [pessoas, busca, filtro]);
@@ -132,9 +133,9 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por nome ou CPF/CNPJ" className="w-72 rounded-md border border-slate-300 px-3 py-2 text-sm" />
-        {(["todos", "fornecedor", "cliente", "inativos"] as const).map((f) => (
+        {(["todos", "fornecedor", "cliente", "semCategoria", "inativos"] as const).map((f) => (
           <button key={f} type="button" onClick={() => setFiltro(f)} className={`rounded-full px-3 py-1 text-sm ${filtro === f ? "bg-marca text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-            {{ todos: "Todos", fornecedor: "Fornecedores", cliente: "Clientes", inativos: "Inativos" }[f]}
+            {{ todos: "Todos", fornecedor: "Fornecedores", cliente: "Clientes", semCategoria: "Sem categoria", inativos: "Inativos" }[f]}
           </button>
         ))}
         <button type="button" onClick={() => setEditando({ ...VAZIA })} className={`${BOTAO_PRIMARIO} ml-auto`}>
@@ -152,6 +153,9 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
               <th className="px-3 py-2">Regime</th>
               <th className="px-3 py-2">Cidade/UF</th>
               <th className="px-3 py-2">PIX / banco</th>
+              <th className="px-3 py-2">
+                <span className="sr-only">Ações</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -167,11 +171,23 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
                 <td className="px-3 py-2">{p.regime_tributario ?? ""}</td>
                 <td className="px-3 py-2">{[p.cidade, p.uf].filter(Boolean).join("/")}</td>
                 <td className="px-3 py-2 text-xs text-slate-600">{p.chave_pix ? `PIX ${p.chave_pix}` : [p.banco, p.agencia && `ag ${p.agencia}`, p.conta && `cc ${p.conta}`].filter(Boolean).join(" · ")}</td>
+                <td className="px-3 py-2 text-right">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditando(paraForm(p));
+                    }}
+                    className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-marca hover:bg-slate-50"
+                  >
+                    Editar
+                  </button>
+                </td>
               </tr>
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
                   Nenhum cadastro encontrado.
                 </td>
               </tr>
@@ -179,7 +195,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-slate-500">{lista.length} cadastros{lista.length > 500 ? " (mostrando 500; refine a busca)" : ""}. Clique numa linha para alterar.</p>
+      <p className="text-xs text-slate-500">{lista.length} cadastros{lista.length > 500 ? " (mostrando 500; refine a busca)" : ""}. Clique em “Editar” (ou na linha) para alterar; “Sem categoria” mostra quem ainda precisa da categoria padrão.</p>
       {editando && <FormularioPessoa inicial={editando} categorias={categorias} fechar={() => setEditando(null)} />}
     </div>
   );
