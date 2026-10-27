@@ -34,10 +34,19 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
       </div>
     );
 
+  // O banco devolve no máximo 1000 linhas por consulta: busca em páginas.
+  const tudo = async <T,>(consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null }>) => {
+    const lista: T[] = [];
+    for (let i = 0; ; i += 1000) {
+      const { data } = await consulta(i, i + 999);
+      lista.push(...(data ?? []));
+      if (!data || data.length < 1000) return lista;
+    }
+  };
   // Saldo antes do período: saldo inicial da conta + lançamentos desde a data dele até o dia anterior ao período.
-  const [{ data: antes }, { data: movs }, { data: abertosData }] = await Promise.all([
-    supabase.from("fin_movimentos").select("valor").eq("conta_id", conta.id).gte("data", conta.data_saldo_inicial).lt("data", de),
-    supabase.from("fin_movimentos").select("*").eq("conta_id", conta.id).gte("data", de).lte("data", ate).order("data").order("criado_em"),
+  const [antes, movs, { data: abertosData }] = await Promise.all([
+    tudo((i, f) => supabase.from("fin_movimentos").select("valor").eq("conta_id", conta.id).gte("data", conta.data_saldo_inicial).lt("data", de).order("id").range(i, f)),
+    tudo((i, f) => supabase.from("fin_movimentos").select("*").eq("conta_id", conta.id).gte("data", de).lte("data", ate).order("data").order("criado_em").order("id").range(i, f)),
     supabase
       .from("fin_titulos_situacao")
       .select("id, tipo, pessoa_id, vencimento, saldo, documento, descricao")
@@ -45,8 +54,8 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
       .in("situacao", ["aberto", "vencido", "parcial"])
       .limit(2000),
   ]);
-  const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? (antes ?? []).reduce((t, m) => t + Number(m.valor), 0) : 0);
-  const movimentos = (movs ?? []) as Movimento[];
+  const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? antes.reduce((t, m) => t + Number(m.valor), 0) : 0);
+  const movimentos = movs as Movimento[];
   const ids = movimentos.map((m) => m.id);
   const { data: baixas } = ids.length
     ? await supabase.from("fin_baixas").select("movimento_id, titulo:fin_titulos(documento, descricao, parcela, parcelas)").in("movimento_id", ids)
