@@ -9,15 +9,25 @@ import { ArvoreCategorias, type CategoriaArvore } from "./ArvoreCategorias";
 export default async function CategoriasPage() {
   await exigirModulo("financeiro");
   const supabase = await createClient();
-  const [{ data: gruposData }, { data: categoriasData }, { data: titulos }, { data: movimentos }] = await Promise.all([
+  // Quantos lançamentos usam cada categoria (ajuda a decidir o que inativar). O banco devolve no máximo 1000 linhas
+  // por consulta: conta o total e busca as páginas em paralelo.
+  const categoriasUsadas = async (tabela: "fin_titulos" | "fin_movimentos") => {
+    const { count } = await supabase.from(tabela).select("id", { count: "exact", head: true }).not("categoria_id", "is", null);
+    const paginas = await Promise.all(
+      Array.from({ length: Math.ceil((count ?? 0) / 1000) }, (_, i) =>
+        supabase.from(tabela).select("categoria_id").not("categoria_id", "is", null).order("id").range(i * 1000, i * 1000 + 999),
+      ),
+    );
+    return paginas.flatMap((p) => (p.data ?? []) as { categoria_id: string }[]);
+  };
+  const [{ data: gruposData }, { data: categoriasData }, titulos, movimentos] = await Promise.all([
     supabase.from("fin_grupos").select("*").order("nome"),
     supabase.from("fin_categorias").select("id, nome, grupo_id, ativo"),
-    // Quantos lançamentos usam cada categoria (ajuda a decidir o que inativar).
-    supabase.from("fin_titulos").select("categoria_id").not("categoria_id", "is", null),
-    supabase.from("fin_movimentos").select("categoria_id").not("categoria_id", "is", null),
+    categoriasUsadas("fin_titulos"),
+    categoriasUsadas("fin_movimentos"),
   ]);
   const usos = new Map<string, number>();
-  for (const r of [...(titulos ?? []), ...(movimentos ?? [])] as { categoria_id: string }[]) usos.set(r.categoria_id, (usos.get(r.categoria_id) ?? 0) + 1);
+  for (const r of [...titulos, ...movimentos]) usos.set(r.categoria_id, (usos.get(r.categoria_id) ?? 0) + 1);
   const categorias: CategoriaArvore[] = ((categoriasData ?? []) as Omit<CategoriaArvore, "usos">[]).map((c) => ({ ...c, usos: usos.get(c.id) ?? 0 }));
 
   return (

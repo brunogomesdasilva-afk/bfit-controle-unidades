@@ -23,21 +23,37 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
   const p = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const { supabase, academias, selecionada } = await contextoAcademias(p("academia"));
   const filtro: Filtro = (p("filtro") as Filtro) in FILTROS ? (p("filtro") as Filtro) : "abertos";
-  const de = p("de") ?? "";
-  const ate = p("ate") ?? "";
+  // Liquidados, Todos e Cancelados têm o histórico inteiro (desde 2020): sem datas, mostram o mês atual.
+  const mesAtual = !p("de") && !p("ate") && filtro !== "abertos" && filtro !== "vencidos";
+  const de = p("de") ?? (mesAtual ? `${hoje().slice(0, 7)}-01` : "");
+  const ate = p("ate") ?? (mesAtual ? new Date(Date.UTC(Number(hoje().slice(0, 4)), Number(hoje().slice(5, 7)), 0)).toISOString().slice(0, 10) : "");
   const caminho = tipo === "pagar" ? "/financeiro/pagar" : "/financeiro/receber";
 
-  let consulta = supabase.from("fin_titulos_situacao").select("*").eq("tipo", tipo).order("vencimento").order("criado_em").limit(3000);
-  if (selecionada) consulta = consulta.eq("academia_id", selecionada);
-  if (filtro === "abertos") consulta = consulta.in("situacao", ["aberto", "vencido", "parcial"]);
-  if (filtro === "vencidos") consulta = consulta.lt("vencimento", hoje()).in("situacao", ["vencido", "parcial"]);
-  if (filtro === "liquidados") consulta = consulta.eq("situacao", "liquidado");
-  if (filtro === "cancelados") consulta = consulta.eq("situacao", "cancelado");
-  if (filtro === "todos") consulta = consulta.neq("situacao", "cancelado");
-  if (de) consulta = consulta.gte("vencimento", de);
-  if (ate) consulta = consulta.lte("vencimento", ate);
-  const [{ data }, listas, { data: feriados }] = await Promise.all([consulta, listasFinanceiro(supabase), supabase.from("feriados").select("data, academia_id")]);
-  const titulos = ((data ?? []) as Titulo[]).map((t) => ({
+  const consulta = (inicio: number) => {
+    let q = supabase.from("fin_titulos_situacao").select("*").eq("tipo", tipo).order("vencimento").order("id");
+    if (selecionada) q = q.eq("academia_id", selecionada);
+    if (filtro === "abertos") q = q.in("situacao", ["aberto", "vencido", "parcial"]);
+    if (filtro === "vencidos") q = q.lt("vencimento", hoje()).in("situacao", ["vencido", "parcial"]);
+    if (filtro === "liquidados") q = q.eq("situacao", "liquidado");
+    if (filtro === "cancelados") q = q.eq("situacao", "cancelado");
+    if (filtro === "todos") q = q.neq("situacao", "cancelado");
+    if (de) q = q.gte("vencimento", de);
+    if (ate) q = q.lte("vencimento", ate);
+    return q.range(inicio, inicio + 999);
+  };
+  // O banco devolve no máximo 1000 por consulta: busca em páginas, até LIMITE.
+  const LIMITE = 5000;
+  const buscar = async () => {
+    const r: Titulo[] = [];
+    for (let i = 0; i < LIMITE; i += 1000) {
+      const { data } = await consulta(i);
+      r.push(...((data ?? []) as Titulo[]));
+      if ((data ?? []).length < 1000) return { lista: r, cortado: false };
+    }
+    return { lista: r, cortado: true };
+  };
+  const [{ lista, cortado }, listas, { data: feriados }] = await Promise.all([buscar(), listasFinanceiro(supabase), supabase.from("feriados").select("data, academia_id")]);
+  const titulos = lista.map((t) => ({
     ...t,
     valor: Number(t.valor),
     baixado: Number(t.baixado),
@@ -53,7 +69,7 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
 
   const link = (mudar: Record<string, string | null>) => {
     const q = new URLSearchParams();
-    for (const [k, v] of Object.entries({ academia: selecionada, filtro, de, ate, ...mudar })) if (v) q.set(k, v);
+    for (const [k, v] of Object.entries({ academia: selecionada, filtro, de: p("de"), ate: p("ate"), ...mudar })) if (v) q.set(k, v);
     return `${caminho}?${q.toString()}`;
   };
   const pessoas = listas.pessoas
@@ -112,12 +128,18 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
         <button type="submit" className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-50">
           Filtrar
         </button>
-        {(de || ate) && (
+        {(p("de") || p("ate")) && (
           <Link href={link({ de: null, ate: null })} className="text-sm text-slate-500 underline">
             limpar datas
           </Link>
         )}
       </form>
+      {mesAtual && <p className="text-xs text-slate-500">Mostrando o mês atual. Para ver outros meses, mude as datas e clique em Filtrar.</p>}
+      {cortado && (
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Período grande demais: aparecem só os primeiros {LIMITE.toLocaleString("pt-BR")} títulos. Diminua as datas para ver todos.
+        </p>
+      )}
 
       <Titulos
         key={`${selecionada}-${filtro}-${de}-${ate}`}

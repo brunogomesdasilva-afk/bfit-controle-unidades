@@ -34,10 +34,19 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
       </div>
     );
 
+  // O banco devolve no máximo 1000 linhas por consulta: busca em páginas.
+  const tudo = async <T,>(consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null }>) => {
+    const lista: T[] = [];
+    for (let i = 0; ; i += 1000) {
+      const { data } = await consulta(i, i + 999);
+      lista.push(...(data ?? []));
+      if (!data || data.length < 1000) return lista;
+    }
+  };
   // Saldo antes do período: saldo inicial da conta + lançamentos desde a data dele até o dia anterior ao período.
-  const [{ data: antes }, { data: movs }, { data: abertosData }] = await Promise.all([
-    supabase.from("fin_movimentos").select("valor").eq("conta_id", conta.id).gte("data", conta.data_saldo_inicial).lt("data", de),
-    supabase.from("fin_movimentos").select("*").eq("conta_id", conta.id).gte("data", de).lte("data", ate).order("data").order("criado_em"),
+  const [antes, movs, { data: abertosData }] = await Promise.all([
+    tudo((i, f) => supabase.from("fin_movimentos").select("valor").eq("conta_id", conta.id).gte("data", conta.data_saldo_inicial).lt("data", de).order("id").range(i, f)),
+    tudo((i, f) => supabase.from("fin_movimentos").select("*").eq("conta_id", conta.id).gte("data", de).lte("data", ate).order("data").order("criado_em").order("id").range(i, f)),
     supabase
       .from("fin_titulos_situacao")
       .select("id, tipo, pessoa_id, vencimento, saldo, documento, descricao")
@@ -45,12 +54,17 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
       .in("situacao", ["aberto", "vencido", "parcial"])
       .limit(2000),
   ]);
-  const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? (antes ?? []).reduce((t, m) => t + Number(m.valor), 0) : 0);
-  const movimentos = (movs ?? []) as Movimento[];
+  const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? antes.reduce((t, m) => t + Number(m.valor), 0) : 0);
+  const movimentos = movs as Movimento[];
   const ids = movimentos.map((m) => m.id);
-  const { data: baixas } = ids.length
-    ? await supabase.from("fin_baixas").select("movimento_id, titulo:fin_titulos(documento, descricao, parcela, parcelas)").in("movimento_id", ids)
-    : { data: [] };
+  // Em lotes: período longo tem milhares de lançamentos, e a lista de ids vai no endereço da consulta.
+  const lotes: string[][] = [];
+  for (let i = 0; i < ids.length; i += 150) lotes.push(ids.slice(i, i + 150));
+  const baixas = (
+    await Promise.all(lotes.map((l) => supabase.from("fin_baixas").select("movimento_id, titulo:fin_titulos(documento, descricao, parcela, parcelas)").in("movimento_id", l)))
+  ).flatMap((r) => r.data ?? []);
+  const baixasDo = new Map<string, typeof baixas>();
+  for (const b of baixas) baixasDo.set(b.movimento_id, [...(baixasDo.get(b.movimento_id) ?? []), b]);
   const pessoa = new Map(listas.pessoas.map((x) => [x.id, nomePessoa(x)]));
   const categoria = new Map(listas.categorias.map((c) => [c.id, c.nome]));
   const linhas: LinhaExtrato[] = movimentos.map((m) => ({
@@ -64,12 +78,10 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
     categoria_id: m.categoria_id,
     origem: m.origem,
     conciliado: m.conciliado,
-    titulos: (baixas ?? [])
-      .filter((b) => b.movimento_id === m.id)
-      .map((b) => {
-        const t = b.titulo as unknown as { documento: string | null; descricao: string | null; parcela: number; parcelas: number } | null;
-        return t ? [t.documento && `NF ${t.documento}`, t.descricao, t.parcelas > 1 && `${t.parcela}/${t.parcelas}`].filter(Boolean).join(" ") || "Título" : "Título";
-      }),
+    titulos: (baixasDo.get(m.id) ?? []).map((b) => {
+      const t = b.titulo as unknown as { documento: string | null; descricao: string | null; parcela: number; parcelas: number } | null;
+      return t ? [t.documento && `NF ${t.documento}`, t.descricao, t.parcelas > 1 && `${t.parcela}/${t.parcelas}`].filter(Boolean).join(" ") || "Título" : "Título";
+    }),
   }));
   const abertos: TituloAberto[] = (abertosData ?? []).map((t) => ({
     id: t.id,
