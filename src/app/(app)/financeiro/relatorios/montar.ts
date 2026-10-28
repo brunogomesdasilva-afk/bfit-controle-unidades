@@ -31,12 +31,12 @@ async function tudo<T>(consulta: (de: number, ate: number) => PromiseLike<{ data
 }
 
 export async function montarRelatorio(supabase: Supabase, rel: Relatorio, f: { academia: string | null; de: string; ate: string; academias: { id: string; nome: string }[] }): Promise<Tabela> {
-  const [{ data: pessoas }, { data: categorias }, { data: contas }] = await Promise.all([
-    supabase.from("fin_pessoas").select("id, razao_social, nome_fantasia"),
+  const [pessoas, { data: categorias }, { data: contas }] = await Promise.all([
+    tudo((de, ate) => supabase.from("fin_pessoas").select("id, razao_social, nome_fantasia").order("id").range(de, ate)),
     supabase.from("fin_categorias").select("id, nome, fin_grupos(nome)"),
     supabase.from("fin_contas").select("id, nome"),
   ]);
-  const pessoa = new Map((pessoas ?? []).map((p) => [p.id, nomePessoa(p)]));
+  const pessoa = new Map(pessoas.map((p) => [p.id, nomePessoa(p)]));
   const categoria = new Map((categorias ?? []).map((c) => [c.id, { nome: c.nome as string, grupo: (c.fin_grupos as unknown as { nome: string } | null)?.nome ?? "Sem grupo" }]));
   const conta = new Map((contas ?? []).map((c) => [c.id, c.nome]));
   const academia = new Map(f.academias.map((a) => [a.id, a.nome]));

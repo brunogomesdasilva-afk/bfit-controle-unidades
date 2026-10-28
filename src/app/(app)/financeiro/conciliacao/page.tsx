@@ -57,9 +57,14 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
   const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? antes.reduce((t, m) => t + Number(m.valor), 0) : 0);
   const movimentos = movs as Movimento[];
   const ids = movimentos.map((m) => m.id);
-  const { data: baixas } = ids.length
-    ? await supabase.from("fin_baixas").select("movimento_id, titulo:fin_titulos(documento, descricao, parcela, parcelas)").in("movimento_id", ids)
-    : { data: [] };
+  // Em lotes: período longo tem milhares de lançamentos, e a lista de ids vai no endereço da consulta.
+  const lotes: string[][] = [];
+  for (let i = 0; i < ids.length; i += 150) lotes.push(ids.slice(i, i + 150));
+  const baixas = (
+    await Promise.all(lotes.map((l) => supabase.from("fin_baixas").select("movimento_id, titulo:fin_titulos(documento, descricao, parcela, parcelas)").in("movimento_id", l)))
+  ).flatMap((r) => r.data ?? []);
+  const baixasDo = new Map<string, typeof baixas>();
+  for (const b of baixas) baixasDo.set(b.movimento_id, [...(baixasDo.get(b.movimento_id) ?? []), b]);
   const pessoa = new Map(listas.pessoas.map((x) => [x.id, nomePessoa(x)]));
   const categoria = new Map(listas.categorias.map((c) => [c.id, c.nome]));
   const linhas: LinhaExtrato[] = movimentos.map((m) => ({
@@ -73,12 +78,10 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
     categoria_id: m.categoria_id,
     origem: m.origem,
     conciliado: m.conciliado,
-    titulos: (baixas ?? [])
-      .filter((b) => b.movimento_id === m.id)
-      .map((b) => {
-        const t = b.titulo as unknown as { documento: string | null; descricao: string | null; parcela: number; parcelas: number } | null;
-        return t ? [t.documento && `NF ${t.documento}`, t.descricao, t.parcelas > 1 && `${t.parcela}/${t.parcelas}`].filter(Boolean).join(" ") || "Título" : "Título";
-      }),
+    titulos: (baixasDo.get(m.id) ?? []).map((b) => {
+      const t = b.titulo as unknown as { documento: string | null; descricao: string | null; parcela: number; parcelas: number } | null;
+      return t ? [t.documento && `NF ${t.documento}`, t.descricao, t.parcelas > 1 && `${t.parcela}/${t.parcelas}`].filter(Boolean).join(" ") || "Título" : "Título";
+    }),
   }));
   const abertos: TituloAberto[] = (abertosData ?? []).map((t) => ({
     id: t.id,
