@@ -145,13 +145,16 @@ const pct = (n: number | null) => (n === null ? "-" : `${(n * 100).toLocaleStrin
 const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const sinal = (n: number | null) => (n === null ? "-" : `${n > 0 ? "+" : ""}${n.toLocaleString("pt-BR")}`);
 
-// Linhas da tabela de cada unidade (e-mail e PDF): rótulo, valor formatado e se a célula fica em vermelho.
-const INDICADORES: [string, (c: ColunaSemanal) => string, ((c: ColunaSemanal) => boolean)?][] = [
+const corSinal = (n: number | null) => (n === null || n === 0 ? null : n < 0 ? "vermelho" : "verde");
+const CORES = { vermelho: "#b91c1c", verde: "#15803d" };
+
+// Linhas da tabela de cada unidade (e-mail e PDF): rótulo, valor formatado e a cor do número (negativo vermelho, positivo verde).
+const INDICADORES: [string, (c: ColunaSemanal) => string, ((c: ColunaSemanal) => "vermelho" | "verde" | null)?][] = [
   ["Total de ativos", (c) => int(c.totalAtivos)],
   ["Adimplentes", (c) => int(c.adimplentes)],
   ["Inadimplentes", (c) => int(c.inadimplentes)],
   ["% Inadimplentes", (c) => pct(c.pctInadimplentes)],
-  ["Ativos últimos 7 dias", (c) => sinal(c.ativos7dias), (c) => (c.ativos7dias ?? 0) < 0],
+  ["Ativos últimos 7 dias", (c) => sinal(c.ativos7dias), (c) => corSinal(c.ativos7dias)],
   ["Total de vendas mês", (c) => int(c.vendasMes)],
   ["Total de vendas mês anterior", (c) => int(c.vendasMesAnterior)],
   ["Faturamento mês atual", (c) => brl(c.faturamentoMes)],
@@ -180,9 +183,12 @@ function tabela(u: UnidadeSemanal, destaque = false) {
   </tr>
   ${linhas
     .map(
-      ([rotulo, valor, vermelho]) =>
+      ([rotulo, valor, cor]) =>
         `<tr><td style="${cel}">${rotulo}</td>${[u.hoje, u.semanaAnterior]
-          .map((c) => `<td style="${cel}text-align:right;white-space:nowrap;${vermelho?.(c) ? "background:#fde2e2;color:#991b1b;" : ""}">${valor(c)}</td>`)
+          .map((c) => {
+            const k = cor?.(c);
+            return `<td style="${cel}text-align:right;white-space:nowrap;${k ? `color:${CORES[k]};font-weight:bold;` : ""}">${valor(c)}</td>`;
+          })
           .join("")}</tr>`
     )
     .join("\n  ")}
@@ -213,7 +219,7 @@ export async function pdfRelatorioSemanal(r: RelatorioSemanal) {
       { rotulo: dm(u.semanaAnterior.data), largura: 150 },
     ],
     linhas: INDICADORES.map(([rotulo, valor]) => [rotulo, valor(u.hoje), valor(u.semanaAnterior)]),
-    destaques: INDICADORES.map(([, , vermelho]) => (vermelho?.(u.hoje) ? "vermelho" : null)),
+    coresTexto: INDICADORES.map(([, , cor]) => (cor ? [null, cor(u.hoje), cor(u.semanaAnterior)] : undefined)),
     vazio: "",
   });
   const observacoes = [r.total, ...r.unidades].flatMap((u) => avisos(u).map((a) => [u.nome, a]));
