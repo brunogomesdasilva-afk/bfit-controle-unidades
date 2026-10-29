@@ -146,9 +146,9 @@ const brl = (n: number) => `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigi
 const sinal = (n: number | null) => (n === null ? "-" : `${n > 0 ? "+" : ""}${n.toLocaleString("pt-BR")}`);
 
 const corSinal = (n: number | null) => (n === null || n === 0 ? null : n < 0 ? "vermelho" : "verde");
-const CORES = { vermelho: "#b91c1c", verde: "#15803d" };
+const FUNDOS = { vermelho: "#fde2e2", verde: "#dcfce7" };
 
-// Linhas da tabela de cada unidade (e-mail e PDF): rótulo, valor formatado e a cor do número (negativo vermelho, positivo verde).
+// Linhas da tabela de cada unidade (e-mail e PDF): rótulo, valor formatado e a cor de fundo da célula (negativo vermelho, positivo verde).
 const INDICADORES: [string, (c: ColunaSemanal) => string, ((c: ColunaSemanal) => "vermelho" | "verde" | null)?][] = [
   ["Total de ativos", (c) => int(c.totalAtivos)],
   ["Adimplentes", (c) => int(c.adimplentes)],
@@ -187,7 +187,7 @@ function tabela(u: UnidadeSemanal, destaque = false) {
         `<tr><td style="${cel}">${rotulo}</td>${[u.hoje, u.semanaAnterior]
           .map((c) => {
             const k = cor?.(c);
-            return `<td style="${cel}text-align:right;white-space:nowrap;${k ? `color:${CORES[k]};font-weight:bold;` : ""}">${valor(c)}</td>`;
+            return `<td style="${cel}text-align:right;white-space:nowrap;${k ? `background:${FUNDOS[k]};font-weight:bold;` : ""}">${valor(c)}</td>`;
           })
           .join("")}</tr>`
     )
@@ -219,7 +219,7 @@ export async function pdfRelatorioSemanal(r: RelatorioSemanal) {
       { rotulo: dm(u.semanaAnterior.data), largura: 150 },
     ],
     linhas: INDICADORES.map(([rotulo, valor]) => [rotulo, valor(u.hoje), valor(u.semanaAnterior)]),
-    coresTexto: INDICADORES.map(([, , cor]) => (cor ? [null, cor(u.hoje), cor(u.semanaAnterior)] : undefined)),
+    fundosCelulas: INDICADORES.map(([, , cor]) => (cor ? [null, cor(u.hoje), cor(u.semanaAnterior)] : undefined)),
     vazio: "",
   });
   const observacoes = [r.total, ...r.unidades].flatMap((u) => avisos(u).map((a) => [u.nome, a]));
