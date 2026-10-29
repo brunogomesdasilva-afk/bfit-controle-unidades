@@ -20,13 +20,12 @@ export type SecaoPdf = {
   linhas: string[][];
   vazio: string;
   destaques?: ("vermelho" | "amarelo" | null)[];
-  // coresTexto: cor do texto de cada célula, por linha (ex.: variação negativa em vermelho, positiva em verde).
-  coresTexto?: (("vermelho" | "verde" | null)[] | undefined)[];
+  // fundosCelulas: cor de fundo de cada célula, por linha (ex.: variação negativa em vermelho, positiva em verde).
+  fundosCelulas?: (("vermelho" | "verde" | null)[] | undefined)[];
   // false: não mostra a quantidade de linhas ao lado do título (seções de resumo).
   mostrarQuantidade?: boolean;
 };
-const FUNDOS = { vermelho: rgb(0.996, 0.886, 0.886), amarelo: rgb(0.996, 0.953, 0.78) };
-const TEXTOS = { vermelho: rgb(0.725, 0.11, 0.11), verde: rgb(0.082, 0.502, 0.239) };
+const FUNDOS = { vermelho: rgb(0.996, 0.886, 0.886), amarelo: rgb(0.996, 0.953, 0.78), verde: rgb(0.863, 0.988, 0.906) };
 
 // titulo/subtitulo: por padrão "Fechamento do mês - <academia>" e "Mês de <mês>" (o acompanhamento diário usa outros).
 export async function gerarPdfFechamento(dados: { academia: string; mesTexto: string; secoes: SecaoPdf[]; titulo?: string; subtitulo?: string }) {
@@ -54,15 +53,15 @@ export async function gerarPdfFechamento(dados: { academia: string; mesTexto: st
     cabecalhoDaPagina();
   }
 
-  function linha(secao: SecaoPdf, celulas: string[], fonte = normal, fundo?: ReturnType<typeof rgb>, cores?: ("vermelho" | "verde" | null)[]) {
+  function linha(secao: SecaoPdf, celulas: string[], fonte = normal, fundo?: ReturnType<typeof rgb>, fundos?: ("vermelho" | "verde" | null)[]) {
     const quebradas = celulas.map((c, i) => quebrar(c, fonte, CORPO, secao.colunas[i].largura - 8));
     const altura = Math.max(...quebradas.map((l) => l.length)) * (CORPO + 2.5) + 7;
     if (y - altura < MARGEM) return false;
     let x = MARGEM;
     quebradas.forEach((linhas, i) => {
       const w = secao.colunas[i].largura;
-      pagina.drawRectangle({ x, y: y - altura, width: w, height: altura, borderColor: BORDA, borderWidth: 0.6, color: fundo });
-      linhas.forEach((texto, j) => pagina.drawText(texto, { x: x + 4, y: y - 10 - j * (CORPO + 2.5), size: CORPO, font: cores?.[i] ? negrito : fonte, color: cores?.[i] ? TEXTOS[cores[i]!] : CINZA }));
+      pagina.drawRectangle({ x, y: y - altura, width: w, height: altura, borderColor: BORDA, borderWidth: 0.6, color: fundos?.[i] ? FUNDOS[fundos[i]!] : fundo });
+      linhas.forEach((texto, j) => pagina.drawText(texto, { x: x + 4, y: y - 10 - j * (CORPO + 2.5), size: CORPO, font: fundos?.[i] ? negrito : fonte, color: CINZA }));
       x += w;
     });
     y -= altura;
@@ -84,11 +83,11 @@ export async function gerarPdfFechamento(dados: { academia: string; mesTexto: st
       const destaque = secao.destaques?.[i];
       const fundo = destaque ? FUNDOS[destaque] : undefined;
       const fonte = destaque ? negrito : normal;
-      const cores = secao.coresTexto?.[i];
-      if (!linha(secao, celulas, fonte, fundo, cores)) {
+      const fundos = secao.fundosCelulas?.[i];
+      if (!linha(secao, celulas, fonte, fundo, fundos)) {
         novaPagina();
         cabecalho();
-        linha(secao, celulas, fonte, fundo, cores);
+        linha(secao, celulas, fonte, fundo, fundos);
       }
     });
     y -= 24;
