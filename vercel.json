@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/envios", "schedule": "0 * * * *" },
-    { "path": "/api/cron/escala", "schedule": "0 9 * * *" }
+    { "path": "/api/cron/escala", "schedule": "0 9 * * *" },
+    { "path": "/api/cron/nf-drive", "schedule": "0 22 * * *" }
   ]
 }

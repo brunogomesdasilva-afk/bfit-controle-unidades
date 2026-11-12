@@ -4,6 +4,7 @@ import { refresh, revalidatePath } from "next/cache";
 import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { consultarCnpj } from "@/lib/consultaCnpj";
 import { feriadosDaAcademia, proximoDiaUtil } from "@/lib/diasUteis";
+import { titulosDaNota } from "@/lib/lancarNota";
 import { documentoValido, soNumeros, somarMeses, type TipoTitulo } from "@/lib/financeiro";
 import { data as lerData, hoje, mensagemErro, numero, texto } from "@/lib/planilha";
 import { createClient } from "@/lib/supabase/server";
@@ -285,31 +286,22 @@ export async function lancarNotaFiscal(n: NotaParaLancar): Promise<ResultadoFin>
   await a.supabase.from("fin_pessoas").update({ categoria_padrao_id: n.categoriaId }).eq("id", pessoaId).is("categoria_padrao_id", null);
 
   const feriados = await feriadosDaAcademia(a.supabase, n.academiaId);
-  const grupo = parcelas.length > 1 ? crypto.randomUUID() : null;
-  const linhas = parcelas.map((p, i) => {
-    const venc = proximoDiaUtil(p.vencimento!, feriados);
-    return {
-      tipo: "pagar",
-      academia_id: n.academiaId,
-      pessoa_id: pessoaId,
-      categoria_id: n.categoriaId,
-      conta_id: n.contaId || null,
-      descricao: texto(n.descricao, 300),
-      documento: texto(n.documento, 60),
-      data_registro: hoje(),
-      vencimento: venc,
-      previsao: venc,
-      valor: p.valor!,
-      parcela: i + 1,
-      parcelas: parcelas.length,
-      grupo_parcelas: grupo,
-      observacoes: texto(n.observacoes, 1000),
+  const linhas = titulosDaNota(
+    {
+      academiaId: n.academiaId,
+      pessoaId,
+      categoriaId: n.categoriaId,
+      contaId: n.contaId || null,
+      documento: n.documento,
+      descricao: n.descricao,
+      observacoes: n.observacoes,
+      retencoes,
+      parcelas: parcelas.map((p) => ({ vencimento: p.vencimento!, valor: p.valor! })),
       anexo: n.anexo,
-      // Retenções ficam só na 1ª parcela (são da nota inteira).
-      ...(i === 0 ? retencoes : {}),
-      criado_por: a.atual.id,
-    };
-  });
+      criadoPor: a.atual.id,
+    },
+    feriados
+  );
   const { error } = await a.supabase.from("fin_titulos").insert(linhas);
   if (error) return { erro: mensagemErro(error) };
   atualizar();
