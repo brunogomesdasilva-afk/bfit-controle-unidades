@@ -1,6 +1,6 @@
 import { exigirAdmin } from "@/lib/auth";
 import { driveConfigurado, emailDaContaDeServico } from "@/lib/googleDrive";
-import type { ResultadoNota } from "@/lib/nfDrive";
+import { caminhoLocal, type ResultadoNota } from "@/lib/nfDrive";
 import { createClient } from "@/lib/supabase/server";
 import { FormNotasDrive, Situacao } from "./FormNotasDrive";
 
@@ -17,6 +17,7 @@ export default async function NotasDrivePage() {
     supabase.from("nf_drive_log").select("executado_em, arquivo, situacao, motivo, destino").order("executado_em", { ascending: false }).limit(100),
   ]);
   const conta = emailDaContaDeServico();
+  const local = caminhoLocal(config?.pasta_notas) && caminhoLocal(config?.pasta_contabilidade);
   const quando = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
 
   return (
@@ -31,9 +32,17 @@ export default async function NotasDrivePage() {
         </p>
       </div>
 
-      {!driveConfigurado() ? (
+      {local ? (
+        <div className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">
+          <p>
+            <strong>Pastas do computador.</strong> O sistema na internet não enxerga o seu disco, então o robô roda no próprio computador: dê dois cliques
+            em <code className="font-medium">rodar-notas-do-computador.bat</code>, na pasta do projeto (ou deixe agendado no Windows às 19h). O resultado
+            aparece no histórico abaixo e no e-mail de resumo. Para usar o Google Drive depois, troque os caminhos pelos links das pastas.
+          </p>
+        </div>
+      ) : !driveConfigurado() ? (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          O acesso ao Google Drive ainda não foi configurado no servidor (variável GOOGLE_SERVICE_ACCOUNT_JSON na Vercel).
+          O acesso ao Google Drive ainda não foi configurado no servidor (variável GOOGLE_SERVICE_ACCOUNT_JSON na Vercel). Enquanto isso, dá para usar pastas do computador: cole nos campos o caminho delas (ex.: C:\Users\bruno\Notas).
         </p>
       ) : (
         <p className="rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-700">
@@ -44,7 +53,7 @@ export default async function NotasDrivePage() {
 
       <FormNotasDrive
         inicial={{ notas: config?.pasta_notas ?? "", contabilidade: config?.pasta_contabilidade ?? "", ativo: config?.ativo ?? true }}
-        podeRodar={driveConfigurado() && Boolean(config?.pasta_notas && config?.pasta_contabilidade)}
+        podeRodar={!local && driveConfigurado() && Boolean(config?.pasta_notas && config?.pasta_contabilidade)}
       />
 
       <section className="space-y-2">

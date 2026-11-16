@@ -1,7 +1,9 @@
+import { copyFile, mkdir, readdir, readFile, rename, stat, unlink } from "node:fs/promises";
+import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { feriadosDaAcademia } from "@/lib/diasUteis";
 import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
-import { baixar, idDaPasta, listarPdfs, moverRenomear, pastaFilha, type ArquivoDrive } from "@/lib/googleDrive";
+import { baixar, idDaPasta, listarPdfs, moverRenomear, pastaFilha } from "@/lib/googleDrive";
 import { titulosDaNota } from "@/lib/lancarNota";
 import { lerNotaFiscal, type NotaLida } from "@/lib/lerNotaFiscal";
 
@@ -14,6 +16,10 @@ import { lerNotaFiscal, type NotaLida } from "@/lib/lerNotaFiscal";
 // Nota que não dá para lançar sozinha (fornecedor sem cadastro ou sem categoria, tomador que não é academia, sem
 // vencimento) fica na pasta e entra no aviso do dia. A leitura do PDF fica guardada: a mesma nota pendente não é
 // lida (nem paga) de novo enquanto o arquivo não mudar.
+//
+// As pastas podem ser do Google Drive (link da pasta: roda no servidor, às 19h) ou do computador (caminho como
+// C:\Users\...: roda no próprio computador, pelo atalho scripts/notas-locais.mts, porque o servidor não enxerga o
+// disco local).
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const LIMITE_MS = 11 * 60 * 1000; // o resto fica para a próxima execução
@@ -22,17 +28,81 @@ const dataBr = (d: string) => d.split("-").reverse().join("-");
 // Caracteres que o Windows não aceita em nome de arquivo (a pasta pode ser sincronizada no computador).
 const limpar = (s: string) => s.replace(/[\\/:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
 
+// De onde vêm as notas e para onde vão: Google Drive ou pasta do computador.
+type ArquivoNota = { id: string; name: string; modifiedTime: string };
+type FonteNotas = {
+  listar: () => Promise<ArquivoNota[]>;
+  baixar: (a: ArquivoNota) => Promise<ArrayBuffer>;
+  // Move para <pasta da contabilidade>/<pastas...>/<nome>.
+  mover: (a: ArquivoNota, pastas: string[], nome: string) => Promise<void>;
+};
+
+// Caminho de pasta do computador (C:\..., \\servidor\... ou /...), não link do Drive.
+export const caminhoLocal = (texto: string | null | undefined) => /^([A-Za-z]:[\\/]|\\\\|\/)/.test((texto ?? "").trim());
+
+function fonteDrive(pastaNotas: string, pastaContabil: string): FonteNotas {
+  return {
+    listar: () => listarPdfs(pastaNotas),
+    baixar: (a) => baixar(a.id),
+    mover: async (a, pastas, nome) => {
+      let destino = pastaContabil;
+      for (const p of pastas) destino = await pastaFilha(destino, p);
+      await moverRenomear(a.id, pastaNotas, destino, nome);
+    },
+  };
+}
+
+function fonteLocal(pastaNotas: string, pastaContabil: string): FonteNotas {
+  return {
+    listar: async () => {
+      const nomes = (await readdir(pastaNotas)).filter((n) => /\.pdf$/i.test(n));
+      return Promise.all(
+        nomes.map(async (n) => {
+          const caminho = path.join(pastaNotas, n);
+          return { id: caminho, name: n, modifiedTime: (await stat(caminho)).mtime.toISOString() };
+        })
+      );
+    },
+    baixar: async (a) => {
+      const b = await readFile(a.id);
+      return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+    },
+    mover: async (a, pastas, nome) => {
+      const destino = path.join(pastaContabil, ...pastas);
+      await mkdir(destino, { recursive: true });
+      // Já existe um arquivo com esse nome: acrescenta (2), (3)...
+      let final = path.join(destino, nome);
+      for (let i = 2; await stat(final).then(() => true, () => false); i++) final = path.join(destino, nome.replace(/\.pdf$/i, ` (${i}).pdf`));
+      try {
+        await rename(a.id, final);
+      } catch {
+        // Outro disco (ex.: da pasta local para uma unidade de rede): copia e apaga o original.
+        await copyFile(a.id, final);
+        await unlink(a.id);
+      }
+    },
+  };
+}
+
 export type ResultadoNota = { arquivo: string; situacao: "lancada" | "ja_lancada" | "pendente" | "erro"; motivo: string | null; destino?: string };
 
 export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean } = {}) {
   const inicio = Date.now();
   const { data: config } = await db.from("nf_drive_config").select("*").maybeSingle();
-  const pastaNotas = idDaPasta(config?.pasta_notas);
-  const pastaContabil = idDaPasta(config?.pasta_contabilidade);
   if (!config?.ativo) return { resultados: [] as ResultadoNota[], aviso: "Robô desligado." };
-  if (!pastaNotas || !pastaContabil) return { resultados: [] as ResultadoNota[], aviso: "As duas pastas do Drive não estão configuradas." };
+  let fonte: FonteNotas;
+  if (caminhoLocal(config.pasta_notas) && caminhoLocal(config.pasta_contabilidade)) {
+    // O servidor (Vercel) não enxerga o disco do computador.
+    if (process.env.VERCEL) return { resultados: [] as ResultadoNota[], aviso: "As pastas são do computador: o robô roda lá, pelo atalho rodar-notas-do-computador.bat." };
+    fonte = fonteLocal(config.pasta_notas.trim(), config.pasta_contabilidade.trim());
+  } else {
+    const pastaNotas = idDaPasta(config.pasta_notas);
+    const pastaContabil = idDaPasta(config.pasta_contabilidade);
+    if (!pastaNotas || !pastaContabil) return { resultados: [] as ResultadoNota[], aviso: "As duas pastas não estão configuradas." };
+    fonte = fonteDrive(pastaNotas, pastaContabil);
+  }
 
-  const arquivos = await listarPdfs(pastaNotas);
+  const arquivos = await fonte.listar();
   const { data: academias } = await db.from("academias").select("id, nome, cnpj");
   const feriadosPorAcademia = new Map<string, Set<string>>();
   const resultados: ResultadoNota[] = [];
@@ -46,8 +116,7 @@ export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?:
     let r: ResultadoNota & { nota?: NotaLida; academiaId?: string; tituloId?: string };
     try {
       r = await processarUma(db, arquivo, {
-        pastaNotas,
-        pastaContabil,
+        fonte,
         academias: (academias ?? []) as { id: string; nome: string; cnpj: string | null }[],
         feriados: async (id) => {
           if (!feriadosPorAcademia.has(id)) feriadosPorAcademia.set(id, await feriadosDaAcademia(db, id));
@@ -78,10 +147,9 @@ export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?:
 
 async function processarUma(
   db: SupabaseClient,
-  arquivo: ArquivoDrive,
+  arquivo: ArquivoNota,
   ctx: {
-    pastaNotas: string;
-    pastaContabil: string;
+    fonte: FonteNotas;
     academias: { id: string; nome: string; cnpj: string | null }[];
     feriados: (academiaId: string) => Promise<Set<string>>;
     criadoPor: string | null;
@@ -101,7 +169,7 @@ async function processarUma(
   let nota = anterior?.modificado === arquivo.modifiedTime ? (anterior.nota as NotaLida) : null;
   let pdf: ArrayBuffer | null = null;
   if (!nota) {
-    pdf = await baixar(arquivo.id);
+    pdf = await ctx.fonte.baixar(arquivo);
     const lida = await lerNotaFiscal(pdf);
     if (!lida.nota) return { arquivo: arquivo.name, situacao: "erro", motivo: lida.erro ?? "Não foi possível ler a nota." };
     nota = lida.nota;
@@ -123,7 +191,7 @@ async function processarUma(
 
   let tituloId: string | undefined = repetidas?.[0]?.id;
   if (!jaLancada) {
-    pdf ??= await baixar(arquivo.id);
+    pdf ??= await ctx.fonte.baixar(arquivo);
     const anexo = `${academia.id}/nf/${Date.now()}-${nota.numero.replace(/\W/g, "") || "nota"}.pdf`;
     const { error: erroAnexo } = await db.storage.from("pagamentos").upload(anexo, pdf, { contentType: "application/pdf" });
     const linhas = titulosDaNota(
@@ -158,15 +226,12 @@ async function processarUma(
   const emissao = nota.data_emissao ?? new Date().toISOString().slice(0, 10);
   const ano = emissao.slice(0, 4);
   const mes = Number(emissao.slice(5, 7));
-  const pastaAno = await pastaFilha(ctx.pastaContabil, ano);
-  const pastaMes = await pastaFilha(pastaAno, `${String(mes).padStart(2, "0")} - ${MESES[mes - 1]}`);
-  const pastaAcademia = await pastaFilha(pastaMes, limpar(academia.nome));
   const vencimentos = nota.duplicatas.map((d) => d.vencimento).sort();
   const venc = vencimentos[0] ?? repetidas?.[0]?.vencimento ?? emissao;
   const nome = limpar(
     `NF ${nota.numero} - ${nomeFornecedor} - R$ ${brl(nota.valor_total)} - venc ${dataBr(venc)}${vencimentos.length > 1 ? ` (${vencimentos.length} parcelas)` : ""}`
   ) + ".pdf";
-  await moverRenomear(arquivo.id, ctx.pastaNotas, pastaAcademia, nome);
+  await ctx.fonte.mover(arquivo, [ano, `${String(mes).padStart(2, "0")} - ${MESES[mes - 1]}`, limpar(academia.nome)], nome);
   const destino = `${ano}/${String(mes).padStart(2, "0")} - ${MESES[mes - 1]}/${academia.nome}/${nome}`;
   return jaLancada
     ? { arquivo: arquivo.name, situacao: "ja_lancada", motivo: "Já estava no contas a pagar: só foi levada para a contabilidade.", destino, nota, academiaId: academia.id, tituloId }

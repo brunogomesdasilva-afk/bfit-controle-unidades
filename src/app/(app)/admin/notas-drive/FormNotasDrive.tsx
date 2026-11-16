@@ -26,12 +26,12 @@ export function FormNotasDrive({ inicial, podeRodar }: { inicial: { notas: strin
     <div className="space-y-4">
       <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
         <label className="block text-sm font-medium text-slate-700">
-          Pasta de notas fiscais (link da pasta no Google Drive)
-          <input value={d.notas} onChange={(e) => setD({ ...d, notas: e.target.value })} placeholder="https://drive.google.com/drive/folders/…" className={campo} />
+          Pasta de notas fiscais (link da pasta no Google Drive ou caminho da pasta no computador)
+          <input value={d.notas} onChange={(e) => setD({ ...d, notas: e.target.value })} placeholder="https://drive.google.com/drive/folders/… ou C:\Users\…" className={campo} />
         </label>
         <label className="block text-sm font-medium text-slate-700">
-          Pasta de fechamento da contabilidade (link da pasta no Google Drive)
-          <input value={d.contabilidade} onChange={(e) => setD({ ...d, contabilidade: e.target.value })} placeholder="https://drive.google.com/drive/folders/…" className={campo} />
+          Pasta de fechamento da contabilidade (link da pasta no Google Drive ou caminho da pasta no computador)
+          <input value={d.contabilidade} onChange={(e) => setD({ ...d, contabilidade: e.target.value })} placeholder="https://drive.google.com/drive/folders/… ou C:\Users\…" className={campo} />
         </label>
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={d.ativo} onChange={(e) => setD({ ...d, ativo: e.target.checked })} className="h-4 w-4 accent-marca" />
