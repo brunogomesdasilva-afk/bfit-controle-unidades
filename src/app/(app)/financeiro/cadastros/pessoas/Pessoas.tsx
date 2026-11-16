@@ -130,16 +130,12 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
     );
   }, [pessoas, busca, filtro]);
   // Clique no cabeçalho ordena por qualquer coluna.
-  const pix = (p: Pessoa) => (p.chave_pix ? `PIX ${p.chave_pix}` : [p.banco, p.agencia && `ag ${p.agencia}`, p.conta && `cc ${p.conta}`].filter(Boolean).join(" · "));
   const { ordenada, ordem, alternar } = useOrdenacao(lista, (p, campo) => {
     switch (campo) {
       case "nome": return nomePessoa(p);
       case "documento": return p.documento;
       case "tipo": return [p.fornecedor && "Fornecedor", p.cliente && "Cliente"].filter(Boolean).join(" e ");
       case "categoria": return nomeCategoria.get(p.categoria_padrao_id ?? "");
-      case "regime": return p.regime_tributario;
-      case "cidade": return [p.cidade, p.uf].filter(Boolean).join("/");
-      case "pix": return pix(p);
       default: return null;
     }
   });
@@ -164,17 +160,15 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
           + Incluir
         </button>
       </div>
-      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+      {/* A lista rola dentro da caixa, com o cabeçalho fixo no topo (dá para saber o que é cada coluna). */}
+      <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-max text-sm">
-          <thead className="bg-slate-50 text-left text-xs text-slate-600">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-xs text-slate-600 shadow-[0_1px_0_0_rgb(226,232,240)]">
             <tr>
               {th("nome", "Nome")}
               {th("documento", "CPF/CNPJ")}
               {th("tipo", "Tipo")}
               {th("categoria", "Categoria padrão")}
-              {th("regime", "Regime")}
-              {th("cidade", "Cidade/UF")}
-              {th("pix", "PIX / banco")}
               <th className="px-3 py-2">
                 <span className="sr-only">Ações</span>
               </th>
@@ -190,9 +184,6 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
                 <td className="px-3 py-2 tabular-nums">{formatarDocumento(p.documento)}</td>
                 <td className="px-3 py-2">{[p.fornecedor && "Fornecedor", p.cliente && "Cliente"].filter(Boolean).join(" e ")}</td>
                 <td className="px-3 py-2">{p.categoria_padrao_id ? (nomeCategoria.get(p.categoria_padrao_id) ?? "") : <span className="text-xs text-amber-700">sem categoria</span>}</td>
-                <td className="px-3 py-2">{p.regime_tributario ?? ""}</td>
-                <td className="px-3 py-2">{[p.cidade, p.uf].filter(Boolean).join("/")}</td>
-                <td className="px-3 py-2 text-xs text-slate-600">{pix(p)}</td>
                 <td className="px-3 py-2 text-right">
                   <button
                     type="button"
@@ -209,7 +200,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-slate-500">
+                <td colSpan={5} className="px-3 py-6 text-center text-slate-500">
                   Nenhum cadastro encontrado.
                 </td>
               </tr>
