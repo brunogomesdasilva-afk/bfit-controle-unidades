@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type KeyboardEvent, type ReactNode } from "react";
+import { RotuloOrdenavel, useOrdenacao, type Ordem, type ValorOrdenavel } from "./Ordenacao";
 
 // Tabela no estilo de planilha: cabeçalho fixo, linhas numeradas e edição direto na linha.
 // "+ Nova linha" abre uma linha em branco no topo; "Alterar" (ou duplo clique) edita a linha.
@@ -103,7 +104,18 @@ function gruposDoCabecalho(colunas: Coluna[]) {
 
 const CELULA = "border border-slate-300 px-2 py-1.5 align-middle";
 
-function CabecalhoColuna({ coluna, linhas }: { coluna: Coluna; linhas: number }) {
+// Valor usado para ordenar a coluna: números pelo valor, opções pelo rótulo mostrado, o resto pelo texto.
+function valorParaOrdenar(coluna: Coluna | undefined, v: string | null | undefined): ValorOrdenavel {
+  if (!coluna || v === null || v === undefined || v === "") return null;
+  if (NUMERICOS.has(coluna.tipo)) {
+    const n = Number(String(v).replace(/[^\d,.-]/g, "").replace(/\.(?=.*[.,])/g, "").replace(",", "."));
+    return Number.isNaN(n) ? v : n;
+  }
+  if (coluna.tipo === "opcoes") return coluna.opcoes?.find((o) => o.valor === v)?.rotulo ?? v;
+  return v;
+}
+
+function CabecalhoColuna({ coluna, linhas, ordem, alternar }: { coluna: Coluna; linhas: number; ordem: Ordem; alternar: (campo: string) => void }) {
   return (
     <th
       rowSpan={linhas}
@@ -112,8 +124,10 @@ function CabecalhoColuna({ coluna, linhas }: { coluna: Coluna; linhas: number })
       }`}
       title={SO_EXIBICAO.has(coluna.tipo) && coluna.tipo !== "situacao" ? "Automático: não é preenchido" : undefined}
     >
-      {coluna.rotulo}
-      {coluna.obrigatorio && <span className="text-red-500"> *</span>}
+      <RotuloOrdenavel campo={coluna.campo} ordem={ordem} alternar={alternar} direita={NUMERICOS.has(coluna.tipo)}>
+        {coluna.rotulo}
+        {coluna.obrigatorio && <span className="text-red-500"> *</span>}
+      </RotuloOrdenavel>
     </th>
   );
 }
@@ -164,6 +178,8 @@ export function Planilha({
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
   const [salvando, iniciar] = useTransition();
+  // Clique no cabeçalho ordena por qualquer coluna.
+  const { ordenada, ordem, alternar } = useOrdenacao(linhas, (l, campo) => valorParaOrdenar(colunas.find((c) => c.campo === campo), l[campo]));
 
   function abrirNovo() {
     const inicial: Record<string, string> = {};
@@ -347,7 +363,7 @@ export function Planilha({
                   </th>
                 ) : (
                   bloco.colunas.map((c) => (
-                    <CabecalhoColuna key={c.campo} coluna={c} linhas={temGrupos ? 2 : 1} />
+                    <CabecalhoColuna key={c.campo} coluna={c} linhas={temGrupos ? 2 : 1} ordem={ordem} alternar={alternar} />
                   ))
                 )
               )}
@@ -362,7 +378,7 @@ export function Planilha({
                 {colunas
                   .filter((c) => c.grupo)
                   .map((c) => (
-                    <CabecalhoColuna key={c.campo} coluna={c} linhas={1} />
+                    <CabecalhoColuna key={c.campo} coluna={c} linhas={1} ordem={ordem} alternar={alternar} />
                   ))}
               </tr>
             )}
@@ -378,7 +394,7 @@ export function Planilha({
               </tr>
             )}
 
-            {linhas.map((linha, i) =>
+            {ordenada.map((linha, i) =>
               editando === linha.id ? (
                 linhaEmEdicao(linha.id, String(i + 1))
               ) : (

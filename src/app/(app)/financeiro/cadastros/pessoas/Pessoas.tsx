@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { formatarDocumento, nomePessoa, REGIMES, soNumeros, type Pessoa } from "@/lib/financeiro";
 import { buscarCnpj, salvarPessoa } from "../../acoes";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, Escolha, Janela, Mensagem, Texto } from "../../componentes";
+import { RotuloOrdenavel, useOrdenacao } from "../../../Ordenacao";
 
 // Cadastro de clientes e fornecedores (a mesma tabela): lista com busca e a janela de inclusão/alteração, que
 // preenche os dados da Receita pelo CNPJ.
@@ -128,6 +129,27 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
         (!b || `${p.razao_social} ${p.nome_fantasia ?? ""}`.toLowerCase().includes(b) || (bd.length >= 3 && (p.documento ?? "").includes(bd)))
     );
   }, [pessoas, busca, filtro]);
+  // Clique no cabeçalho ordena por qualquer coluna.
+  const pix = (p: Pessoa) => (p.chave_pix ? `PIX ${p.chave_pix}` : [p.banco, p.agencia && `ag ${p.agencia}`, p.conta && `cc ${p.conta}`].filter(Boolean).join(" · "));
+  const { ordenada, ordem, alternar } = useOrdenacao(lista, (p, campo) => {
+    switch (campo) {
+      case "nome": return nomePessoa(p);
+      case "documento": return p.documento;
+      case "tipo": return [p.fornecedor && "Fornecedor", p.cliente && "Cliente"].filter(Boolean).join(" e ");
+      case "categoria": return nomeCategoria.get(p.categoria_padrao_id ?? "");
+      case "regime": return p.regime_tributario;
+      case "cidade": return [p.cidade, p.uf].filter(Boolean).join("/");
+      case "pix": return pix(p);
+      default: return null;
+    }
+  });
+  const th = (campo: string, rotulo: string) => (
+    <th className="px-3 py-2" aria-sort={ordem?.campo === campo ? (ordem.desc ? "descending" : "ascending") : undefined}>
+      <RotuloOrdenavel campo={campo} ordem={ordem} alternar={alternar}>
+        {rotulo}
+      </RotuloOrdenavel>
+    </th>
+  );
 
   return (
     <div className="space-y-3">
@@ -146,20 +168,20 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
         <table className="w-full min-w-max text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-600">
             <tr>
-              <th className="px-3 py-2">Nome</th>
-              <th className="px-3 py-2">CPF/CNPJ</th>
-              <th className="px-3 py-2">Tipo</th>
-              <th className="px-3 py-2">Categoria padrão</th>
-              <th className="px-3 py-2">Regime</th>
-              <th className="px-3 py-2">Cidade/UF</th>
-              <th className="px-3 py-2">PIX / banco</th>
+              {th("nome", "Nome")}
+              {th("documento", "CPF/CNPJ")}
+              {th("tipo", "Tipo")}
+              {th("categoria", "Categoria padrão")}
+              {th("regime", "Regime")}
+              {th("cidade", "Cidade/UF")}
+              {th("pix", "PIX / banco")}
               <th className="px-3 py-2">
                 <span className="sr-only">Ações</span>
               </th>
             </tr>
           </thead>
           <tbody>
-            {lista.slice(0, 500).map((p) => (
+            {ordenada.slice(0, 500).map((p) => (
               <tr key={p.id} onClick={() => setEditando(paraForm(p))} className="cursor-pointer border-t border-slate-100 hover:bg-sky-50">
                 <td className="px-3 py-2">
                   <span className="font-medium text-slate-900">{nomePessoa(p)}</span>
@@ -170,7 +192,7 @@ export function Pessoas({ pessoas, categorias }: { pessoas: Pessoa[]; categorias
                 <td className="px-3 py-2">{p.categoria_padrao_id ? (nomeCategoria.get(p.categoria_padrao_id) ?? "") : <span className="text-xs text-amber-700">sem categoria</span>}</td>
                 <td className="px-3 py-2">{p.regime_tributario ?? ""}</td>
                 <td className="px-3 py-2">{[p.cidade, p.uf].filter(Boolean).join("/")}</td>
-                <td className="px-3 py-2 text-xs text-slate-600">{p.chave_pix ? `PIX ${p.chave_pix}` : [p.banco, p.agencia && `ag ${p.agencia}`, p.conta && `cc ${p.conta}`].filter(Boolean).join(" · ")}</td>
+                <td className="px-3 py-2 text-xs text-slate-600">{pix(p)}</td>
                 <td className="px-3 py-2 text-right">
                   <button
                     type="button"

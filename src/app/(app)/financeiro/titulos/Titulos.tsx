@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { proximoDiaUtil } from "@/lib/diasUteis";
 import { dataBr, FORMAS, nomePessoa, reais, SITUACOES, type Titulo, type TipoTitulo } from "@/lib/financeiro";
 import { baixarTitulos, cancelarTitulo, estornarBaixa, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
 import { FormularioPessoa } from "../cadastros/pessoas/Pessoas";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
+import { RotuloOrdenavel, useOrdenacao } from "../../Ordenacao";
 
 // Contas a pagar e a receber (mesma tela): lista com seleção e totais; janela do título (dados, baixas e
 // histórico); janela de baixa, inclusive parcial e de vários títulos de uma vez.
@@ -406,6 +407,32 @@ export function Titulos({
     return titulos.filter((t) => `${nomeDe(t)} ${t.descricao ?? ""} ${t.documento ?? ""} ${nomeCategoria.get(t.categoria_id ?? "") ?? ""}`.toLowerCase().includes(b));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [titulos, busca, nome]);
+  const nomeConta = useMemo(() => new Map(contas.map((c) => [c.id, c.nome])), [contas]);
+  // Clique no cabeçalho ordena por qualquer coluna.
+  const { ordenada, ordem, alternar } = useOrdenacao(lista, (t, campo) => {
+    switch (campo) {
+      case "situacao": return t.situacao;
+      case "vencimento": return t.vencimento;
+      case "previsao": return t.previsao;
+      case "pessoa": return nomeDe(t);
+      case "descricao": return [t.descricao, t.documento && `NF ${t.documento}`].filter(Boolean).join(" · ");
+      case "parcela": return t.parcelas > 1 ? t.parcela : null;
+      case "categoria": return nomeCategoria.get(t.categoria_id ?? "");
+      case "conta": return nomeConta.get(t.conta_id ?? "");
+      case "academia": return nomeAcademia.get(t.academia_id);
+      case "valor": return Number(t.valor);
+      case "pago": return Number(t.pago);
+      case "saldo": return Number(t.saldo);
+      default: return null;
+    }
+  });
+  const th = (campo: string, rotulo: ReactNode, direita = false) => (
+    <th className={`px-2 py-2 ${direita ? "text-right" : ""}`} aria-sort={ordem?.campo === campo ? (ordem.desc ? "descending" : "ascending") : undefined}>
+      <RotuloOrdenavel campo={campo} ordem={ordem} alternar={alternar} direita={direita}>
+        {rotulo}
+      </RotuloOrdenavel>
+    </th>
+  );
   const base = selecionados.size ? lista.filter((t) => selecionados.has(t.id)) : lista;
   const soma = (c: "valor" | "pago" | "saldo") => base.reduce((s, t) => s + Number(t[c]), 0);
   const marcar = (id: string) => {
@@ -450,22 +477,23 @@ export function Titulos({
                   onChange={(e) => setSelecionados(e.target.checked ? new Set(lista.map((t) => t.id)) : new Set())}
                 />
               </th>
-              <th className="px-2 py-2">Situação</th>
-              <th className="px-2 py-2">Vencimento</th>
-              <th className="px-2 py-2">Previsão</th>
-              <th className="px-2 py-2">{tipo === "pagar" ? "Fornecedor" : "Cliente"}</th>
-              <th className="px-2 py-2">Descrição / NF</th>
-              <th className="px-2 py-2">Parcela</th>
-              <th className="px-2 py-2">Categoria</th>
-              {mostrarAcademia && <th className="px-2 py-2">Academia</th>}
-              <th className="px-2 py-2 text-right">Valor</th>
-              <th className="px-2 py-2 text-right">{tipo === "pagar" ? "Pago" : "Recebido"}</th>
-              <th className="px-2 py-2 text-right">Saldo</th>
+              {th("situacao", "Situação")}
+              {th("vencimento", "Vencimento")}
+              {th("previsao", "Previsão")}
+              {th("pessoa", tipo === "pagar" ? "Fornecedor" : "Cliente")}
+              {th("descricao", "Descrição / NF")}
+              {th("parcela", "Parcela")}
+              {th("categoria", "Categoria")}
+              {th("conta", "Conta corrente")}
+              {mostrarAcademia && th("academia", "Academia")}
+              {th("valor", "Valor", true)}
+              {th("pago", tipo === "pagar" ? "Pago" : "Recebido", true)}
+              {th("saldo", "Saldo", true)}
               <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
-            {lista.map((t) => (
+            {ordenada.map((t) => (
               <tr key={t.id} className={`border-t border-slate-100 hover:bg-sky-50 ${selecionados.has(t.id) ? "bg-sky-50/60" : ""} ${t.cancelado ? "text-slate-400 line-through" : ""}`}>
                 <td className="px-3 py-1.5">
                   <input type="checkbox" aria-label="Selecionar" checked={selecionados.has(t.id)} onChange={() => marcar(t.id)} />
@@ -487,6 +515,7 @@ export function Titulos({
                 </td>
                 <td className="px-2 tabular-nums text-slate-500">{t.parcelas > 1 ? `${String(t.parcela).padStart(3, "0")}/${String(t.parcelas).padStart(3, "0")}` : ""}</td>
                 <td className="max-w-56 truncate px-2 text-slate-600">{nomeCategoria.get(t.categoria_id ?? "") ?? ""}</td>
+                <td className="max-w-48 truncate px-2 text-slate-600">{nomeConta.get(t.conta_id ?? "") ?? ""}</td>
                 {mostrarAcademia && <td className="px-2 text-slate-600">{nomeAcademia.get(t.academia_id)}</td>}
                 <td className="px-2 text-right tabular-nums">{reais(t.valor)}</td>
                 <td className="px-2 text-right tabular-nums text-slate-600">{t.pago ? reais(t.pago) : "–"}</td>
@@ -502,7 +531,7 @@ export function Titulos({
             ))}
             {lista.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={14} className="px-3 py-8 text-center text-slate-500">
                   Nenhum título neste filtro.
                 </td>
               </tr>
@@ -511,7 +540,7 @@ export function Titulos({
           {lista.length > 0 && (
             <tfoot className="border-t-2 border-slate-300 bg-slate-50 text-sm font-semibold">
               <tr>
-                <td colSpan={mostrarAcademia ? 9 : 8} className="px-3 py-2 text-slate-600">
+                <td colSpan={mostrarAcademia ? 10 : 9} className="px-3 py-2 text-slate-600">
                   {selecionados.size ? `${base.length} selecionado(s)` : `${lista.length} título(s)`}
                 </td>
                 <td className="px-2 text-right tabular-nums">{reais(soma("valor"))}</td>
