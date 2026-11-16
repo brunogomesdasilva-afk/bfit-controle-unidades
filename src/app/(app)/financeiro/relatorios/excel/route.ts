@@ -16,6 +16,7 @@ export async function GET(request: Request) {
   const { supabase, academias, selecionada } = await contextoAcademias(url.searchParams.get("academia") ?? undefined);
   const tabela = await montarRelatorio(supabase, rel, { academia: selecionada, de, ate, academias });
 
+  if (rel === "base_fluxo") return baseDoFluxo(tabela, de, ate);
   if (rel === "fluxo_pagamentos") return fluxoDePagamentos(tabela, selecionada ? (academias.find((a) => a.id === selecionada)?.nome ?? "") : "Todas", de, ate);
 
   const livro = new ExcelJS.Workbook();
@@ -78,6 +79,30 @@ async function fluxoDePagamentos(tabela: Awaited<ReturnType<typeof montarRelator
   });
   const buffer = await livro.xlsx.writeBuffer();
   const nome = `Fluxo de pagamentos ${academia} ${de} a ${ate}.xlsx`;
+  return new Response(new Uint8Array(buffer as ArrayBuffer), {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(nome)}`,
+      "Cache-Control": "no-store",
+    },
+  });
+}
+
+// Base do fluxo no layout da exportação do Omie (bd_bluefit.xlsx): aba "Fluxo Financeiro", cabeçalho na 1ª linha e
+// uma linha por título, sem título nem totais (a planilha é usada como base de dados).
+async function baseDoFluxo(tabela: Awaited<ReturnType<typeof montarRelatorio>>, de: string, ate: string) {
+  const livro = new ExcelJS.Workbook();
+  const aba = livro.addWorksheet("Fluxo Financeiro");
+  aba.addRow(tabela.colunas.map((c) => c.rotulo)).font = { bold: true };
+  for (const l of tabela.linhas) aba.addRow(l.map((v, j) => (j === 0 && typeof v === "string" && v ? new Date(`${v}T12:00:00Z`) : v)));
+  aba.getColumn(1).numFmt = "dd/mm/yyyy";
+  aba.getColumn(4).numFmt = "#,##0.00";
+  aba.getColumn(5).numFmt = "#,##0.00";
+  tabela.colunas.forEach((c, j) => (aba.getColumn(j + 1).width = j === 0 ? 14 : c.tipo === "moeda" ? 14 : j >= 10 ? 10 : 28));
+  aba.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: tabela.colunas.length } };
+  aba.views = [{ state: "frozen", ySplit: 1 }];
+  const buffer = await livro.xlsx.writeBuffer();
+  const nome = `bd_bluefit ${de} a ${ate}.xlsx`;
   return new Response(new Uint8Array(buffer as ArrayBuffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
