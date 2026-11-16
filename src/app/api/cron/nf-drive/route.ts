@@ -12,6 +12,6 @@ export async function GET(request: Request) {
     return new Response("Não autorizado.", { status: 401 });
   const db = createAdminClient();
   if (!db) return new Response("Chave de serviço não configurada.", { status: 500 });
-  const r = await processarNotasDrive(db, { avisar: true });
+  const r = await processarNotasDrive(db, { avisar: true, automatico: true });
   return Response.json({ aviso: r.aviso, restantes: r.restantes ?? 0, resultados: r.resultados.map((x) => `${x.situacao}: ${x.arquivo}`) });
 }

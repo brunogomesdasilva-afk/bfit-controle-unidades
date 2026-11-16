@@ -16,7 +16,9 @@ const { processarNotasDrive } = await import("../src/lib/nfDrive");
 const db = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 
 console.log("Lendo a pasta de notas fiscais…");
-const r = await processarNotasDrive(db, { avisar: true });
+// Com parâmetro (ex.: "auto", no agendamento do Windows) é execução automática: respeita a caixa "Rodar
+// automaticamente". Dois cliques, sem parâmetro, roda sempre.
+const r = await processarNotasDrive(db, { avisar: true, automatico: process.argv.length > 2 });
 if (r.aviso) console.log(r.aviso);
 const nomes = { lancada: "LANÇADA", ja_lancada: "JÁ LANÇADA", pendente: "PENDENTE", erro: "ERRO" };
 for (const x of r.resultados) console.log(`${nomes[x.situacao]}: ${x.arquivo}${x.destino ? ` → ${x.destino}` : x.motivo ? ` (${x.motivo})` : ""}`);

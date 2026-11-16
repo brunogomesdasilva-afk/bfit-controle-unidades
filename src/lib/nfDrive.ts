@@ -86,10 +86,13 @@ function fonteLocal(pastaNotas: string, pastaContabil: string): FonteNotas {
 
 export type ResultadoNota = { arquivo: string; situacao: "lancada" | "ja_lancada" | "pendente" | "erro"; motivo: string | null; destino?: string };
 
-export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean } = {}) {
+// automatico: execução agendada (19h ou atalho agendado no Windows), que só roda com a caixa "Rodar automaticamente"
+// marcada. Rodar na mão ("Rodar agora" ou dois cliques no atalho) roda sempre.
+export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean; automatico?: boolean } = {}) {
   const inicio = Date.now();
   const { data: config } = await db.from("nf_drive_config").select("*").maybeSingle();
-  if (!config?.ativo) return { resultados: [] as ResultadoNota[], aviso: "Robô desligado." };
+  if (!config) return { resultados: [] as ResultadoNota[], aviso: "As pastas ainda não foram configuradas." };
+  if (opcoes.automatico && !config.ativo) return { resultados: [] as ResultadoNota[], aviso: "Execução automática desligada (caixa \"Rodar automaticamente\" desmarcada)." };
   let fonte: FonteNotas;
   if (caminhoLocal(config.pasta_notas) && caminhoLocal(config.pasta_contabilidade)) {
     // O servidor (Vercel) não enxerga o disco do computador.
