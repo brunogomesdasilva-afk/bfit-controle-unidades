@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { proximoDiaUtil } from "@/lib/diasUteis";
 import { dataBr, FORMAS, nomePessoa, reais, SITUACOES, type Titulo, type TipoTitulo } from "@/lib/financeiro";
-import { baixarTitulos, cancelarTitulo, estornarBaixa, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
+import { baixarTitulos, cancelarTitulo, estornarBaixa, excluirTitulos, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
 import { FormularioPessoa } from "../cadastros/pessoas/Pessoas";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
+import { ITEM_MENU, MenuTresPontos } from "../../MenuTresPontos";
 import { RotuloOrdenavel, useOrdenacao } from "../../Ordenacao";
 
 // Contas a pagar e a receber (mesma tela): lista com seleção e totais; janela do título (dados, baixas e
@@ -46,7 +47,18 @@ function FormularioTitulo({
   novoCadastro: (aoSalvar: (id: string) => void) => void;
   feriados: { data: string; academia_id: string | null }[];
 }) {
-  const [d, setD] = useState(inicial);
+  // Conta padrão: a do Bradesco da academia (ou a primeira dela).
+  const contaPadrao = (academiaId: string) => {
+    const daAcademia = contas.filter((c) => c.academia_id === academiaId);
+    return (daAcademia.find((c) => /bradesco/i.test(c.nome)) ?? daAcademia[0])?.id ?? "";
+  };
+  const diasNaoUteis = (academiaId: string) => new Set(feriados.filter((f) => !f.academia_id || f.academia_id === academiaId).map((f) => f.data));
+  const [d, setD] = useState<Record<string, string>>(() => ({
+    ...inicial,
+    conta_id: inicial.conta_id || (inicial.academia_id ? contaPadrao(inicial.academia_id) : ""),
+    // Previsão de pagamento: o vencimento, ou o próximo dia útil se ele cair em fim de semana ou feriado.
+    previsao: inicial.previsao || (/^\d{4}-\d{2}-\d{2}$/.test(inicial.vencimento ?? "") ? proximoDiaUtil(inicial.vencimento, diasNaoUteis(inicial.academia_id ?? "")) : ""),
+  }));
   const [m, setM] = useState<{ erro?: string; ok?: string } | null>(null);
   const [retencoes, setRetencoes] = useState(["ret_iss", "ret_irrf", "ret_inss", "ret_pis", "ret_cofins", "ret_csll"].some((r) => Number((inicial[r] ?? "0").replace(",", "."))));
   const [ocupado, iniciar] = useTransition();
@@ -55,9 +67,8 @@ function FormularioTitulo({
   // Vencimento que não é dia útil vai para o próximo dia útil (o servidor faz o mesmo ao salvar).
   const [ajuste, setAjuste] = useState<string | null>(null);
   const mudarVencimento = (v: string) => {
-    if (!/^d{4}-d{2}-d{2}$/.test(v)) return setD({ ...d, vencimento: v });
-    const doDia = new Set(feriados.filter((f) => !f.academia_id || f.academia_id === d.academia_id).map((f) => f.data));
-    const util = proximoDiaUtil(v, doDia);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return setD({ ...d, vencimento: v });
+    const util = proximoDiaUtil(v, diasNaoUteis(d.academia_id ?? ""));
     setAjuste(util !== v ? `${dataBr(v)} não é dia útil: o vencimento foi para ${dataBr(util)}.` : null);
     setD({ ...d, vencimento: util, previsao: !d.previsao || d.previsao === d.vencimento ? util : d.previsao });
   };
@@ -77,7 +88,8 @@ function FormularioTitulo({
             rotulo={tipo === "pagar" ? "Fornecedor / favorecido" : "Cliente"}
             pessoas={pessoas}
             valor={d.pessoa_id ?? ""}
-            mudar={(id, p) => setD({ ...d, pessoa_id: id, categoria_id: d.categoria_id || p?.categoria_padrao_id || "" })}
+            // A categoria vem do cadastro do fornecedor/cliente (em branco se ele não tiver).
+            mudar={(id, p) => setD({ ...d, pessoa_id: id, categoria_id: p?.categoria_padrao_id ?? "" })}
             incluir={() => novoCadastro((id) => setD((x) => ({ ...x, pessoa_id: id })))}
           />
         </div>
@@ -86,10 +98,10 @@ function FormularioTitulo({
           {ajuste && <p className="mt-1 text-xs text-amber-700">{ajuste}</p>}
         </div>
         <CampoMoeda rotulo={novo && Number(d.parcelas) > 1 ? "Valor total (dividido nas parcelas)" : "Valor da conta"} {...campo("valor")} className="md:col-span-3" />
-        <Escolha rotulo="Categoria" {...campo("categoria_id")} opcoes={categorias} className="md:col-span-6" />
+        <Escolha rotulo="Categoria *" {...campo("categoria_id")} opcoes={categorias} className="md:col-span-6" />
         <Texto rotulo="Previsão de pagamento" tipo="date" {...campo("previsao")} className="md:col-span-3" />
         <Escolha
-          rotulo="Conta corrente"
+          rotulo="Conta corrente *"
           {...campo("conta_id")}
           opcoes={contas.filter((c) => !d.academia_id || c.academia_id === d.academia_id).map((c) => ({ valor: c.id, rotulo: c.nome }))}
           vazio="—"
@@ -99,7 +111,14 @@ function FormularioTitulo({
       <div className="grid gap-3 border-t border-slate-100 pt-3 md:grid-cols-12">
         <Texto rotulo="Nota fiscal" {...campo("documento")} className="md:col-span-3" />
         <Texto rotulo="Data de registro" tipo="date" {...campo("data_registro")} className="md:col-span-3" />
-        <Escolha rotulo="Academia (projeto)" {...campo("academia_id")} opcoes={academias} className="md:col-span-3" />
+        <Escolha
+          rotulo="Academia (projeto) *"
+          valor={d.academia_id ?? ""}
+          // Trocou a academia: a conta passa a ser a do Bradesco dela, se a escolhida for de outra academia.
+          mudar={(v) => setD({ ...d, academia_id: v, conta_id: contas.find((c) => c.id === d.conta_id)?.academia_id === v ? d.conta_id : contaPadrao(v) })}
+          opcoes={academias}
+          className="md:col-span-3"
+        />
         {novo && (
           <Rotulo texto="Parcelas (mensais)" className="md:col-span-3">
             <input type="number" min={1} max={120} value={d.parcelas ?? "1"} onChange={(e) => setD({ ...d, parcelas: e.target.value })} className={CAMPO} />
@@ -230,12 +249,15 @@ function JanelaTitulo({
   props,
   fechar,
   baixar,
+  copia,
 }: {
   tipo: TipoTitulo;
   titulo: Titulo | null;
   props: Omit<Parameters<typeof FormularioTitulo>[0], "tipo" | "inicial" | "aoSalvar">;
   fechar: () => void;
   baixar: (t: Titulo) => void;
+  // "Duplicar": título novo já preenchido com os dados deste (sem baixas, uma parcela, registro hoje).
+  copia?: Titulo;
 }) {
   const [historico, setHistorico] = useState<Historico | null>(null);
   const [m, setM] = useState<{ erro?: string; ok?: string } | null>(null);
@@ -243,10 +265,19 @@ function JanelaTitulo({
   useEffect(() => {
     if (titulo) historicoTitulo(titulo.id).then(setHistorico);
   }, [titulo]);
+  const comoTexto = (t: Titulo) =>
+    Object.fromEntries(Object.entries(t).map(([k, v]) => [k, typeof v === "number" && (k === "valor" || k.startsWith("ret_")) ? br(v) : v === null || v === undefined ? "" : String(v)]));
   const inicial: Record<string, string> = titulo
-    ? Object.fromEntries(
-        Object.entries(titulo).map(([k, v]) => [k, typeof v === "number" && (k === "valor" || k.startsWith("ret_")) ? br(v) : v === null || v === undefined ? "" : String(v)])
-      )
+    ? comoTexto(titulo)
+    : copia
+      ? Object.fromEntries(
+          Object.entries(comoTexto(copia)).filter(([k]) =>
+            ["academia_id", "pessoa_id", "categoria_id", "conta_id", "descricao", "documento", "valor", "vencimento", "previsao", "observacoes"].includes(k) || k.startsWith("ret_")
+          ).concat([
+            ["parcelas", "1"],
+            ["data_registro", hojeIso()],
+          ])
+        )
     : { parcelas: "1", vencimento: hojeIso(), data_registro: hojeIso(), academia_id: props.academias.length === 1 ? props.academias[0].valor : "" };
   const estornar = (id: string) => {
     if (!window.confirm("Estornar esta baixa? O valor volta para o saldo do título e o lançamento sai do extrato.")) return;
@@ -266,7 +297,7 @@ function JanelaTitulo({
   };
 
   return (
-    <Janela titulo={titulo ? `${tipo === "pagar" ? "Conta a pagar" : "Conta a receber"}${titulo.parcelas > 1 ? ` · parcela ${titulo.parcela}/${titulo.parcelas}` : ""}` : tipo === "pagar" ? "Incluir conta a pagar" : "Incluir conta a receber"} fechar={fechar} largura="max-w-5xl">
+    <Janela titulo={titulo ? `${tipo === "pagar" ? "Conta a pagar" : "Conta a receber"}${titulo.parcelas > 1 ? ` · parcela ${titulo.parcela}/${titulo.parcelas}` : ""}` : `${copia ? "Duplicar" : "Incluir"} conta a ${tipo === "pagar" ? "pagar" : "receber"}`} fechar={fechar} largura="max-w-5xl">
       <div className="space-y-5">
         {titulo && (
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-slate-50 px-4 py-3 text-sm">
@@ -392,7 +423,18 @@ export function Titulos({
 }) {
   const [busca, setBusca] = useState("");
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
-  const [aberto, setAberto] = useState<Titulo | "novo" | null>(null);
+  const [aberto, setAberto] = useState<Titulo | "novo" | { copia: Titulo } | null>(null);
+  const [m, setM] = useState<{ erro?: string; ok?: string } | null>(null);
+  const [excluindo, iniciarExclusao] = useTransition();
+  // Exclui de vez (pede confirmação); título com pagamento registrado não sai (o servidor avisa).
+  const excluir = (ids: string[]) => {
+    if (!ids.length || !window.confirm(ids.length === 1 ? "Excluir este título? Essa ação não pode ser desfeita." : `Excluir os ${ids.length} títulos selecionados? Essa ação não pode ser desfeita.`)) return;
+    iniciarExclusao(async () => {
+      const r = await excluirTitulos(ids);
+      setM(r);
+      if (r.ok) setSelecionados(new Set());
+    });
+  };
   const [baixa, setBaixa] = useState<Titulo[] | null>(null);
   const [cadastro, setCadastro] = useState<((id: string) => void) | null>(null);
   const [listaPessoas, setListaPessoas] = useState(pessoas);
@@ -460,12 +502,19 @@ export function Titulos({
             {tipo === "pagar" ? "Pagar" : "Receber"} {baixaveis.length} selecionado{baixaveis.length > 1 ? "s" : ""}
           </button>
         )}
+        {selecionados.size > 0 && (
+          <button type="button" onClick={() => excluir([...selecionados])} disabled={excluindo} className={`${BOTAO_SECUNDARIO} border-red-300 text-red-700 hover:bg-red-50`}>
+            {excluindo ? "Excluindo…" : `Excluir ${selecionados.size} selecionado${selecionados.size > 1 ? "s" : ""}`}
+          </button>
+        )}
         <button type="button" onClick={() => setAberto("novo")} className={`${BOTAO_PRIMARIO} ml-auto`}>
           + Incluir
         </button>
       </div>
 
-      <div className="overflow-auto rounded-lg border border-slate-200 bg-white">
+      <Mensagem m={m} />
+      {/* A tabela rola pelo mouse/touchpad, sem mostrar a barra de rolagem. */}
+      <div className="sem-barra overflow-auto rounded-lg border border-slate-200 bg-white">
         <table className="w-full min-w-max text-sm">
           <thead className="bg-slate-50 text-left text-xs text-slate-600">
             <tr>
@@ -521,11 +570,21 @@ export function Titulos({
                 <td className="px-2 text-right tabular-nums text-slate-600">{t.pago ? reais(t.pago) : "–"}</td>
                 <td className="px-2 text-right font-medium tabular-nums">{t.saldo ? reais(t.saldo) : "–"}</td>
                 <td className="px-2 text-right">
-                  {t.saldo > 0 && !t.cancelado && (
-                    <button type="button" onClick={() => setBaixa([t])} className="whitespace-nowrap rounded border border-marca/40 px-2 py-0.5 text-xs font-medium text-marca hover:bg-marca hover:text-white">
-                      {tipo === "pagar" ? "Pagar" : "Receber"}
-                    </button>
-                  )}
+                  <span className="flex items-center justify-end gap-1">
+                    {t.saldo > 0 && !t.cancelado && (
+                      <button type="button" onClick={() => setBaixa([t])} className="whitespace-nowrap rounded border border-marca/40 px-2 py-0.5 text-xs font-medium text-marca hover:bg-marca hover:text-white">
+                        {tipo === "pagar" ? "Pagar" : "Receber"}
+                      </button>
+                    )}
+                    <MenuTresPontos rotulo="Mais ações do título">
+                      <button type="button" role="menuitem" onClick={() => setAberto({ copia: t })} className={ITEM_MENU}>
+                        Duplicar
+                      </button>
+                      <button type="button" role="menuitem" onClick={() => excluir([t.id])} className={`${ITEM_MENU} text-red-700 hover:bg-red-50`}>
+                        Excluir
+                      </button>
+                    </MenuTresPontos>
+                  </span>
                 </td>
               </tr>
             ))}
@@ -553,7 +612,16 @@ export function Titulos({
         </table>
       </div>
 
-      {aberto && <JanelaTitulo tipo={tipo} titulo={aberto === "novo" ? null : aberto} props={propsForm} fechar={() => setAberto(null)} baixar={(t) => setBaixa([t])} />}
+      {aberto && (
+        <JanelaTitulo
+          tipo={tipo}
+          titulo={aberto === "novo" || "copia" in aberto ? null : aberto}
+          copia={aberto !== "novo" && "copia" in aberto ? aberto.copia : undefined}
+          props={propsForm}
+          fechar={() => setAberto(null)}
+          baixar={(t) => setBaixa([t])}
+        />
+      )}
       {baixa && <JanelaBaixa tipo={tipo} titulos={baixa} contas={contas} nomeDe={nomeDe} fechar={() => { setBaixa(null); setAberto(null); setSelecionados(new Set()); }} />}
       {cadastro && (
         <FormularioPessoa

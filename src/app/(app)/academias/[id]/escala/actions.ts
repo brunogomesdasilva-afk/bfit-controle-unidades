@@ -28,7 +28,7 @@ export async function gerarEscalaDaUnidade(academiaId: string, opcoes: OpcoesEsc
     data: { user },
   } = await supabase.auth.getUser();
   // As folgas do mês ficam gravadas (substituem as que estavam): a próxima geração, inclusive a automática, usa elas.
-  if (!/^d{4}-(0[1-9]|1[0-2])$/.test(opcoes.mes)) return { erro: "Escolha o mês da escala." };
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(opcoes.mes)) return { erro: "Escolha o mês da escala." };
   const [ano, m] = opcoes.mes.split("-").map(Number);
   const fimMes = new Date(Date.UTC(ano, m, 0)).toISOString().slice(0, 10);
   const { error: erroApagar } = await supabase.from("escala_folgas").delete().eq("academia_id", academiaId).gte("data", `${opcoes.mes}-01`).lte("data", fimMes);
