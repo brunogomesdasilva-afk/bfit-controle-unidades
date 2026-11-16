@@ -27,11 +27,11 @@ export default async function RelatoriosFinanceiroPage({ searchParams }: PagePro
   const mes = hoje().slice(0, 7);
   const somarDias = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
   // Fluxo de pagamentos: por padrão, de hoje aos próximos 7 dias (o lote da semana).
-  const de = p("de") ?? (rel === "fluxo_pagamentos" ? hoje() : rel === "fluxo" ? `${mes.slice(0, 4)}-01-01` : `${mes}-01`);
+  const de = p("de") ?? (rel === "fluxo_pagamentos" ? hoje() : rel === "fluxo" || rel === "base_fluxo" ? `${mes.slice(0, 4)}-01-01` : `${mes}-01`);
   // Último dia do mês atual + n meses.
   const fimDoMes = (n: number) => new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)) + n, 0)).toISOString().slice(0, 10);
   // Padrão: previsto = próximos 3 meses; fluxo realizado = ano até hoje; os demais = mês atual.
-  const ate = p("ate") ?? (rel === "fluxo_pagamentos" ? somarDias(hoje(), 7) : rel === "previsto" ? fimDoMes(2) : rel === "fluxo" ? hoje() : fimDoMes(0));
+  const ate = p("ate") ?? (rel === "fluxo_pagamentos" ? somarDias(hoje(), 7) : rel === "previsto" ? fimDoMes(2) : rel === "fluxo" ? hoje() : rel === "base_fluxo" ? `${mes.slice(0, 4)}-12-31` : fimDoMes(0));
   const tabela = await montarRelatorio(supabase, rel, { academia: selecionada, de, ate, academias });
   const usaDe = rel !== "pagar_aberto" && rel !== "receber_aberto";
   const q = (mudar: Record<string, string | null>) => {

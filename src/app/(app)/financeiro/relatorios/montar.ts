@@ -12,6 +12,7 @@ export const RELATORIOS = {
   recebimentos: "Recebimentos realizados",
   fluxo: "Fluxo de caixa por categoria (realizado)",
   previsto: "Fluxo de caixa previsto (em aberto)",
+  base_fluxo: "Base do fluxo financeiro (layout Omie)",
 } as const;
 export type Relatorio = keyof typeof RELATORIOS;
 export type Celula = string | number | null;
@@ -88,6 +89,66 @@ export async function montarRelatorio(supabase: Supabase, rel: Relatorio, f: { a
       ]),
       totais: ["", "", "", "", "", "", "Total", -sum(ordenados, "valor"), ""],
       nota: `Títulos a pagar com data de pagamento (previsão) de ${f.de.split("-").reverse().join("/")} a ${f.ate.split("-").reverse().join("/")}. Por conta: ${[...porConta].map(([c, v]) => `${c} ${v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`).join(" · ") || "—"}.`,
+    };
+  }
+
+  // Base do fluxo no mesmo layout da exportação do Omie (planilha bd_bluefit, aba "Fluxo Financeiro"): um título por
+  // linha, pela data de previsão, com as mesmas 13 colunas e nos mesmos formatos (a pagar negativo, "N/D" vazio).
+  if (rel === "base_fluxo") {
+    const titulos = await tudo((de, ate) => {
+      let q = supabase
+        .from("fin_titulos_situacao")
+        .select("id, tipo, academia_id, pessoa_id, categoria_id, previsao, vencimento, parcelas, valor, pago, observacoes")
+        .neq("situacao", "cancelado")
+        .or(`and(previsao.gte.${f.de},previsao.lte.${f.ate}),and(previsao.is.null,vencimento.gte.${f.de},vencimento.lte.${f.ate})`)
+        .order("id")
+        .range(de, ate);
+      if (f.academia) q = q.eq("academia_id", f.academia);
+      return q;
+    });
+    const fantasia = new Map(pessoas.map((p) => [p.id, (p.nome_fantasia || p.razao_social) as string]));
+    const MES_INTEIRO = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+    const linhas = titulos
+      .map((x) => ({ ...x, data: (x.previsao ?? x.vencimento) as string }))
+      .sort((a, b) => a.data.localeCompare(b.data) || a.tipo.localeCompare(b.tipo))
+      .map((x) => {
+        const pagar = x.tipo === "pagar";
+        const sinal = pagar ? -1 : 1;
+        const tipo = pagar ? "Contas a Pagar" : "Contas a Receber";
+        return [
+          x.data,
+          pagar ? "2. Contas a Pagar" : "1. Contas a Receber",
+          x.parcelas > 1 ? `${tipo} (repetição)` : pagar ? "Conta a Pagar" : "Conta a Receber",
+          sinal * Number(x.valor),
+          sinal * Number(x.pago),
+          academia.get(x.academia_id) ?? "N/D",
+          (x.observacoes as string | null)?.trim() || "N/D",
+          categoria.get(x.categoria_id)?.nome ?? "N/D",
+          fantasia.get(x.pessoa_id) ?? "N/D",
+          categoria.get(x.categoria_id)?.grupo ?? "N/D",
+          Number(x.data.slice(0, 4)),
+          Number(x.data.slice(8, 10)),
+          MES_INTEIRO[Number(x.data.slice(5, 7)) - 1],
+        ] as Celula[];
+      });
+    return {
+      colunas: [
+        { rotulo: "Data de Previsão (completa)", tipo: "data" },
+        { rotulo: "Tipo", tipo: "texto" },
+        { rotulo: "Origem", tipo: "texto" },
+        { rotulo: "Valor da Conta", tipo: "moeda" },
+        { rotulo: "Pago ou Recebido", tipo: "moeda" },
+        { rotulo: "Projeto", tipo: "texto" },
+        { rotulo: "Observação da Conta", tipo: "texto" },
+        { rotulo: "Categoria", tipo: "texto" },
+        { rotulo: "Cliente ou Fornecedor (Nome Fantasia)", tipo: "texto" },
+        { rotulo: "Grupo", tipo: "texto" },
+        { rotulo: "Data de Previsão.Ano", tipo: "texto" },
+        { rotulo: "Data de Previsão.Dia", tipo: "texto" },
+        { rotulo: "Data de Previsão.Mês", tipo: "texto" },
+      ],
+      linhas,
+      nota: `${linhas.length} títulos (contas a pagar e a receber, sem os cancelados) com data de previsão de ${f.de.split("-").reverse().join("/")} a ${f.ate.split("-").reverse().join("/")}.`,
     };
   }
 
