@@ -157,6 +157,7 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
   if (!dados.academia_id) return { erro: "Escolha a academia (projeto)." };
   if (!dados.pessoa_id) return { erro: tipo === "pagar" ? "Escolha o fornecedor." : "Escolha o cliente." };
   if (!dados.categoria_id) return { erro: "Escolha a categoria." };
+  if (!dados.conta_id) return { erro: "Escolha a conta corrente." };
   const datas = { previsao: lerData(dados.previsao), data_registro: lerData(dados.data_registro) };
   if (Object.values(datas).some((d) => d === undefined)) return { erro: "Alguma data está inválida." };
   const retencoes: Record<string, number> = {};
@@ -327,6 +328,21 @@ export async function cancelarTitulo(id: string, cancelar: boolean): Promise<Res
   if (error) return { erro: mensagemErro(error) };
   atualizar();
   return { ok: cancelar ? "Título cancelado." : "Título reativado." };
+}
+
+// Exclui títulos de vez (seleção na lista ou menu da linha). Título com pagamento/recebimento registrado não sai:
+// estorne as baixas antes, para o extrato da conta não ficar com lançamento sem origem.
+export async function excluirTitulos(ids: string[]): Promise<ResultadoFin> {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  if (!ids.length) return { erro: "Selecione os títulos." };
+  const { data: comBaixa } = await a.supabase.from("fin_baixas").select("titulo_id").in("titulo_id", ids);
+  const bloqueados = new Set((comBaixa ?? []).map((b) => b.titulo_id as string));
+  if (bloqueados.size) return { erro: `${bloqueados.size === 1 ? "1 título tem" : `${bloqueados.size} títulos têm`} pagamento registrado. Estorne as baixas antes de excluir.` };
+  const { error } = await a.supabase.from("fin_titulos").delete().in("id", ids);
+  if (error) return { erro: mensagemErro(error) };
+  atualizar();
+  return { ok: ids.length === 1 ? "Título excluído." : `${ids.length} títulos excluídos.` };
 }
 
 // ------------------------------------------------------------------------------------------- Baixas

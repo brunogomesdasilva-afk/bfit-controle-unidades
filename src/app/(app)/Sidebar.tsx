@@ -358,17 +358,6 @@ const TODOS: ItemMenu[] = [
         ],
       },
       {
-        href: "/financeiro/pagar",
-        rotulo: "Contas a pagar",
-        ativo: (p: string) => p === "/financeiro/pagar",
-        icone: (
-          <Icone>
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <polyline points="19 12 12 19 5 12" />
-          </Icone>
-        ),
-      },
-      {
         href: "/financeiro/nf",
         rotulo: "Importar NF",
         ativo: (p: string) => p === "/financeiro/nf",
@@ -378,6 +367,17 @@ const TODOS: ItemMenu[] = [
             <polyline points="14 2 14 8 20 8" />
             <line x1="12" y1="18" x2="12" y2="12" />
             <polyline points="9 15 12 12 15 15" />
+          </Icone>
+        ),
+      },
+      {
+        href: "/financeiro/pagar",
+        rotulo: "Contas a pagar",
+        ativo: (p: string) => p === "/financeiro/pagar",
+        icone: (
+          <Icone>
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <polyline points="19 12 12 19 5 12" />
           </Icone>
         ),
       },

@@ -45,3 +45,11 @@ body {
     font-size: 16px !important;
   }
 }
+
+/* Área que rola pelo mouse/touchpad sem mostrar a barra de rolagem (ex.: lista do contas a pagar). */
+.sem-barra {
+  scrollbar-width: none;
+}
+.sem-barra::-webkit-scrollbar {
+  display: none;
+}
