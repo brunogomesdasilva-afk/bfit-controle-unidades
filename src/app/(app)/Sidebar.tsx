@@ -550,6 +550,19 @@ const TODOS: ItemMenu[] = [
         ),
       },
       {
+        href: "/admin/notas-drive",
+        rotulo: "Notas do Drive",
+        somenteAdmin: true,
+        ativo: (p: string) => p === "/admin/notas-drive",
+        icone: (
+          <Icone>
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+            <path d="M9 14h6" />
+            <path d="M12 11v6" />
+          </Icone>
+        ),
+      },
+      {
         href: "/admin/cadastro",
         rotulo: "Cadastro",
         somenteAdmin: true,
