@@ -32,7 +32,7 @@ export async function salvarPastas(dados: { notas: string; contabilidade: string
     });
     if (error) return { erro: error.message };
     revalidatePath("/admin/notas-drive");
-    return { ok: "Pastas do computador gravadas. O robô roda no computador, pelo atalho rodar-notas-do-computador.bat." };
+    return { ok: "Pastas do computador gravadas. O Rodar agora funciona com o sistema aberto no computador (iniciar-sistema.bat)." };
   }
   const nomes: string[] = [];
   for (const [rotulo, link] of [

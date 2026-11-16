@@ -44,6 +44,8 @@ export async function salvarPessoa(id: string | null, dados: Record<string, stri
   const registro: Record<string, string | boolean | null> = {};
   for (const c of CAMPOS_PESSOA) registro[c] = texto(dados[c], c === "observacoes" ? 1000 : 200);
   if (!registro.razao_social) return { erro: "Informe a razão social (ou o nome, se for pessoa física)." };
+  // Nomes sempre em maiúsculas (padrão do cadastro).
+  for (const c of ["razao_social", "nome_fantasia"]) if (typeof registro[c] === "string") registro[c] = (registro[c] as string).toLocaleUpperCase("pt-BR");
   registro.documento = documento || null;
   registro.tipo_pessoa = documento.length === 11 ? "PF" : "PJ";
   registro.cliente = dados.cliente === "sim";
@@ -235,8 +237,8 @@ export async function cadastrarFornecedorDaNota(f: FornecedorDaNota, categoriaId
     .insert({
       documento: doc || null,
       tipo_pessoa: doc.length === 11 ? "PF" : "PJ",
-      razao_social: texto(f.razao_social, 200) ?? "Fornecedor",
-      nome_fantasia: texto(f.nome_fantasia ?? undefined, 200),
+      razao_social: (texto(f.razao_social, 200) ?? "Fornecedor").toLocaleUpperCase("pt-BR"),
+      nome_fantasia: texto(f.nome_fantasia ?? undefined, 200)?.toLocaleUpperCase("pt-BR") ?? null,
       regime_tributario: regime,
       cnae: texto(f.cnae ?? undefined, 200),
       cidade: texto(f.cidade ?? undefined, 100),

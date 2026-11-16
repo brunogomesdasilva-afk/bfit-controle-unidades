@@ -7,7 +7,8 @@ import { baixar, idDaPasta, listarPdfs, moverRenomear, pastaFilha } from "@/lib/
 import { titulosDaNota } from "@/lib/lancarNota";
 import { lerNotaFiscal, type NotaLida } from "@/lib/lerNotaFiscal";
 
-// Robô das notas do Google Drive (todo dia às 19h, e pelo botão "Rodar agora" em Administrador > Notas do Drive):
+// Robô das notas fiscais (só quando o Bruno clica em "Rodar agora" em Administrador > Notas do Drive, sem execução
+// automática):
 // 1. lê cada PDF da pasta de notas fiscais;
 // 2. lança no contas a pagar (academia pelo CNPJ do tomador, fornecedor e categoria padrão do cadastro,
 //    vencimentos da nota);
@@ -17,9 +18,9 @@ import { lerNotaFiscal, type NotaLida } from "@/lib/lerNotaFiscal";
 // vencimento) fica na pasta e entra no aviso do dia. A leitura do PDF fica guardada: a mesma nota pendente não é
 // lida (nem paga) de novo enquanto o arquivo não mudar.
 //
-// As pastas podem ser do Google Drive (link da pasta: roda no servidor, às 19h) ou do computador (caminho como
-// C:\Users\...: roda no próprio computador, pelo atalho scripts/notas-locais.mts, porque o servidor não enxerga o
-// disco local).
+// As pastas podem ser do Google Drive (link da pasta: o site na internet roda) ou do computador (caminho como
+// C:\Users\...: só roda no próprio computador, com o sistema aberto pelo iniciar-sistema.bat ou pelo atalho
+// rodar-notas-do-computador.bat, porque o site na internet não enxerga o disco local).
 
 const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const LIMITE_MS = 11 * 60 * 1000; // o resto fica para a próxima execução
@@ -86,14 +87,18 @@ function fonteLocal(pastaNotas: string, pastaContabil: string): FonteNotas {
 
 export type ResultadoNota = { arquivo: string; situacao: "lancada" | "ja_lancada" | "pendente" | "erro"; motivo: string | null; destino?: string };
 
+// Pastas do computador só podem ser lidas quando o sistema roda no próprio computador (não no site da Vercel).
+export const SEM_DISCO_LOCAL =
+  "As pastas são do computador e o site na internet não enxerga o seu disco. Abra o sistema pelo iniciar-sistema.bat (no computador) e clique em Rodar agora, ou dê dois cliques em rodar-notas-do-computador.bat.";
+export const rodaComPastasLocais = () => !process.env.VERCEL;
+
 export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean } = {}) {
   const inicio = Date.now();
   const { data: config } = await db.from("nf_drive_config").select("*").maybeSingle();
-  if (!config?.ativo) return { resultados: [] as ResultadoNota[], aviso: "Robô desligado." };
+  if (!config) return { resultados: [] as ResultadoNota[], aviso: "As pastas ainda não foram configuradas." };
   let fonte: FonteNotas;
   if (caminhoLocal(config.pasta_notas) && caminhoLocal(config.pasta_contabilidade)) {
-    // O servidor (Vercel) não enxerga o disco do computador.
-    if (process.env.VERCEL) return { resultados: [] as ResultadoNota[], aviso: "As pastas são do computador: o robô roda lá, pelo atalho rodar-notas-do-computador.bat." };
+    if (!rodaComPastasLocais()) return { resultados: [] as ResultadoNota[], aviso: SEM_DISCO_LOCAL };
     fonte = fonteLocal(config.pasta_notas.trim(), config.pasta_contabilidade.trim());
   } else {
     const pastaNotas = idDaPasta(config.pasta_notas);

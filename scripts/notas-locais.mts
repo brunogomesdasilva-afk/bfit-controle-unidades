@@ -1,6 +1,6 @@
 // Robô das notas fiscais com pastas do COMPUTADOR (Administrador > Notas do Drive, com caminhos como C:\Users\...):
-// o sistema na internet não enxerga o disco local, então este atalho faz no computador o mesmo que o robô das 19h
-// faz com o Google Drive: lê cada PDF da pasta de notas, lança no contas a pagar e move a nota renomeada para a
+// o sistema na internet não enxerga o disco local, então este atalho faz no computador o mesmo que o botão "Rodar
+// agora" faz com o Google Drive: lê cada PDF da pasta de notas, lança no contas a pagar e move a nota renomeada para a
 // pasta da contabilidade (ano / mês da emissão / academia). Usa as chaves do .env.local.
 // Uso: npx tsx scripts/notas-locais.mts   (ou dois cliques em rodar-notas-do-computador.bat)
 import fs from "node:fs";

@@ -556,15 +556,15 @@ export function Titulos({
                 <td className="cursor-pointer px-2 tabular-nums text-slate-500" onClick={() => setAberto(t)}>
                   {t.previsao && t.previsao !== t.vencimento ? dataBr(t.previsao) : ""}
                 </td>
-                <td className="max-w-64 cursor-pointer truncate px-2 font-medium text-slate-900" onClick={() => setAberto(t)}>
+                <td className="max-w-44 cursor-pointer truncate px-2 font-medium text-slate-900" title={nomeDe(t)} onClick={() => setAberto(t)}>
                   {nomeDe(t)}
                 </td>
-                <td className="max-w-72 cursor-pointer truncate px-2 text-slate-600" onClick={() => setAberto(t)}>
+                <td className="max-w-48 cursor-pointer truncate px-2 text-slate-600" title={[t.descricao, t.documento && `NF ${t.documento}`].filter(Boolean).join(" · ")} onClick={() => setAberto(t)}>
                   {[t.descricao, t.documento && `NF ${t.documento}`].filter(Boolean).join(" · ")}
                 </td>
                 <td className="px-2 tabular-nums text-slate-500">{t.parcelas > 1 ? `${String(t.parcela).padStart(3, "0")}/${String(t.parcelas).padStart(3, "0")}` : ""}</td>
-                <td className="max-w-56 truncate px-2 text-slate-600">{nomeCategoria.get(t.categoria_id ?? "") ?? ""}</td>
-                <td className="max-w-48 truncate px-2 text-slate-600">{nomeConta.get(t.conta_id ?? "") ?? ""}</td>
+                <td className="max-w-40 truncate px-2 text-slate-600" title={nomeCategoria.get(t.categoria_id ?? "") ?? ""}>{nomeCategoria.get(t.categoria_id ?? "") ?? ""}</td>
+                <td className="max-w-32 truncate px-2 text-slate-600" title={nomeConta.get(t.conta_id ?? "") ?? ""}>{nomeConta.get(t.conta_id ?? "") ?? ""}</td>
                 {mostrarAcademia && <td className="px-2 text-slate-600">{nomeAcademia.get(t.academia_id)}</td>}
                 <td className="px-2 text-right tabular-nums">{reais(t.valor)}</td>
                 <td className="px-2 text-right tabular-nums text-slate-600">{t.pago ? reais(t.pago) : "–"}</td>

@@ -1,14 +1,14 @@
 import { exigirAdmin } from "@/lib/auth";
 import { driveConfigurado, emailDaContaDeServico } from "@/lib/googleDrive";
-import { caminhoLocal, type ResultadoNota } from "@/lib/nfDrive";
+import { caminhoLocal, rodaComPastasLocais, SEM_DISCO_LOCAL, type ResultadoNota } from "@/lib/nfDrive";
 import { createClient } from "@/lib/supabase/server";
 import { FormNotasDrive, Situacao } from "./FormNotasDrive";
 
 // "Rodar agora" lê as notas com o Claude, uma a uma.
 export const maxDuration = 800;
 
-// Administrador > Notas do Drive: as duas pastas do Google Drive do robô das notas fiscais (todo dia às 19h) e o
-// histórico do que ele fez com cada arquivo.
+// Administrador > Notas do Drive: as duas pastas do robô das notas fiscais (Google Drive ou computador), o botão
+// "Rodar agora" (não há execução automática) e o histórico do que ele fez com cada arquivo.
 export default async function NotasDrivePage() {
   await exigirAdmin();
   const supabase = await createClient();
@@ -25,19 +25,20 @@ export default async function NotasDrivePage() {
       <div>
         <h1 className="text-lg font-semibold text-slate-900">Notas do Drive</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Todo dia às 19h o sistema lê os PDFs da pasta de notas fiscais, lança cada nota no contas a pagar e, depois de lançada, move a nota para a
+          Ao clicar em <strong>Rodar agora</strong>, o sistema lê os PDFs da pasta de notas fiscais, lança cada nota no contas a pagar e, depois de lançada, move a nota para a
           pasta da contabilidade, em <strong>ano / mês da emissão / academia</strong>, com o nome &quot;NF número - fornecedor - R$ valor - venc
           data&quot;. Nota que não dá para lançar sozinha (fornecedor sem cadastro ou sem categoria, tomador que não é academia, sem vencimento) fica
-          na pasta e vai no e-mail de resumo do dia.
+          na pasta e aparece no resultado e no e-mail de resumo.
         </p>
       </div>
 
       {local ? (
         <div className="rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-900">
           <p>
-            <strong>Pastas do computador.</strong> O sistema na internet não enxerga o seu disco, então o robô roda no próprio computador: dê dois cliques
-            em <code className="font-medium">rodar-notas-do-computador.bat</code>, na pasta do projeto (ou deixe agendado no Windows às 19h). O resultado
-            aparece no histórico abaixo e no e-mail de resumo. Para usar o Google Drive depois, troque os caminhos pelos links das pastas.
+            <strong>Pastas do computador.</strong> O site na internet não enxerga o seu disco: o botão Rodar agora funciona com o sistema aberto no próprio
+            computador (pelo <code className="font-medium">iniciar-sistema.bat</code>, em localhost:3001). Outra forma: dois cliques em{" "}
+            <code className="font-medium">rodar-notas-do-computador.bat</code>, na pasta do projeto. O resultado aparece no histórico abaixo. Para usar o
+            Google Drive depois, troque os caminhos pelos links das pastas.
           </p>
         </div>
       ) : !driveConfigurado() ? (
@@ -53,7 +54,8 @@ export default async function NotasDrivePage() {
 
       <FormNotasDrive
         inicial={{ notas: config?.pasta_notas ?? "", contabilidade: config?.pasta_contabilidade ?? "", ativo: config?.ativo ?? true }}
-        podeRodar={!local && driveConfigurado() && Boolean(config?.pasta_notas && config?.pasta_contabilidade)}
+        podeRodar={Boolean(config?.pasta_notas && config?.pasta_contabilidade) && (local ? rodaComPastasLocais() : driveConfigurado())}
+        motivoSemRodar={!config?.pasta_notas || !config?.pasta_contabilidade ? "Salve as duas pastas primeiro." : local ? SEM_DISCO_LOCAL : "O acesso ao Google Drive ainda não foi configurado."}
       />
 
       <section className="space-y-2">

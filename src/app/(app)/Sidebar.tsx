@@ -1019,7 +1019,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-2">
+      <nav className="sem-barra flex-1 space-y-1 overflow-y-auto overflow-x-hidden p-2">
         {itens.map((item) => {
           // Com o submenu fechado, o item pai fica destacado se a página atual estiver dentro dele.
           const estaAberto = submenuAberto === item.href;
