@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
 import { idDaPasta, nomeDaPasta } from "@/lib/googleDrive";
-import { processarNotasDrive, type ResultadoNota } from "@/lib/nfDrive";
+import { caminhoLocal, processarNotasDrive, type ResultadoNota } from "@/lib/nfDrive";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -16,6 +16,24 @@ async function soAdmin() {
 export async function salvarPastas(dados: { notas: string; contabilidade: string; ativo: boolean }): Promise<{ erro?: string; ok?: string }> {
   const atual = await soAdmin();
   if (!atual) return { erro: "Só o administrador altera esta configuração." };
+  const locais = [dados.notas, dados.contabilidade].filter((c) => caminhoLocal(c)).length;
+  if (locais === 1) return { erro: "As duas pastas precisam ser do mesmo lugar: as duas do computador ou as duas do Google Drive." };
+  // Pastas do computador: o servidor não consegue abri-las para conferir; quem confere é o atalho no computador.
+  if (locais === 2) {
+    if (dados.notas.trim().toLowerCase() === dados.contabilidade.trim().toLowerCase()) return { erro: "As duas pastas precisam ser diferentes." };
+    const supabase = await createClient();
+    const { error } = await supabase.from("nf_drive_config").upsert({
+      id: true,
+      pasta_notas: dados.notas.trim(),
+      pasta_contabilidade: dados.contabilidade.trim(),
+      ativo: dados.ativo,
+      atualizado_em: new Date().toISOString(),
+      atualizado_por: atual.id,
+    });
+    if (error) return { erro: error.message };
+    revalidatePath("/admin/notas-drive");
+    return { ok: "Pastas do computador gravadas. O robô roda no computador, pelo atalho rodar-notas-do-computador.bat." };
+  }
   const nomes: string[] = [];
   for (const [rotulo, link] of [
     ["notas fiscais", dados.notas],
