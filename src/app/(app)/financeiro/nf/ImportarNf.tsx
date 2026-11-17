@@ -250,7 +250,12 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
             <Escolha rotulo="Academia (tomador)" valor={d.academia_id ?? ""} mudar={(v) => mudar("academia_id", v)} opcoes={academias} className="md:col-span-3" />
             <Texto rotulo="Nota fiscal" valor={d.documento ?? ""} mudar={(v) => mudar("documento", v)} className="md:col-span-3" />
             <div className="md:col-span-6">
-              <Escolha rotulo="Categoria" valor={d.categoria_id ?? ""} mudar={(v) => mudar("categoria_id", v)} opcoes={categorias} />
+              <Escolha
+                rotulo={leitura.fornecedor.categoria_padrao_id ? "Categoria" : "Categoria * (fica gravada no fornecedor)"}
+                valor={d.categoria_id ?? ""}
+                mudar={(v) => mudar("categoria_id", v)}
+                opcoes={categorias}
+              />
             </div>
             <Escolha
               rotulo="Conta corrente"

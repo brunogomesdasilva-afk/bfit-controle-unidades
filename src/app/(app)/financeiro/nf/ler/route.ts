@@ -1,10 +1,11 @@
 import { getPerfilAtual, temModulo } from "@/lib/auth";
 import { consultarCnpj } from "@/lib/consultaCnpj";
+import { fornecedorDaNota } from "@/lib/fornecedorDaNota";
 import { lerNotaFiscal } from "@/lib/lerNotaFiscal";
 import { createClient } from "@/lib/supabase/server";
 
-// Recebe o PDF da nota, lê com o Claude e cruza com os cadastros: de qual academia é (CNPJ do tomador), se o
-// fornecedor já está cadastrado (CNPJ do emitente, com a categoria padrão dele) e se a nota já foi lançada.
+// Recebe o PDF da nota, lê com o Claude e cruza com os cadastros: de qual academia é (CNPJ do tomador), o fornecedor
+// (cadastrado ou completado pelo CNPJ do emitente, com a categoria padrão dele) e se a nota já foi lançada.
 export const maxDuration = 120;
 
 const LIMITE = 4 * 1024 * 1024;
@@ -22,16 +23,24 @@ export async function POST(request: Request) {
   if (!nota) return Response.json({ erro }, { status: 422 });
 
   const supabase = await createClient();
-  const [{ data: academias }, { data: fornecedor }] = await Promise.all([
-    supabase.from("academias").select("id, nome, cnpj"),
-    nota.emitente.documento ? supabase.from("fin_pessoas").select("id, razao_social, nome_fantasia, categoria_padrao_id, regime_tributario").eq("documento", nota.emitente.documento).maybeSingle() : Promise.resolve({ data: null }),
-  ]);
+  const { data: academias } = await supabase.from("academias").select("id, nome, cnpj");
+  // Fornecedor: cadastrado agora com o CNPJ e os dados da nota e da Receita, se não existir; se existir com o
+  // cadastro incompleto, os campos vazios são preenchidos. Só a categoria é escolhida na tela.
+  let fornecedor = null;
+  if (nota.emitente.documento) {
+    try {
+      const f = await fornecedorDaNota(supabase, nota);
+      fornecedor = { id: f.id, razao_social: f.razao_social, nome_fantasia: f.nome_fantasia, categoria_padrao_id: f.categoria_padrao_id, regime_tributario: f.regime_tributario };
+    } catch (e) {
+      return Response.json({ erro: e instanceof Error ? e.message : String(e) }, { status: 500 });
+    }
+  }
   const academia = (academias ?? []).find((a) => a.cnpj && a.cnpj === nota.tomador.documento) ?? null;
   const { data: repetidas } = fornecedor
     ? await supabase.from("fin_titulos").select("id, vencimento, valor, academia_id").eq("pessoa_id", fornecedor.id).eq("documento", nota.numero).eq("cancelado", false)
     : { data: [] };
-  // Fornecedor novo: dados da Receita para o cadastro automático.
-  const receita = !fornecedor && nota.emitente.documento.length === 14 ? await consultarCnpj(nota.emitente.documento) : null;
+  // Situação na Receita (aviso na tela se não estiver ativa).
+  const receita = nota.emitente.documento.length === 14 ? await consultarCnpj(nota.emitente.documento) : null;
 
   return Response.json({
     nota,

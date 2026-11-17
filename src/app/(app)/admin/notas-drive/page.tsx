@@ -1,8 +1,10 @@
 import { exigirAdmin } from "@/lib/auth";
 import { driveConfigurado, emailDaContaDeServico } from "@/lib/googleDrive";
+import type { NotaLida } from "@/lib/lerNotaFiscal";
 import { caminhoLocal, rodaComPastasLocais, SEM_DISCO_LOCAL, type ResultadoNota } from "@/lib/nfDrive";
 import { createClient } from "@/lib/supabase/server";
 import { FormNotasDrive, Situacao } from "./FormNotasDrive";
+import { Pendentes, type NotaPendente } from "./Pendentes";
 
 // "Rodar agora" lê as notas com o Claude, uma a uma.
 export const maxDuration = 800;
@@ -12,10 +14,39 @@ export const maxDuration = 800;
 export default async function NotasDrivePage() {
   await exigirAdmin();
   const supabase = await createClient();
-  const [{ data: config }, { data: log }] = await Promise.all([
+  const [{ data: config }, { data: log }, { data: recentes }, { data: categorias }, { data: academias }] = await Promise.all([
     supabase.from("nf_drive_config").select("*").maybeSingle(),
     supabase.from("nf_drive_log").select("executado_em, arquivo, situacao, motivo, destino").order("executado_em", { ascending: false }).limit(100),
+    // Para as pendentes: a última passagem de cada arquivo.
+    supabase.from("nf_drive_log").select("drive_id, arquivo, situacao, motivo, nota, academia_id").order("executado_em", { ascending: false }).limit(1000),
+    supabase.from("fin_categorias").select("id, nome, fin_grupos(nome)").eq("tipo", "despesa").eq("ativo", true).order("nome"),
+    supabase.from("academias").select("id, nome"),
   ]);
+  // Notas pendentes que dá para resolver na tela (falta categoria e/ou vencimento; tomador já identificado).
+  const ultimos = new Map<string, NonNullable<typeof recentes>[number]>();
+  for (const l of recentes ?? []) if (!ultimos.has(l.drive_id as string)) ultimos.set(l.drive_id as string, l);
+  const abertas = [...ultimos.values()].filter((l) => l.situacao === "pendente" && l.nota && l.academia_id);
+  const documentos = abertas.map((l) => (l.nota as NotaLida).emitente.documento).filter(Boolean);
+  const { data: fornecedores } = documentos.length
+    ? await supabase.from("fin_pessoas").select("documento, razao_social, nome_fantasia, categoria_padrao_id").in("documento", documentos)
+    : { data: [] };
+  const pendentes: NotaPendente[] = abertas.map((l) => {
+    const n = l.nota as NotaLida;
+    const f = (fornecedores ?? []).find((x) => x.documento === n.emitente.documento);
+    return {
+      arquivoId: l.drive_id as string,
+      arquivo: l.arquivo as string,
+      fornecedor: (f?.nome_fantasia || f?.razao_social || n.emitente.razao_social) as string,
+      academia: (academias ?? []).find((a) => a.id === l.academia_id)?.nome ?? "",
+      numero: n.numero,
+      emissao: n.data_emissao,
+      valor: n.valor_liquido || n.valor_total,
+      categoriaId: (f?.categoria_padrao_id as string | null) ?? null,
+      semVencimento: !n.duplicatas.length,
+      motivo: (l.motivo as string | null) ?? "",
+    };
+  });
+  const opcoesCategoria = (categorias ?? []).map((c) => ({ valor: c.id as string, rotulo: c.nome as string, grupo: (c.fin_grupos as unknown as { nome: string } | null)?.nome }));
   const conta = emailDaContaDeServico();
   const local = caminhoLocal(config?.pasta_notas) && caminhoLocal(config?.pasta_contabilidade);
   const quando = (d: string) => new Date(d).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" });
@@ -27,7 +58,7 @@ export default async function NotasDrivePage() {
         <p className="mt-1 text-sm text-slate-500">
           Ao clicar em <strong>Rodar agora</strong>, o sistema lê os PDFs da pasta de notas fiscais, lança cada nota no contas a pagar e, depois de lançada, move a nota para a
           pasta da contabilidade, em <strong>ano / mês da emissão / academia</strong>, com o nome &quot;NF número - fornecedor - R$ valor - venc
-          data&quot;. Nota que não dá para lançar sozinha (fornecedor sem cadastro ou sem categoria, tomador que não é academia, sem vencimento) fica
+          data&quot;. Fornecedor novo é cadastrado com os dados da nota e da Receita. Se faltar a categoria do fornecedor ou o vencimento, a nota fica em Notas pendentes para você informar e lançar. A que não é de nenhuma academia (tomador) fica
           na pasta e aparece no resultado e no e-mail de resumo.
         </p>
       </div>
@@ -56,6 +87,13 @@ export default async function NotasDrivePage() {
         inicial={{ notas: config?.pasta_notas ?? "", contabilidade: config?.pasta_contabilidade ?? "", ativo: config?.ativo ?? true }}
         podeRodar={Boolean(config?.pasta_notas && config?.pasta_contabilidade) && (local ? rodaComPastasLocais() : driveConfigurado())}
         motivoSemRodar={!config?.pasta_notas || !config?.pasta_contabilidade ? "Salve as duas pastas primeiro." : local ? SEM_DISCO_LOCAL : "O acesso ao Google Drive ainda não foi configurado."}
+      />
+
+      <Pendentes
+        pendentes={pendentes}
+        categorias={opcoesCategoria}
+        podeLancar={local ? rodaComPastasLocais() : driveConfigurado()}
+        motivoSemLancar={local ? SEM_DISCO_LOCAL : "O acesso ao Google Drive ainda não foi configurado."}
       />
 
       <section className="space-y-2">
