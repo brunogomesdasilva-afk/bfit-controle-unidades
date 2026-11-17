@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { feriadosDaAcademia } from "@/lib/diasUteis";
 import { emailConfigurado, emailDeRelatorio, enviarEmail } from "@/lib/email";
 import { baixar, idDaPasta, listarPdfs, moverRenomear, pastaFilha } from "@/lib/googleDrive";
+import { fornecedorDaNota } from "@/lib/fornecedorDaNota";
 import { titulosDaNota } from "@/lib/lancarNota";
 import { lerNotaFiscal, type NotaLida } from "@/lib/lerNotaFiscal";
 
@@ -92,32 +93,33 @@ export const SEM_DISCO_LOCAL =
   "As pastas são do computador e o site na internet não enxerga o seu disco. Abra o sistema pelo iniciar-sistema.bat (no computador) e clique em Rodar agora, ou dê dois cliques em rodar-notas-do-computador.bat.";
 export const rodaComPastasLocais = () => !process.env.VERCEL;
 
-export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean } = {}) {
-  const inicio = Date.now();
+// O que a tela "Notas pendentes" informa quando a nota não traz: categoria (fica gravada no fornecedor) e vencimento.
+export type Complementos = { categoriaId?: string; vencimento?: string };
+
+// Conta padrão do lançamento: a do Bradesco da academia (ou a primeira conta ativa dela).
+async function contaPadrao(db: SupabaseClient, academiaId: string) {
+  const { data } = await db.from("fin_contas").select("id, nome").eq("academia_id", academiaId).eq("ativa", true);
+  return ((data ?? []).find((c) => /bradesco/i.test(c.nome as string)) ?? data?.[0])?.id ?? null;
+}
+
+// As pastas configuradas na tela (Drive ou computador), prontas para ler e mover; ou o aviso do que falta.
+async function preparar(db: SupabaseClient) {
   const { data: config } = await db.from("nf_drive_config").select("*").maybeSingle();
-  if (!config) return { resultados: [] as ResultadoNota[], aviso: "As pastas ainda não foram configuradas." };
+  if (!config) return { aviso: "As pastas ainda não foram configuradas." };
   let fonte: FonteNotas;
   if (caminhoLocal(config.pasta_notas) && caminhoLocal(config.pasta_contabilidade)) {
-    if (!rodaComPastasLocais()) return { resultados: [] as ResultadoNota[], aviso: SEM_DISCO_LOCAL };
+    if (!rodaComPastasLocais()) return { aviso: SEM_DISCO_LOCAL };
     fonte = fonteLocal(config.pasta_notas.trim(), config.pasta_contabilidade.trim());
   } else {
     const pastaNotas = idDaPasta(config.pasta_notas);
     const pastaContabil = idDaPasta(config.pasta_contabilidade);
-    if (!pastaNotas || !pastaContabil) return { resultados: [] as ResultadoNota[], aviso: "As duas pastas não estão configuradas." };
+    if (!pastaNotas || !pastaContabil) return { aviso: "As duas pastas não estão configuradas." };
     fonte = fonteDrive(pastaNotas, pastaContabil);
   }
-
-  const arquivos = await fonte.listar();
   const { data: academias } = await db.from("academias").select("id, nome, cnpj");
   const feriadosPorAcademia = new Map<string, Set<string>>();
-  const resultados: ResultadoNota[] = [];
-  let restantes = 0;
-
-  for (const arquivo of arquivos) {
-    if (Date.now() - inicio > LIMITE_MS) {
-      restantes++;
-      continue;
-    }
+  // Processa uma nota e registra no histórico o que aconteceu com ela.
+  const processar = async (arquivo: ArquivoNota, complementos?: Complementos): Promise<ResultadoNota> => {
     let r: ResultadoNota & { nota?: NotaLida; academiaId?: string; tituloId?: string };
     try {
       r = await processarUma(db, arquivo, {
@@ -128,11 +130,11 @@ export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?:
           return feriadosPorAcademia.get(id)!;
         },
         criadoPor: (config.atualizado_por as string | null) ?? null,
+        complementos,
       });
     } catch (e) {
       r = { arquivo: arquivo.name, situacao: "erro", motivo: e instanceof Error ? e.message : String(e) };
     }
-    resultados.push({ arquivo: r.arquivo, situacao: r.situacao, motivo: r.motivo, destino: r.destino });
     await db.from("nf_drive_log").insert({
       drive_id: arquivo.id,
       modificado: arquivo.modifiedTime,
@@ -144,10 +146,37 @@ export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?:
       titulo_id: r.tituloId ?? null,
       destino: r.destino ?? null,
     });
-  }
+    return { arquivo: r.arquivo, situacao: r.situacao, motivo: r.motivo, destino: r.destino };
+  };
+  return { fonte, processar };
+}
 
+export async function processarNotasDrive(db: SupabaseClient, opcoes: { avisar?: boolean } = {}) {
+  const inicio = Date.now();
+  const p = await preparar(db);
+  if ("aviso" in p) return { resultados: [] as ResultadoNota[], aviso: p.aviso as string };
+  const arquivos = await p.fonte.listar();
+  const resultados: ResultadoNota[] = [];
+  let restantes = 0;
+  for (const arquivo of arquivos) {
+    if (Date.now() - inicio > LIMITE_MS) {
+      restantes++;
+      continue;
+    }
+    resultados.push(await p.processar(arquivo));
+  }
   if (opcoes.avisar && resultados.length) await avisar(db, resultados, restantes);
   return { resultados, restantes, aviso: null as string | null };
+}
+
+// Botão "Lançar" da tela Notas pendentes: a nota que ainda está na pasta, com a categoria e/ou o vencimento
+// informados.
+export async function lancarNotaPendente(db: SupabaseClient, arquivoId: string, complementos: Complementos): Promise<ResultadoNota | { aviso: string }> {
+  const p = await preparar(db);
+  if ("aviso" in p) return { aviso: p.aviso as string };
+  const arquivo = (await p.fonte.listar()).find((a) => a.id === arquivoId);
+  if (!arquivo) return { aviso: "A nota não está mais na pasta de notas fiscais." };
+  return p.processar(arquivo, complementos);
 }
 
 async function processarUma(
@@ -158,6 +187,8 @@ async function processarUma(
     academias: { id: string; nome: string; cnpj: string | null }[];
     feriados: (academiaId: string) => Promise<Set<string>>;
     criadoPor: string | null;
+    // O que foi informado na tela "Notas pendentes" para esta nota.
+    complementos?: Complementos;
   }
 ): Promise<ResultadoNota & { nota?: NotaLida; academiaId?: string; tituloId?: string }> {
   const pendente = (motivo: string, extra: { nota?: NotaLida; academiaId?: string } = {}) => ({ arquivo: arquivo.name, situacao: "pendente" as const, motivo, ...extra });
@@ -182,17 +213,25 @@ async function processarUma(
 
   const academia = ctx.academias.find((a) => a.cnpj && a.cnpj === nota.tomador.documento);
   if (!academia) return pendente(`Tomador ${nota.tomador.razao_social ?? ""} (${nota.tomador.documento ?? "sem CNPJ"}) não é nenhuma academia.`, { nota });
-  const { data: fornecedor } = nota.emitente.documento
-    ? await db.from("fin_pessoas").select("id, razao_social, nome_fantasia, categoria_padrao_id").eq("documento", nota.emitente.documento).maybeSingle()
-    : { data: null };
-  if (!fornecedor) return pendente(`Fornecedor ${nota.emitente.razao_social} (${nota.emitente.documento}) não está cadastrado: lance pelo Importar NF, que cadastra pedindo só a categoria.`, { nota, academiaId: academia.id });
-  if (!fornecedor.categoria_padrao_id) return pendente(`Fornecedor ${fornecedor.nome_fantasia || fornecedor.razao_social} está sem categoria padrão no cadastro.`, { nota, academiaId: academia.id });
-  const nomeFornecedor = (fornecedor.nome_fantasia || fornecedor.razao_social) as string;
+  // Fornecedor: cadastrado agora (com CNPJ e dados da nota e da Receita) se não existir; completado se faltar dado.
+  const fornecedor = await fornecedorDaNota(db, nota);
+  const nomeFornecedor = fornecedor.nome_fantasia || fornecedor.razao_social;
+  // Categoria escolhida na tela fica gravada no fornecedor para as próximas notas dele.
+  const categoriaId = fornecedor.categoria_padrao_id ?? ctx.complementos?.categoriaId ?? null;
+  if (!fornecedor.categoria_padrao_id && categoriaId) await db.from("fin_pessoas").update({ categoria_padrao_id: categoriaId }).eq("id", fornecedor.id);
 
   // Nota já lançada (mesmo fornecedor e número): não lança de novo, só leva o PDF para a contabilidade.
   const { data: repetidas } = await db.from("fin_titulos").select("id, vencimento").eq("pessoa_id", fornecedor.id).eq("documento", nota.numero).eq("cancelado", false).order("vencimento");
   const jaLancada = (repetidas ?? []).length > 0;
-  if (!jaLancada && !nota.duplicatas.length) return pendente("A nota não informa vencimento: lance pelo Importar NF informando a data.", { nota, academiaId: academia.id });
+  // Vencimentos: os da nota; sem nenhum, o informado na tela (parcela única com o valor líquido).
+  const parcelas = nota.duplicatas.length
+    ? nota.duplicatas.map((d) => ({ vencimento: d.vencimento, valor: d.valor }))
+    : ctx.complementos?.vencimento
+      ? [{ vencimento: ctx.complementos.vencimento, valor: nota.valor_liquido || nota.valor_total }]
+      : [];
+  const faltando = [!categoriaId && "categoria", !jaLancada && !parcelas.length && "vencimento"].filter(Boolean);
+  if (!jaLancada && faltando.length)
+    return pendente(`Falta informar ${faltando.join(" e ")}${fornecedor.novo ? ` (fornecedor ${nomeFornecedor} cadastrado agora)` : ""}: preencha em Notas pendentes e clique em Lançar.`, { nota, academiaId: academia.id });
 
   let tituloId: string | undefined = repetidas?.[0]?.id;
   if (!jaLancada) {
@@ -203,8 +242,8 @@ async function processarUma(
       {
         academiaId: academia.id,
         pessoaId: fornecedor.id,
-        categoriaId: fornecedor.categoria_padrao_id,
-        contaId: null,
+        categoriaId: categoriaId!,
+        contaId: await contaPadrao(db, academia.id),
         documento: nota.numero,
         descricao: nota.descricao,
         observacoes: [nota.forma_pagamento && `Pagamento: ${nota.forma_pagamento}`, nota.observacoes, "Lançada pelo robô das notas do Drive."].filter(Boolean).join(" · "),
@@ -216,7 +255,7 @@ async function processarUma(
           ret_cofins: nota.retencoes.cofins,
           ret_csll: nota.retencoes.csll,
         },
-        parcelas: nota.duplicatas.map((d) => ({ vencimento: d.vencimento, valor: d.valor })),
+        parcelas,
         anexo: erroAnexo ? null : anexo,
         criadoPor: ctx.criadoPor,
       },
@@ -231,7 +270,7 @@ async function processarUma(
   const emissao = nota.data_emissao ?? new Date().toISOString().slice(0, 10);
   const ano = emissao.slice(0, 4);
   const mes = Number(emissao.slice(5, 7));
-  const vencimentos = nota.duplicatas.map((d) => d.vencimento).sort();
+  const vencimentos = parcelas.map((d) => d.vencimento).sort();
   const venc = vencimentos[0] ?? repetidas?.[0]?.vencimento ?? emissao;
   const nome = limpar(
     `NF ${nota.numero} - ${nomeFornecedor} - R$ ${brl(nota.valor_total)} - venc ${dataBr(venc)}${vencimentos.length > 1 ? ` (${vencimentos.length} parcelas)` : ""}`

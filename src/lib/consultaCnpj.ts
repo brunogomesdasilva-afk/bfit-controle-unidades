@@ -17,6 +17,8 @@ export type CadastroCnpj = {
   mei: { optante: boolean | null; data_opcao: string | null; data_exclusao: string | null };
   municipio: string;
   socios: string[];
+  // Endereço e contato (para completar o cadastro do fornecedor).
+  endereco: { cep: string | null; logradouro: string | null; numero: string | null; complemento: string | null; bairro: string | null; email: string | null; telefone: string | null };
 };
 
 const simNao = (v: unknown) => (v === true || v === "Sim" || v === "S" ? true : v === false || v === "Não" || v === "N" ? false : null);
@@ -46,6 +48,15 @@ async function brasilApi(cnpj: string): Promise<CadastroCnpj> {
     mei: { optante: simNao(d.opcao_pelo_mei), data_opcao: d.data_opcao_pelo_mei, data_exclusao: d.data_exclusao_do_mei },
     municipio: `${d.municipio}/${d.uf}`,
     socios: (d.qsa ?? []).map((s: { nome_socio: string; qualificacao_socio: string }) => `${s.nome_socio} (${s.qualificacao_socio})`),
+    endereco: {
+      cep: d.cep || null,
+      logradouro: [d.descricao_tipo_de_logradouro, d.logradouro].filter(Boolean).join(" ") || null,
+      numero: d.numero || null,
+      complemento: d.complemento || null,
+      bairro: d.bairro || null,
+      email: d.email || null,
+      telefone: d.ddd_telefone_1 || null,
+    },
   };
 }
 
@@ -68,6 +79,15 @@ async function cnpjWs(cnpj: string): Promise<CadastroCnpj> {
     mei: { optante: simNao(d.simples?.mei), data_opcao: d.simples?.data_opcao_mei ?? null, data_exclusao: d.simples?.data_exclusao_mei ?? null },
     municipio: `${e.cidade?.nome}/${e.estado?.sigla}`,
     socios: (d.socios ?? []).map((s: { nome: string; qualificacao_socio?: { descricao: string } }) => `${s.nome} (${s.qualificacao_socio?.descricao?.trim() ?? ""})`),
+    endereco: {
+      cep: e.cep || null,
+      logradouro: [e.tipo_logradouro, e.logradouro].filter(Boolean).join(" ") || null,
+      numero: e.numero || null,
+      complemento: e.complemento || null,
+      bairro: e.bairro || null,
+      email: e.email || null,
+      telefone: e.ddd1 && e.telefone1 ? `${e.ddd1}${e.telefone1}` : null,
+    },
   };
 }
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getPerfilAtual } from "@/lib/auth";
 import { idDaPasta, nomeDaPasta } from "@/lib/googleDrive";
-import { caminhoLocal, processarNotasDrive, type ResultadoNota } from "@/lib/nfDrive";
+import { caminhoLocal, lancarNotaPendente, processarNotasDrive, type Complementos, type ResultadoNota } from "@/lib/nfDrive";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -62,7 +62,7 @@ export async function salvarPastas(dados: { notas: string; contabilidade: string
   return { ok: `Pastas gravadas: "${nomes[0]}" e "${nomes[1]}".` };
 }
 
-// "Rodar agora": a mesma execução das 19h, sem o e-mail (o resultado aparece na tela).
+// "Rodar agora": lê todas as notas da pasta (o resultado aparece na tela).
 export async function rodarAgora(): Promise<{ erro?: string; aviso?: string | null; resultados?: ResultadoNota[]; restantes?: number }> {
   if (!(await soAdmin())) return { erro: "Só o administrador roda o robô." };
   const db = createAdminClient();
@@ -71,6 +71,23 @@ export async function rodarAgora(): Promise<{ erro?: string; aviso?: string | nu
     const r = await processarNotasDrive(db);
     revalidatePath("/admin/notas-drive");
     return r;
+  } catch (e) {
+    return { erro: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// "Lançar" de uma nota pendente, com a categoria e/ou o vencimento informados na tela.
+export async function lancarPendente(arquivoId: string, complementos: Complementos): Promise<{ erro?: string; ok?: string }> {
+  if (!(await soAdmin())) return { erro: "Só o administrador lança as notas." };
+  if (complementos.vencimento && !/^\d{4}-\d{2}-\d{2}$/.test(complementos.vencimento)) return { erro: "Vencimento inválido." };
+  const db = createAdminClient();
+  if (!db) return { erro: "Chave de serviço não configurada." };
+  try {
+    const r = await lancarNotaPendente(db, arquivoId, complementos);
+    revalidatePath("/admin/notas-drive");
+    if ("aviso" in r) return { erro: r.aviso };
+    if (r.situacao === "lancada" || r.situacao === "ja_lancada") return { ok: `Lançada no contas a pagar e levada para ${r.destino}.` };
+    return { erro: r.motivo ?? "Não foi possível lançar a nota." };
   } catch (e) {
     return { erro: e instanceof Error ? e.message : String(e) };
   }
