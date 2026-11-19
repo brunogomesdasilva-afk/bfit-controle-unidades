@@ -355,6 +355,17 @@ const TODOS: ItemMenu[] = [
               </Icone>
             ),
           },
+          {
+            href: "/financeiro/cadastros/cnab",
+            rotulo: "Parâmetros CNAB",
+            ativo: (p: string) => p === "/financeiro/cadastros/cnab",
+            icone: (
+              <Icone>
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-2.82-1.17l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 3 13.1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.17-2.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 10 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21 10.9V11a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </Icone>
+            ),
+          },
         ],
       },
       {
@@ -408,7 +419,7 @@ const TODOS: ItemMenu[] = [
       {
         href: "/financeiro/relatorios",
         rotulo: "Relatórios",
-        ativo: (p: string) => p === "/financeiro/relatorios",
+        ativo: (p: string) => p === "/financeiro/relatorios" || p === "/financeiro/lote-banco",
         icone: (
           <Icone>
             <line x1="18" y1="20" x2="18" y2="10" />
@@ -416,6 +427,32 @@ const TODOS: ItemMenu[] = [
             <line x1="6" y1="20" x2="6" y2="14" />
           </Icone>
         ),
+        filhos: [
+          {
+            href: "/financeiro/relatorios",
+            rotulo: "Relatórios financeiros",
+            ativo: (p: string) => p === "/financeiro/relatorios",
+            icone: (
+              <Icone>
+                <line x1="18" y1="20" x2="18" y2="10" />
+                <line x1="12" y1="20" x2="12" y2="4" />
+                <line x1="6" y1="20" x2="6" y2="14" />
+              </Icone>
+            ),
+          },
+          {
+            href: "/financeiro/lote-banco",
+            rotulo: "Gerar lote para o banco",
+            ativo: (p: string) => p === "/financeiro/lote-banco",
+            icone: (
+              <Icone>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </Icone>
+            ),
+          },
+        ],
       },
       {
         href: "/financeiro",

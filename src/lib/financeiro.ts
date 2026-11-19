@@ -67,6 +67,8 @@ export type Titulo = {
   observacoes: string | null;
   cancelado: boolean;
   anexo?: string | null; // PDF da NF (pasta "pagamentos" do armazenamento)
+  codigo_barras?: string | null; // boleto ou guia a pagar (lote do banco)
+  nosso_numero?: string | null; // boleto emitido na cobrança
   // da view fin_titulos_situacao
   baixado: number;
   pago: number;

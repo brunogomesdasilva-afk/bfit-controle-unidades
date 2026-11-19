@@ -178,6 +178,8 @@ export async function salvarTitulo(tipo: TipoTitulo, id: string | null, dados: R
     documento: texto(dados.documento, 60),
     data_registro: datas.data_registro ?? hoje(),
     observacoes: texto(dados.observacoes, 1000),
+    // Linha digitável/código de barras do boleto ou da guia (para o lote do banco): só os números.
+    codigo_barras: (dados.codigo_barras ?? "").replace(/\D/g, "") || null,
     ...retencoes,
   };
 
