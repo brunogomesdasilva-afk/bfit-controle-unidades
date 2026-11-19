@@ -125,6 +125,9 @@ function FormularioTitulo({
           </Rotulo>
         )}
         <Texto rotulo="Descrição" {...campo("descricao")} className="md:col-span-12" />
+        {tipo === "pagar" && (
+          <Texto rotulo="Código de barras ou linha digitável (boleto ou guia, para o lote do banco)" {...campo("codigo_barras")} className="md:col-span-12" />
+        )}
         <Texto rotulo="Observações" {...campo("observacoes")} className="md:col-span-12" />
       </div>
       <div>
