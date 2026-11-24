@@ -34,6 +34,9 @@ export function Extrato({
   contas,
   linhas,
   saldoAnterior,
+  de,
+  ate,
+  previstos,
   pessoas,
   categorias,
   abertos,
@@ -42,6 +45,10 @@ export function Extrato({
   contas: Opcao[];
   linhas: LinhaExtrato[];
   saldoAnterior: number;
+  de: string;
+  ate: string;
+  // Títulos em aberto desta conta (data da previsão; valor negativo a pagar, positivo a receber).
+  previstos: { data: string; valor: number }[];
   pessoas: PessoaResumo[];
   categorias: Opcao[];
   abertos: TituloAberto[];
@@ -63,7 +70,24 @@ export function Extrato({
       }, []),
     [linhas, saldoAnterior]
   );
+  // Saldo previsto: o saldo + os títulos em aberto previstos até o dia (os atrasados contam desde o início).
+  const previstoAte = (dia: string) => previstos.reduce((t, p) => (p.data <= dia ? t + p.valor : t), 0);
+  // Todos os dias do período (também os sem lançamento), cada um com o saldo do fim do dia.
+  const dias = useMemo(() => {
+    const lista: { dia: string; movimento: number; saldo: number; previsto: number }[] = [];
+    let saldo = saldoAnterior;
+    for (let t = Date.parse(`${de}T12:00:00Z`), fim = Date.parse(`${ate}T12:00:00Z`); t <= fim && lista.length < 1000; t += 86400000) {
+      const dia = new Date(t).toISOString().slice(0, 10);
+      const movimento = linhas.filter((l) => l.data === dia).reduce((s, l) => s + l.valor, 0);
+      saldo += movimento;
+      lista.push({ dia, movimento, saldo, previsto: saldo + previstoAte(dia) });
+    }
+    return lista;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linhas, saldoAnterior, de, ate, previstos]);
   const visiveis = comSaldo.filter((l) => filtro === "todos" || (filtro === "pendentes" ? !l.conciliado : l.origem === "extrato" && !l.categoria_id && !l.titulos.length));
+  // Cada dia: os lançamentos visíveis dele e, no fim, a linha do saldo.
+  const itens = dias.flatMap((d) => [...visiveis.filter((l) => l.data === d.dia), d]);
   const entradas = linhas.filter((l) => l.valor > 0).reduce((t, l) => t + l.valor, 0);
   const saidas = linhas.filter((l) => l.valor < 0).reduce((t, l) => t + l.valor, 0);
   const pendentes = linhas.filter((l) => !l.conciliado).length;
@@ -151,14 +175,31 @@ export function Extrato({
               <th className="px-2 py-2">Origem</th>
               <th className="px-2 py-2 text-right">Valor</th>
               <th className="px-2 py-2 text-right">Saldo</th>
+              <th className="px-2 py-2 text-right">Saldo previsto</th>
               <th className="px-2 py-2" />
             </tr>
           </thead>
           <tbody>
-            {visiveis.map((l, i) => {
-              const fimDoDia = i === visiveis.length - 1 || visiveis[i + 1].data !== l.data;
+            {itens.map((item) => {
+              // Fim de cada dia (também sem lançamento): linha SALDO com o saldo e o saldo previsto.
+              if ("dia" in item)
+                return (
+                  <tr key={`saldo-${item.dia}`} className="border-y border-slate-200 bg-slate-50 font-semibold">
+                    <td />
+                    <td />
+                    <td className="px-2 py-1.5 tabular-nums">{dataBr(item.dia)}</td>
+                    <td className="px-2">SALDO</td>
+                    <td />
+                    <td />
+                    <td className="px-2 text-right tabular-nums text-slate-600">{reais(item.movimento)}</td>
+                    <td className={`px-2 text-right tabular-nums ${item.saldo < 0 ? "text-red-700" : "text-sky-800"}`}>{reais(item.saldo)}</td>
+                    <td className={`px-2 text-right tabular-nums ${item.previsto < 0 ? "text-red-700" : "text-sky-800"}`}>{reais(item.previsto)}</td>
+                    <td />
+                  </tr>
+                );
+              const l = item;
               return (
-                <tr key={l.id} className={`border-t border-slate-100 ${fimDoDia ? "border-b border-b-slate-200" : ""} ${sel.has(l.id) ? "bg-sky-50" : ""}`}>
+                <tr key={l.id} className={`border-t border-slate-100 ${sel.has(l.id) ? "bg-sky-50" : ""}`}>
                   <td className="px-3 py-1.5">
                     <input type="checkbox" aria-label="Selecionar" checked={sel.has(l.id)} onChange={() => setSel((s) => { const n = new Set(s); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })} />
                   </td>
@@ -177,7 +218,8 @@ export function Extrato({
                   <td className="max-w-56 truncate px-2 text-slate-600">{l.categoria || (l.origem === "extrato" && !l.titulos.length ? <span className="text-amber-700">sem classificar</span> : "")}</td>
                   <td className="px-2 text-xs text-slate-500">{ORIGEM[l.origem]}</td>
                   <td className={`px-2 text-right font-medium tabular-nums ${l.valor < 0 ? "text-red-700" : "text-sky-700"}`}>{reais(l.valor)}</td>
-                  <td className={`px-2 text-right tabular-nums ${fimDoDia ? "font-semibold" : "text-slate-400"}`}>{reais(l.saldo)}</td>
+                  <td className="px-2 text-right tabular-nums text-slate-500">{reais(l.saldo)}</td>
+                  <td className="px-2 text-right tabular-nums text-slate-500">{reais(l.saldo + previstoAte(l.data))}</td>
                   <td className="whitespace-nowrap px-2 text-right text-xs">
                     {l.origem === "extrato" && !l.titulos.length && (
                       <button type="button" onClick={() => setBaixarCom(l)} className="mr-2 text-marca hover:underline">
@@ -204,9 +246,9 @@ export function Extrato({
                 </tr>
               );
             })}
-            {visiveis.length === 0 && (
+            {itens.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-8 text-center text-slate-500">
+                <td colSpan={10} className="px-3 py-8 text-center text-slate-500">
                   Nenhum lançamento no período.
                 </td>
               </tr>
