@@ -47,6 +47,11 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
   const [semVencimento, setSemVencimento] = useState(false);
   const [gravando, iniciar] = useTransition();
 
+  // Conta padrão: a do Bradesco da academia da nota (ex.: nota do Km18 → Bradesco KM18).
+  const contaPadrao = (academiaId: string) => {
+    const daAcademia = contas.filter((c) => c.academia_id === academiaId);
+    return (daAcademia.find((c) => /bradesco/i.test(c.nome)) ?? daAcademia[0])?.id ?? "";
+  };
   const diasNaoUteis = useMemo(() => new Set(feriados.filter((f) => !f.academia_id || f.academia_id === d.academia_id).map((f) => f.data)), [feriados, d.academia_id]);
   const util = (v: string) => (/^\d{4}-\d{2}-\d{2}$/.test(v) ? proximoDiaUtil(v, diasNaoUteis) : v);
 
@@ -67,7 +72,7 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
       setD({
         academia_id: l.academia?.id ?? "",
         categoria_id: l.fornecedor?.categoria_padrao_id ?? "",
-        conta_id: "",
+        conta_id: l.academia ? contaPadrao(l.academia.id) : "",
         documento: n.numero,
         descricao: n.descricao,
         observacoes: [n.forma_pagamento && `Pagamento: ${n.forma_pagamento}`, n.observacoes].filter(Boolean).join(" · "),
@@ -102,6 +107,8 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
   }
   const mudar = (campo: string, v: string) => {
     const novo = { ...d, [campo]: v };
+    // Trocou a academia: a conta passa a ser a do Bradesco dela.
+    if (campo === "academia_id") novo.conta_id = contaPadrao(v);
     setD(novo);
     if (semVencimento && ["forma", "primeiro", "quantas", "liquido"].includes(campo)) gerarParcelas(novo);
   };
@@ -258,7 +265,7 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
               />
             </div>
             <Escolha
-              rotulo="Conta corrente"
+              rotulo="Conta corrente *"
               valor={d.conta_id ?? ""}
               mudar={(v) => mudar("conta_id", v)}
               opcoes={contas.filter((c) => c.academia_id === d.academia_id).map((c) => ({ valor: c.id, rotulo: c.nome }))}
@@ -357,7 +364,7 @@ export function ImportarNf({ academias, categorias, contas, feriados }: { academ
             <button type="button" onClick={() => setLeitura(null)} className={BOTAO_SECUNDARIO}>
               Descartar
             </button>
-            <button type="button" onClick={lancar} disabled={gravando || !d.academia_id || !d.categoria_id || !parcelas.length} className={BOTAO_PRIMARIO}>
+            <button type="button" onClick={lancar} disabled={gravando || !d.academia_id || !d.categoria_id || !d.conta_id || !parcelas.length} className={BOTAO_PRIMARIO}>
               {gravando ? "Lançando…" : `Lançar no contas a pagar${parcelas.length > 1 ? ` (${parcelas.length} parcelas)` : ""}`}
             </button>
           </div>

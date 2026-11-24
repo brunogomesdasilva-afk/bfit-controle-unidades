@@ -44,7 +44,7 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
     }
   };
   // Saldo antes do período: saldo inicial da conta + lançamentos desde a data dele até o dia anterior ao período.
-  const [antes, movs, { data: abertosData }] = await Promise.all([
+  const [antes, movs, { data: abertosData }, { data: previstosData }] = await Promise.all([
     tudo((i, f) => supabase.from("fin_movimentos").select("valor").eq("conta_id", conta.id).gte("data", conta.data_saldo_inicial).lt("data", de).order("id").range(i, f)),
     tudo((i, f) => supabase.from("fin_movimentos").select("*").eq("conta_id", conta.id).gte("data", de).lte("data", ate).order("data").order("criado_em").order("id").range(i, f)),
     supabase
@@ -53,7 +53,18 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
       .eq("academia_id", conta.academia_id)
       .in("situacao", ["aberto", "vencido", "parcial"])
       .limit(2000),
+    // Saldo previsto: contas a pagar e a receber em aberto desta conta, pela previsão de pagamento.
+    supabase
+      .from("fin_titulos_situacao")
+      .select("tipo, saldo, previsao, vencimento")
+      .eq("conta_id", conta.id)
+      .in("situacao", ["aberto", "vencido", "parcial"])
+      .gt("saldo", 0)
+      .limit(5000),
   ]);
+  const previstos = (previstosData ?? [])
+    .map((t) => ({ data: (t.previsao ?? t.vencimento) as string, valor: (t.tipo === "pagar" ? -1 : 1) * Number(t.saldo) }))
+    .filter((t) => t.data <= ate);
   const saldoAnterior = Number(conta.saldo_inicial) + (de > conta.data_saldo_inicial ? antes.reduce((t, m) => t + Number(m.valor), 0) : 0);
   const movimentos = movs as Movimento[];
   const ids = movimentos.map((m) => m.id);
@@ -132,6 +143,9 @@ export default async function ConciliacaoPage({ searchParams }: PageProps<"/fina
         contas={contasOpcoes}
         linhas={linhas}
         saldoAnterior={saldoAnterior}
+        de={de}
+        ate={ate}
+        previstos={previstos}
         pessoas={pessoas}
         categorias={listas.opcoesCategoria()}
         abertos={abertos}

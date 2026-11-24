@@ -275,6 +275,7 @@ export async function lancarNotaFiscal(n: NotaParaLancar): Promise<ResultadoFin>
   if ("erro" in a) return { erro: a.erro };
   if (!n.academiaId) return { erro: "Escolha a academia." };
   if (!n.categoriaId) return { erro: "Escolha a categoria." };
+  if (!n.contaId) return { erro: "Escolha a conta corrente." };
   if (!n.parcelas.length) return { erro: "Informe o vencimento e o valor (ou as parcelas)." };
   const parcelas = n.parcelas.map((p) => ({ vencimento: lerData(p.vencimento), valor: valor(p.valor) }));
   if (parcelas.some((p) => !p.vencimento || !p.valor)) return { erro: "Toda parcela precisa de vencimento e valor." };
@@ -364,6 +365,7 @@ export async function baixarTitulos(
   if ("erro" in a) return { erro: a.erro };
   const data = lerData(comum.data);
   if (!data) return { erro: "Informe a data da baixa." };
+  if (data > hoje()) return { erro: "A data da baixa não pode ser depois de hoje." };
   if (!comum.contaId) return { erro: "Escolha a conta." };
   if (!baixas.length) return { erro: "Escolha pelo menos um título." };
 
@@ -465,6 +467,19 @@ export async function estornarBaixa(id: string): Promise<ResultadoFin> {
   if (mov?.origem === "baixa" && (count ?? 0) <= 1) await a.supabase.from("fin_movimentos").delete().eq("id", mov.id);
   atualizar();
   return { ok: "Baixa estornada." };
+}
+
+// Estorna todas as baixas do título (botão "Estornar baixa" na janela e nos 3 pontos): ele volta a ficar em aberto.
+export async function estornarBaixasDoTitulo(tituloId: string): Promise<ResultadoFin> {
+  const a = await acesso();
+  if ("erro" in a) return { erro: a.erro };
+  const { data: baixas } = await a.supabase.from("fin_baixas").select("id").eq("titulo_id", tituloId);
+  if (!baixas?.length) return { erro: "Este título não tem baixa para estornar." };
+  for (const b of baixas) {
+    const r = await estornarBaixa(b.id as string);
+    if (r.erro) return r;
+  }
+  return { ok: baixas.length === 1 ? "Baixa estornada: o título voltou a ficar em aberto." : `${baixas.length} baixas estornadas: o título voltou a ficar em aberto.` };
 }
 
 // ------------------------------------------------------------------------------------------- Extrato e conciliação

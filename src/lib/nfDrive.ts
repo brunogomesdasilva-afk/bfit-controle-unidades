@@ -179,6 +179,65 @@ export async function lancarNotaPendente(db: SupabaseClient, arquivoId: string, 
   return p.processar(arquivo, complementos);
 }
 
+// Financeiro > Importar NF > "Importar uma pasta": o navegador lê a pasta do computador e manda cada PDF. Aqui a nota
+// passa pelo mesmo robô (lê, cadastra o fornecedor, lança), mas o arquivo não é movido: a resposta diz a pasta e o
+// nome de destino, e o próprio navegador move o PDF. Nota já lançada (duplicada) não é lançada de novo nem movida.
+export type ResultadoNavegador = ResultadoNota & { pastas?: string[]; nomeNovo?: string; faltando?: string[]; fornecedor?: string; numero?: string; valor?: number };
+
+export async function processarPdfDoNavegador(
+  db: SupabaseClient,
+  arquivo: { nome: string; modificado: string; pdf: ArrayBuffer },
+  opcoes: { criadoPor: string; complementos?: Complementos }
+): Promise<ResultadoNavegador> {
+  const id = `navegador:${arquivo.nome}`;
+  let destino: { pastas: string[]; nome: string } | null = null;
+  const fonte: FonteNotas = {
+    listar: async () => [],
+    baixar: async () => arquivo.pdf,
+    mover: async (_a, pastas, nome) => {
+      destino = { pastas, nome };
+    },
+  };
+  const { data: academias } = await db.from("academias").select("id, nome, cnpj");
+  const ref: ArquivoNota = { id, name: arquivo.nome, modifiedTime: arquivo.modificado };
+  let r: Awaited<ReturnType<typeof processarUma>>;
+  try {
+    r = await processarUma(db, ref, {
+      fonte,
+      academias: (academias ?? []) as { id: string; nome: string; cnpj: string | null }[],
+      feriados: (academiaId) => feriadosDaAcademia(db, academiaId),
+      criadoPor: opcoes.criadoPor,
+      complementos: opcoes.complementos,
+    });
+  } catch (e) {
+    r = { arquivo: arquivo.nome, situacao: "erro", motivo: e instanceof Error ? e.message : String(e) };
+  }
+  await db.from("nf_drive_log").insert({
+    drive_id: id,
+    modificado: arquivo.modificado,
+    arquivo: arquivo.nome,
+    situacao: r.situacao,
+    motivo: r.motivo,
+    nota: r.nota ?? null,
+    academia_id: r.academiaId ?? null,
+    titulo_id: r.tituloId ?? null,
+    destino: r.destino ?? null,
+  });
+  const d = destino as { pastas: string[]; nome: string } | null;
+  return {
+    arquivo: r.arquivo,
+    situacao: r.situacao,
+    motivo: r.situacao === "ja_lancada" ? "Duplicada: esta nota já está no contas a pagar. Não foi importada e ficou na pasta." : r.motivo,
+    destino: r.destino,
+    pastas: r.situacao === "lancada" ? d?.pastas : undefined,
+    nomeNovo: r.situacao === "lancada" ? d?.nome : undefined,
+    faltando: r.faltando,
+    fornecedor: r.fornecedor,
+    numero: r.nota?.numero,
+    valor: r.nota ? r.nota.valor_liquido || r.nota.valor_total : undefined,
+  };
+}
+
 async function processarUma(
   db: SupabaseClient,
   arquivo: ArquivoNota,
@@ -190,7 +249,7 @@ async function processarUma(
     // O que foi informado na tela "Notas pendentes" para esta nota.
     complementos?: Complementos;
   }
-): Promise<ResultadoNota & { nota?: NotaLida; academiaId?: string; tituloId?: string }> {
+): Promise<ResultadoNota & { nota?: NotaLida; academiaId?: string; tituloId?: string; faltando?: string[]; fornecedor?: string }> {
   const pendente = (motivo: string, extra: { nota?: NotaLida; academiaId?: string } = {}) => ({ arquivo: arquivo.name, situacao: "pendente" as const, motivo, ...extra });
 
   // Leitura: a guardada, se o arquivo não mudou; senão, lê o PDF com o Claude.
@@ -231,7 +290,11 @@ async function processarUma(
       : [];
   const faltando = [!categoriaId && "categoria", !jaLancada && !parcelas.length && "vencimento"].filter(Boolean);
   if (!jaLancada && faltando.length)
-    return pendente(`Falta informar ${faltando.join(" e ")}${fornecedor.novo ? ` (fornecedor ${nomeFornecedor} cadastrado agora)` : ""}: preencha em Notas pendentes e clique em Lançar.`, { nota, academiaId: academia.id });
+    return {
+      ...pendente(`Falta informar ${faltando.join(" e ")}${fornecedor.novo ? ` (fornecedor ${nomeFornecedor} cadastrado agora)` : ""}: preencha em Notas pendentes e clique em Lançar.`, { nota, academiaId: academia.id }),
+      faltando: faltando as string[],
+      fornecedor: nomeFornecedor,
+    };
 
   let tituloId: string | undefined = repetidas?.[0]?.id;
   if (!jaLancada) {
