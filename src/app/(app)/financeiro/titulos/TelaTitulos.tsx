@@ -9,10 +9,10 @@ import { Titulos } from "./Titulos";
 // Tela de contas a pagar ou a receber (mesmos campos). Filtros na URL: academia, situação e período de vencimento.
 
 const FILTROS = {
-  abertos: "Em aberto",
-  vencidos: "Vencidos",
-  liquidados: "Liquidados",
   todos: "Todos",
+  vencidos: "Vencidos",
+  abertos: "Em aberto",
+  liquidados: "Baixados",
   cancelados: "Cancelados",
 } as const;
 type Filtro = keyof typeof FILTROS;
@@ -23,10 +23,9 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
   const p = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const { supabase, academias, selecionada } = await contextoAcademias(p("academia"));
   const filtro: Filtro = (p("filtro") as Filtro) in FILTROS ? (p("filtro") as Filtro) : "abertos";
-  // Liquidados, Todos e Cancelados têm o histórico inteiro (desde 2020): sem datas, mostram o mês atual.
-  const mesAtual = !p("de") && !p("ate") && filtro !== "abertos" && filtro !== "vencidos";
-  const de = p("de") ?? (mesAtual ? `${hoje().slice(0, 7)}-01` : "");
-  const ate = p("ate") ?? (mesAtual ? new Date(Date.UTC(Number(hoje().slice(0, 4)), Number(hoje().slice(5, 7)), 0)).toISOString().slice(0, 10) : "");
+  // As datas do filtro de vencimento começam sempre em branco.
+  const de = p("de") ?? "";
+  const ate = p("ate") ?? "";
   const caminho = tipo === "pagar" ? "/financeiro/pagar" : "/financeiro/receber";
 
   const consulta = (inicio: number) => {
@@ -53,6 +52,10 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
     return { lista: r, cortado: true };
   };
   const [{ lista, cortado }, listas, { data: feriados }] = await Promise.all([buscar(), listasFinanceiro(supabase), supabase.from("feriados").select("data, academia_id")]);
+  // Vencidos primeiro (do mais antigo), depois os demais pelo vencimento.
+  const dataHoje = hoje();
+  const vencido = (t: Titulo) => t.situacao === "vencido" || (t.situacao === "parcial" && t.vencimento < dataHoje);
+  lista.sort((a, b) => Number(vencido(b)) - Number(vencido(a)));
   const titulos = lista.map((t) => ({
     ...t,
     valor: Number(t.valor),
@@ -134,7 +137,6 @@ export async function TelaTitulos({ tipo, searchParams }: { tipo: TipoTitulo; se
           </Link>
         )}
       </form>
-      {mesAtual && <p className="text-xs text-slate-500">Mostrando o mês atual. Para ver outros meses, mude as datas e clique em Filtrar.</p>}
       {cortado && (
         <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800">
           Período grande demais: aparecem só os primeiros {LIMITE.toLocaleString("pt-BR")} títulos. Diminua as datas para ver todos.

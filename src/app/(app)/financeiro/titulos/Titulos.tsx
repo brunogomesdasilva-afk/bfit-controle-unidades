@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { proximoDiaUtil } from "@/lib/diasUteis";
 import { dataBr, FORMAS, nomePessoa, reais, SITUACOES, type Titulo, type TipoTitulo } from "@/lib/financeiro";
-import { baixarTitulos, cancelarTitulo, estornarBaixa, excluirTitulos, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
+import { baixarTitulos, cancelarTitulo, estornarBaixa, estornarBaixasDoTitulo, excluirTitulos, historicoTitulo, linkDoAnexo, salvarTitulo, type BaixaPedida } from "../acoes";
 import { BuscaPessoa, type PessoaResumo } from "../BuscaPessoa";
 import { FormularioPessoa } from "../cadastros/pessoas/Pessoas";
 import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, CampoMoeda, Escolha, Janela, Mensagem, Rotulo, Texto } from "../componentes";
@@ -172,6 +172,8 @@ function JanelaBaixa({ tipo, titulos, contas, nomeDe, fechar }: { tipo: TipoTitu
   const total = Object.values(linhas).reduce((t, l) => t + n(l.valor) + n(l.juros) + n(l.multa), 0);
   const variasAcademias = new Set(titulos.map((t) => t.academia_id)).size > 1;
   const alterar = (id: string, campo: keyof BaixaPedida, v: string) => setLinhas({ ...linhas, [id]: { ...linhas[id], [campo]: v } });
+  // A baixa não pode ter data depois de hoje.
+  const dataFutura = comum.data > hojeIso();
   const baixar = () =>
     iniciar(async () => {
       const r = await baixarTitulos(Object.values(linhas), comum);
@@ -186,7 +188,10 @@ function JanelaBaixa({ tipo, titulos, contas, nomeDe, fechar }: { tipo: TipoTitu
       ) : (
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-4">
-            <Texto rotulo={tipo === "pagar" ? "Data do pagamento" : "Data do recebimento"} tipo="date" valor={comum.data} mudar={(v) => setComum({ ...comum, data: v })} />
+            <div>
+              <Texto rotulo={tipo === "pagar" ? "Data do pagamento" : "Data do recebimento"} tipo="date" valor={comum.data} mudar={(v) => setComum({ ...comum, data: v })} />
+              {dataFutura && <p className="mt-1 text-xs text-red-700">A data não pode ser depois de hoje.</p>}
+            </div>
             <Escolha rotulo="Conta" valor={comum.contaId} mudar={(v) => setComum({ ...comum, contaId: v })} opcoes={contasDaAcademia.map((c) => ({ valor: c.id, rotulo: c.nome }))} />
             <Escolha rotulo="Forma" valor={comum.forma} mudar={(v) => setComum({ ...comum, forma: v })} opcoes={FORMAS.map((f) => ({ valor: f, rotulo: f }))} />
             <Texto rotulo="Observação" valor={comum.observacoes} mudar={(v) => setComum({ ...comum, observacoes: v })} />
@@ -235,7 +240,7 @@ function JanelaBaixa({ tipo, titulos, contas, nomeDe, fechar }: { tipo: TipoTitu
             <span className="text-sm text-slate-600">
               Total {tipo === "pagar" ? "pago" : "recebido"}: <strong className="tabular-nums">{reais(total)}</strong>
             </span>
-            <button type="button" onClick={baixar} disabled={ocupado || !comum.contaId} className={BOTAO_PRIMARIO}>
+            <button type="button" onClick={baixar} disabled={ocupado || !comum.contaId || dataFutura} className={BOTAO_PRIMARIO}>
               {ocupado ? "Registrando…" : "Confirmar baixa"}
             </button>
           </div>
@@ -290,6 +295,14 @@ function JanelaTitulo({
       if (r.ok && titulo) setHistorico(await historicoTitulo(titulo.id));
     });
   };
+  const estornarTudo = () => {
+    if (!titulo || !window.confirm("Estornar a baixa deste título? O valor volta para o saldo e o lançamento sai do extrato.")) return;
+    iniciar(async () => {
+      const r = await estornarBaixasDoTitulo(titulo.id);
+      setM(r);
+      if (r.ok) setTimeout(fechar, 600);
+    });
+  };
   const cancelar = (sim: boolean) => {
     if (!titulo || (sim && !window.confirm("Cancelar este título? Ele sai das contas em aberto (dá para reativar depois)."))) return;
     iniciar(async () => {
@@ -331,6 +344,11 @@ function JanelaTitulo({
               {titulo.saldo > 0 && !titulo.cancelado && (
                 <button type="button" onClick={() => baixar(titulo)} className={BOTAO_PRIMARIO}>
                   {tipo === "pagar" ? "Registrar pagamento" : "Registrar recebimento"}
+                </button>
+              )}
+              {titulo.baixado > 0 && (
+                <button type="button" onClick={estornarTudo} disabled={ocupado} className={`${BOTAO_SECUNDARIO} text-red-700`}>
+                  Estornar baixa
                 </button>
               )}
               {titulo.cancelado ? (
@@ -437,6 +455,10 @@ export function Titulos({
       setM(r);
       if (r.ok) setSelecionados(new Set());
     });
+  };
+  const estornar = (t: Titulo) => {
+    if (!window.confirm("Estornar a baixa deste título? O valor volta para o saldo e o lançamento sai do extrato.")) return;
+    iniciarExclusao(async () => setM(await estornarBaixasDoTitulo(t.id)));
   };
   const [baixa, setBaixa] = useState<Titulo[] | null>(null);
   const [cadastro, setCadastro] = useState<((id: string) => void) | null>(null);
@@ -583,6 +605,11 @@ export function Titulos({
                       <button type="button" role="menuitem" onClick={() => setAberto({ copia: t })} className={ITEM_MENU}>
                         Duplicar
                       </button>
+                      {t.baixado > 0 && (
+                        <button type="button" role="menuitem" onClick={() => estornar(t)} className={`${ITEM_MENU} text-red-700 hover:bg-red-50`}>
+                          Estornar baixa
+                        </button>
+                      )}
                       <button type="button" role="menuitem" onClick={() => excluir([t.id])} className={`${ITEM_MENU} text-red-700 hover:bg-red-50`}>
                         Excluir
                       </button>
