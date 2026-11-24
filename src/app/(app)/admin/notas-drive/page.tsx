@@ -25,7 +25,8 @@ export default async function NotasDrivePage() {
   // Notas pendentes que dá para resolver na tela (falta categoria e/ou vencimento; tomador já identificado).
   const ultimos = new Map<string, NonNullable<typeof recentes>[number]>();
   for (const l of recentes ?? []) if (!ultimos.has(l.drive_id as string)) ultimos.set(l.drive_id as string, l);
-  const abertas = [...ultimos.values()].filter((l) => l.situacao === "pendente" && l.nota && l.academia_id);
+  // As da pasta escolhida no navegador (Importar NF) são resolvidas naquela tela.
+  const abertas = [...ultimos.values()].filter((l) => l.situacao === "pendente" && l.nota && l.academia_id && !String(l.drive_id).startsWith("navegador:"));
   const documentos = abertas.map((l) => (l.nota as NotaLida).emitente.documento).filter(Boolean);
   const { data: fornecedores } = documentos.length
     ? await supabase.from("fin_pessoas").select("documento, razao_social, nome_fantasia, categoria_padrao_id").in("documento", documentos)
