@@ -17,6 +17,7 @@ import {
 import { diasEmAberto } from "@/lib/pendencias";
 import { PERIODOS, type OcupacaoProfessor, type Periodo } from "@/lib/ocupacao";
 import { ontem } from "@/lib/planilha";
+import { EditarArea } from "./painel/EditarArea";
 import { PerfilClientes } from "./painel/PerfilClientes";
 import { SemAcademias } from "./SemAcademias";
 
@@ -59,15 +60,18 @@ function Cartao({
   valor,
   detalhe,
   destaque,
+  children,
 }: {
   titulo: string;
   valor: ReactNode;
   detalhe?: ReactNode;
   destaque?: boolean;
+  // Algo a mais no cartão (ex.: o botão de editar a área).
+  children?: ReactNode;
 }) {
   return (
     <div
-      className={`rounded-lg border p-3.5 sm:p-3 ${destaque ? "border-marca bg-marca text-white" : "border-slate-200 bg-white"}`}
+      className={`relative rounded-lg border p-3.5 sm:p-3 ${destaque ? "border-marca bg-marca text-white" : "border-slate-200 bg-white"}`}
     >
       <p className={`text-xs ${destaque ? "text-blue-100" : "text-slate-500"}`}>
         {titulo}
@@ -84,6 +88,7 @@ function Cartao({
           {detalhe}
         </p>
       )}
+      {children}
     </div>
   );
 }
@@ -286,7 +291,7 @@ export default async function PainelPage({
   searchParams: Promise<{ unidade?: string; data?: string }>;
 }) {
   const params = await searchParams;
-  const { supabase, academias, admin, selecionada } = await contextoAcademias(
+  const { supabase, academias, admin, selecionada, atual } = await contextoAcademias(
     params.unidade,
   );
   if (academias.length === 0) {
@@ -397,8 +402,14 @@ export default async function PainelPage({
             <Cartao
               titulo="Índice de ocupação"
               valor={area ? `${numero(div(adimplentes, area), 2)} /m²` : "—"}
-              detalhe={area ? `${numero(adimplentes)} adimplentes ÷ ${numero(area)} m²` : "cadastre a área (m²) da academia"}
-            />
+              detalhe={area ? `${numero(adimplentes)} adimplentes ÷ ${numero(area)} m²` : "clique em ✏️ Editar e informe a área (m²)"}
+            >
+              <EditarArea
+                academias={academias
+                  .filter((a) => (unidade ? a.id === unidade : true) && (admin || a.id === atual?.academiaId))
+                  .map((a) => ({ id: a.id, nome: a.nome, area: a.area_m2 === null ? null : Number(a.area_m2) }))}
+              />
+            </Cartao>
             <Cartao
               titulo="Média de alunos por aula coletiva"
               valor={numero(d.medias.mediaAlunosColetiva, 1)}
